@@ -1,20 +1,33 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+
+// Import your screens – ensure these paths match your project structure.
+import CommunicationStackScreen from './src/screens/CommunicationScreen';
+import EasySentenceBuilderScreen from './src/screens/EasySentenceBuilderScreen';
+import ImagePickerSpeechScreen from './src/screens/ImagePickerSpeechScreen';
+import CameraScreen from './src/screens/CameraScreen';
+import EmotionScreen from './src/screens/EmotionScreen';
+
+const Tab = createBottomTabNavigator();
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <NavigationContainer>
+      <Tab.Navigator
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: '#4CAF50',
+          tabBarInactiveTintColor: 'gray',
+          tabBarStyle: { backgroundColor: '#fff' },
+        }}
+      >
+        <Tab.Screen name="Communication" component={CommunicationStackScreen} />
+        <Tab.Screen name="Easy Sentence" component={EasySentenceBuilderScreen} />
+        <Tab.Screen name="Image Picker" component={ImagePickerSpeechScreen} />
+        <Tab.Screen name="Camera" component={CameraScreen} />
+        <Tab.Screen name="Emotion" component={EmotionScreen} />
+      </Tab.Navigator>
+    </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

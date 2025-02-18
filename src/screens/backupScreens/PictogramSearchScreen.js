@@ -1,7 +1,6 @@
-// /src/screens/PictogramSearchScreen.js
 import React, { useState } from 'react';
 import { View, Text, TextInput, Button, FlatList, Image, ActivityIndicator, StyleSheet } from 'react-native';
-import { searchPictograms } from '../services/arasaacService';
+import { searchPictograms, getPictogramUrl } from '../services/arasaacService';
 
 const PictogramSearchScreen = () => {
   const [query, setQuery] = useState('');
@@ -10,9 +9,10 @@ const PictogramSearchScreen = () => {
 
   const handleSearch = async () => {
     setLoading(true);
-    const results = await searchPictograms(query);
+    // Pass the language code "en" along with the query to the search function
+    const results = await searchPictograms('en', query);
     if (results) {
-      setPictograms(results); // Adjust this based on how the API returns the data.
+      setPictograms(results);
     }
     setLoading(false);
   };
@@ -27,14 +27,14 @@ const PictogramSearchScreen = () => {
         onChangeText={setQuery}
       />
       <Button title="Search" onPress={handleSearch} />
-      {loading && <ActivityIndicator size="large" colour="#0000ff" />}
+      {loading && <ActivityIndicator size="large" color="#0000ff" />}
       <FlatList
         data={pictograms}
         keyExtractor={(item, index) => index.toString()}
         renderItem={({ item }) => (
           <View style={styles.itemContainer}>
-            {/* Adjust property names based on the API response */}
-            <Image style={styles.image} source={{ uri: item.url }} />
+            {/* Use getPictogramUrl with the pictogram's _id */}
+            <Image style={styles.image} source={{ uri: getPictogramUrl(item._id, 500) }} />
             <Text>{item.name}</Text>
           </View>
         )}
@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
   },
   input: {
     height: 40,
-    borderColour: '#ccc',
+    borderColor: '#ccc',
     borderWidth: 1,
     marginBottom: 10,
     paddingHorizontal: 8
