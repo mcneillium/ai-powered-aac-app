@@ -1,10 +1,11 @@
+import '@tensorflow/tfjs-react-native'; // Ensure tfjs-react-native is initialized
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Button } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { AntDesign } from '@expo/vector-icons';
 import * as tf from '@tensorflow/tfjs';
+import { decodeJpeg } from '@tensorflow/tfjs-react-native'; // Import decodeJpeg
 import * as cocossd from '@tensorflow-models/coco-ssd';
-import * as FileSystem from 'expo-file-system';
 
 export default function LiveSceneModeScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -64,24 +65,23 @@ export default function LiveSceneModeScreen() {
       setIsProcessing(true);
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.5,
-        base64: true,
+        base64: false,
         skipProcessing: true
       });
 
-      // Convert base64 to tensor
-      const base64Image = await FileSystem.readAsStringAsync(photo.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      const imgBuffer = tf.util.encodeString(base64Image, 'base64').buffer;
-      const raw = new Uint8Array(imgBuffer);
-      const imageTensor = tf.node.decodeImage(raw);
-
+      // Fetch the image bytes from the photo URI.
+      const response = await fetch(photo.uri, {}, { isBinary: true });
+      const imageData = await response.arrayBuffer();
+      const raw = new Uint8Array(imageData);
+      
+      // Use decodeJpeg from tfjs-react-native to decode the image
+      const imageTensor = decodeJpeg(raw);
+      
       // Get predictions
       const detections = await model.detect(imageTensor);
       console.log('Detections:', detections);
       setPredictions(detections);
-
+      
       // Cleanup
       tf.dispose(imageTensor);
     } catch (error) {
