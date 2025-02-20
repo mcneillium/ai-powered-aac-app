@@ -1,11 +1,12 @@
-import '@tensorflow/tfjs-react-native'; // Ensure tfjs-react-native is initialized
-import React, { useRef, useState, useEffect } from 'react';
+import '@tensorflow/tfjs-react-native'; // Initialize tfjs-react-native
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Button } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { AntDesign } from '@expo/vector-icons';
 import * as tf from '@tensorflow/tfjs';
-import { decodeJpeg } from '@tensorflow/tfjs-react-native'; // Import decodeJpeg
+import { decodeJpeg } from '@tensorflow/tfjs-react-native';
 import * as cocossd from '@tensorflow-models/coco-ssd';
+import * as Speech from 'expo-speech';
 
 export default function LiveSceneModeScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -14,8 +15,13 @@ export default function LiveSceneModeScreen() {
   const [predictions, setPredictions] = useState([]);
   const [isTfReady, setIsTfReady] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDetecting, setIsDetecting] = useState(false); // toggle detection on/off
+  const [currentDetection, setCurrentDetection] = useState(null);
   const cameraRef = useRef(null);
-  const frameProcessorRef = useRef(null);
+
+  // Constants for performance tuning:
+  const CAPTURE_DELAY = 500; // delay between captures in ms when no detection (faster)
+  const DETECTION_COOLDOWN = 3000; // cooldown delay after detection in ms
 
   // Initialize TensorFlow and load model
   useEffect(() => {
@@ -24,10 +30,7 @@ export default function LiveSceneModeScreen() {
         await tf.ready();
         console.log('TensorFlow ready');
         setIsTfReady(true);
-        
-        const loadedModel = await cocossd.load({
-          base: 'lite_mobilenet_v2'
-        });
+        const loadedModel = await cocossd.load({ base: 'lite_mobilenet_v2' });
         console.log('Model loaded');
         setModel(loadedModel);
       } catch (error) {
@@ -36,63 +39,79 @@ export default function LiveSceneModeScreen() {
     };
 
     initTf();
-
-    return () => {
-      if (frameProcessorRef.current) {
-        clearInterval(frameProcessorRef.current);
-      }
-    };
   }, []);
 
-  // Process frames periodically
-  useEffect(() => {
-    if (model && !frameProcessorRef.current) {
-      frameProcessorRef.current = setInterval(processFrame, 1000);
-    }
-    
-    return () => {
-      if (frameProcessorRef.current) {
-        clearInterval(frameProcessorRef.current);
-        frameProcessorRef.current = null;
-      }
-    };
-  }, [model]);
-
-  const processFrame = async () => {
-    if (!model || !cameraRef.current || isProcessing) return;
+  // Recursive frame processing function with adjustable delays
+  const processFrame = useCallback(async () => {
+    if (!model || !cameraRef.current || !isDetecting) return;
+    if (isProcessing) return; // safeguard
 
     try {
       setIsProcessing(true);
+      // Use a lower quality value to speed up capture and decoding
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.5,
+        quality: 0.2,
         base64: false,
-        skipProcessing: true
+        skipProcessing: true,
       });
 
       // Fetch the image bytes from the photo URI.
-      const response = await fetch(photo.uri, {}, { isBinary: true });
+      const response = await fetch(photo.uri);
       const imageData = await response.arrayBuffer();
       const raw = new Uint8Array(imageData);
-      
-      // Use decodeJpeg from tfjs-react-native to decode the image
+
+      // Decode the JPEG image using tfjs-react-native's decodeJpeg
       const imageTensor = decodeJpeg(raw);
-      
+
       // Get predictions
       const detections = await model.detect(imageTensor);
       console.log('Detections:', detections);
       setPredictions(detections);
-      
-      // Cleanup
+
+      // If a detection is found and it's new, announce it and start a cooldown
+      if (detections.length > 0) {
+        const bestDetection = detections.reduce((prev, curr) =>
+          prev.score > curr.score ? prev : curr
+        );
+        if (!currentDetection || currentDetection.class !== bestDetection.class) {
+          setCurrentDetection(bestDetection);
+          Speech.speak(`I see a ${bestDetection.class}`, { rate: 0.9 });
+          // Cooldown: Do not process further frames for DETECTION_COOLDOWN
+          setTimeout(() => {
+            setCurrentDetection(null);
+            processFrame();
+          }, DETECTION_COOLDOWN);
+          tf.dispose(imageTensor);
+          setIsProcessing(false);
+          return;
+        }
+      }
+
       tf.dispose(imageTensor);
     } catch (error) {
       console.error('Error processing frame:', error);
     } finally {
       setIsProcessing(false);
+      // Schedule next frame if not in cooldown
+      if (isDetecting && !currentDetection) {
+        setTimeout(processFrame, CAPTURE_DELAY);
+      }
     }
-  };
+  }, [model, isDetecting, isProcessing, currentDetection]);
+
+  // Start frame processing when detection is enabled
+  useEffect(() => {
+    if (isDetecting) {
+      processFrame();
+    }
+  }, [isDetecting, processFrame]);
 
   const toggleCameraFacing = () => {
     setFacing((current) => (current === 'back' ? 'front' : 'back'));
+  };
+
+  const toggleDetection = () => {
+    setIsDetecting((prev) => !prev);
   };
 
   // While permissions are still loading
@@ -114,7 +133,7 @@ export default function LiveSceneModeScreen() {
     );
   }
 
-  // While TensorFlow is loading
+  // While TensorFlow or the model is loading
   if (!isTfReady || !model) {
     return (
       <View style={styles.centerContainer}>
@@ -128,16 +147,25 @@ export default function LiveSceneModeScreen() {
 
   return (
     <View style={styles.container}>
-      <CameraView 
-        style={styles.camera} 
-        facing={facing} 
-        ref={cameraRef}
-      >
+      <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
         <View style={styles.buttonContainer}>
           <TouchableOpacity style={styles.button} onPress={toggleCameraFacing}>
             <AntDesign name="retweet" size={44} color="black" />
           </TouchableOpacity>
+          <TouchableOpacity style={styles.button} onPress={toggleDetection}>
+            <Text style={{ color: '#FFF', fontSize: 18 }}>
+              {isDetecting ? 'Stop Detection' : 'Start Detection'}
+            </Text>
+          </TouchableOpacity>
         </View>
+        {/* Show the current detection in the center */}
+        {currentDetection && (
+          <View style={styles.centerDetection}>
+            <Text style={styles.centerText}>
+              {currentDetection.class} ({(currentDetection.score * 100).toFixed(0)}%)
+            </Text>
+          </View>
+        )}
         <View style={styles.predictionsContainer}>
           <Text style={styles.predictionText}>
             Found {predictions.length} objects
@@ -154,17 +182,13 @@ export default function LiveSceneModeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  camera: {
-    flex: 1,
-  },
+  camera: { flex: 1 },
   buttonContainer: {
     flex: 1,
     flexDirection: 'row',
@@ -179,11 +203,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
   },
-  text: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 10,
-  },
+  text: { fontSize: 16, textAlign: 'center', marginBottom: 10 },
   predictionsContainer: {
     position: 'absolute',
     bottom: 0,
@@ -196,5 +216,21 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     marginVertical: 4,
-  }
+  },
+  centerDetection: {
+    position: 'absolute',
+    top: '40%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  centerText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#FFF',
+    textShadowColor: '#000',
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 5,
+  },
 });
