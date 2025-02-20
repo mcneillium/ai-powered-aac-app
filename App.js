@@ -54,7 +54,6 @@ export default function App() {
       >
         <Tab.Screen name="Communication" component={CommunicationStackScreen} />
         <Tab.Screen name="Easy Sentence" component={EasySentenceBuilderScreen} />
-        <Tab.Screen name="Image Picker" component={ImagePickerSpeechScreen} />
         <Tab.Screen name="Camera" component={CameraScreen} />
         <Tab.Screen name="Emotion" component={EmotionScreen} />
         <Tab.Screen name="Live Scene" component={LiveSceneModeScreen} />
