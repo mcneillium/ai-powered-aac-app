@@ -1,25 +1,23 @@
-// src/screens/LiveSceneModeScreen.js
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Dimensions } from 'react-native';
-import { Camera } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as tf from '@tensorflow/tfjs';
 import * as cocossd from '@tensorflow-models/coco-ssd';
 import { cameraWithTensors } from '@tensorflow/tfjs-react-native';
 
-const TensorCamera = cameraWithTensors(Camera);
+const TensorCamera = cameraWithTensors(CameraView);
 
 export default function LiveSceneModeScreen() {
-  const [hasPermission, setHasPermission] = useState(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [model, setModel] = useState(null);
   const [predictions, setPredictions] = useState([]);
   const [isTfReady, setIsTfReady] = useState(false);
+  const [facing, setFacing] = useState('back');
   const rafId = useRef(null);
 
-  // Request camera permissions and load model on mount
+  // Load TensorFlow model on mount
   useEffect(() => {
     (async () => {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
       await tf.ready();
       setIsTfReady(true);
       const loadedModel = await cocossd.load();
@@ -31,7 +29,7 @@ export default function LiveSceneModeScreen() {
     };
   }, []);
 
-  // This function processes each frame from the camera feed.
+  // This function processes each frame from the camera feed
   const handleCameraStream = (images, updatePreview, gl) => {
     const loop = async () => {
       const nextImageTensor = images.next().value;
@@ -44,17 +42,31 @@ export default function LiveSceneModeScreen() {
     loop();
   };
 
-  if (hasPermission === null) {
-    return <View />;
+  // While permissions are still loading
+  if (!permission) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
   }
-  if (hasPermission === false) {
-    return <Text>No access to camera</Text>;
+
+  // If permissions are not granted
+  if (!permission.granted) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.text}>We need your permission to show the camera</Text>
+        <Button title="Grant Permission" onPress={requestPermission} />
+      </View>
+    );
   }
+
+  // While TensorFlow and model are loading
   if (!isTfReady || !model) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4CAF50" />
-        <Text>Loading model...</Text>
+        <Text style={styles.text}>Loading TensorFlow model...</Text>
       </View>
     );
   }
@@ -68,7 +80,7 @@ export default function LiveSceneModeScreen() {
     <View style={styles.container}>
       <TensorCamera
         style={styles.camera}
-        type={Camera.Constants.Type.back}
+        facing={facing}
         cameraTextureHeight={textureDims.height}
         cameraTextureWidth={textureDims.width}
         resizeHeight={200}
@@ -89,8 +101,13 @@ export default function LiveSceneModeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  camera: { flex: 1 },
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  camera: {
+    flex: 1,
+  },
   predictionsContainer: {
     position: 'absolute',
     bottom: 0,
@@ -99,10 +116,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     padding: 10,
   },
-  predictionText: { color: '#fff', fontSize: 16, marginVertical: 2 },
+  predictionText: {
+    color: '#fff',
+    fontSize: 16,
+    marginVertical: 2,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  text: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 10,
   },
 });
