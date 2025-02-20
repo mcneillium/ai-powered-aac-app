@@ -6,9 +6,10 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "plugins": [
-      "expo-camera"
+      "expo-camera",
+      "expo-dev-client"
     ],
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -29,11 +30,19 @@
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
-        "READ_EXTERNAL_STORAGE"
-      ]
+        "READ_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.elpabloawakens.aipoweredaacapp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "40248271-421a-4a83-bd92-16c7d4767eef"
+      }
     }
   }
 }

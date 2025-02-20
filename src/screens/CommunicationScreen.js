@@ -1,3 +1,4 @@
+// src/screens/CommunicationScreen.js
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
@@ -5,116 +6,95 @@ import {
   FlatList,
   Image,
   TouchableOpacity,
-  ScrollView,
-  Button,
   Text,
+  Modal,
+  ActivityIndicator,
+  Button,
 } from 'react-native';
 import * as Speech from 'expo-speech';
 import { StatusBar } from 'expo-status-bar';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { searchPictograms, getPictogramUrl } from '../services/arasaacService';
 
 export default function CommunicationScreen() {
   const [pictograms, setPictograms] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedPictogram, setSelectedPictogram] = useState(null);
-  const [logVisible, setLogVisible] = useState(false);
-  const [interactionLog, setInteractionLog] = useState([]);
-  const categories = ['Everyday', 'Food', 'Drinks', 'People', 'Places'];
+  const [modalVisible, setModalVisible] = useState(false);
+  const [currentCategory, setCurrentCategory] = useState('');
 
+  // Define your categories
+  const categories = ['Everyday', 'Food', 'Drinks', 'People', 'Places'];
+  // State to hold one representative pictogram for each category
+  const [categoryImages, setCategoryImages] = useState({});
+
+  // Pre-fetch one pictogram for each category
   useEffect(() => {
-    loadCategory('Everyday');
+    const fetchRepresentativeImages = async () => {
+      const reps = {};
+      for (let category of categories) {
+        const data = await searchPictograms('en', category);
+        if (data && data.length > 0) {
+          reps[category] = data[0]; // use the first pictogram as representative
+        }
+      }
+      setCategoryImages(reps);
+    };
+
+    fetchRepresentativeImages();
   }, []);
 
-  const loadCategory = async (category) => {
+  // When a category card is pressed, load its pictograms and show the modal.
+  const handleCategoryCardPress = async (category) => {
+    setCurrentCategory(category);
+    setModalVisible(true);
     setLoading(true);
     const data = await searchPictograms('en', category);
     if (data) {
       setPictograms(data);
     }
     setLoading(false);
-    // Clear previous selection when switching categories
     setSelectedPictogram(null);
   };
 
-  const handleCategorySelect = (category) => {
-    loadCategory(category);
-  };
-
   const selectPictogram = (item) => {
-    // Extract the first keyword as the description
     const description =
       item.keywords && item.keywords.length > 0 && item.keywords[0].keyword
         ? item.keywords[0].keyword
         : 'No description available';
-    const selected = { ...item, description };
-    setSelectedPictogram(selected);
-    logUserInteraction({
-      action: 'selectPictogram',
-      wordAdded: selected.description,
-      timestamp: new Date().toISOString(),
-    });
+    setSelectedPictogram({ ...item, description });
   };
 
   const speakSelected = () => {
     if (selectedPictogram) {
       Speech.speak(selectedPictogram.description);
-      logUserInteraction({
-        action: 'speakSelected',
-        sentence: selectedPictogram.description,
-        timestamp: new Date().toISOString(),
-      });
     } else {
       Speech.speak('No pictogram selected');
     }
   };
 
-  // Logging function to store interactions in AsyncStorage
-  const logUserInteraction = async (interactionData) => {
-    try {
-      const storedLog = await AsyncStorage.getItem('userInteractionLog');
-      let logArray = storedLog ? JSON.parse(storedLog) : [];
-      logArray.push(interactionData);
-      await AsyncStorage.setItem('userInteractionLog', JSON.stringify(logArray));
-    } catch (error) {
-      console.error('Error logging interaction:', error);
-    }
+  // Render each category card using the representative pictogram image if available.
+  const renderCategoryCard = ({ item }) => {
+    // Check if a representative image exists; otherwise use a placeholder
+    const rep = categoryImages[item];
+    const imageUri = rep ? getPictogramUrl(rep._id, 500) : `https://via.placeholder.com/150?text=${item}`;
+    return (
+      <TouchableOpacity
+        style={styles.categoryCard}
+        onPress={() => handleCategoryCardPress(item)}
+      >
+        <Image source={{ uri: imageUri }} style={styles.categoryImage} />
+        <View style={styles.categoryLabelContainer}>
+          <Text style={styles.categoryLabel}>{item}</Text>
+        </View>
+      </TouchableOpacity>
+    );
   };
 
-  // Function to fetch log data from AsyncStorage
-  const fetchLogData = async () => {
-    try {
-      const storedLog = await AsyncStorage.getItem('userInteractionLog');
-      const logArray = storedLog ? JSON.parse(storedLog) : [];
-      setInteractionLog(logArray);
-      console.log('User Interaction Log:', logArray);
-    } catch (error) {
-      console.error('Error fetching log data:', error);
-    }
-  };
-
-  // Toggle log visibility and fetch log data when showing
-  const toggleLogVisibility = () => {
-    setLogVisible(prev => !prev);
-    if (!logVisible) {
-      fetchLogData();
-    }
-  };
-
-  const renderCategoryButton = (category, index) => (
-    <TouchableOpacity
-      key={index}
-      style={styles.categoryButton}
-      onPress={() => handleCategorySelect(category)}
-    >
-      <Text style={styles.categoryButtonText}>{category}</Text>
-    </TouchableOpacity>
-  );
-
+  // Render pictogram items within the modal.
   const renderPictogramItem = ({ item }) => (
     <TouchableOpacity
       style={[
-        styles.gridItem,
+        styles.pictogramItem,
         selectedPictogram && selectedPictogram._id === item._id ? styles.selectedItem : null,
       ]}
       onPress={() => selectPictogram(item)}
@@ -128,63 +108,45 @@ export default function CommunicationScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Display currently selected pictogram's description */}
-      {selectedPictogram && (
-        <View style={styles.selectedContainer}>
-          <Text style={styles.selectedText}>
-            Selected: {selectedPictogram.description}
-          </Text>
-        </View>
-      )}
+      <Text style={styles.header}>Select a Category</Text>
+      <FlatList
+        data={categories}
+        renderItem={renderCategoryCard}
+        keyExtractor={(item) => item}
+        numColumns={2}
+        contentContainerStyle={styles.categoryGrid}
+      />
 
-      {/* Category Bar */}
-      <View style={styles.categoryBarContainer}>
-        <ScrollView
-          horizontal
-          contentContainerStyle={styles.categoryBar}
-          showsHorizontalScrollIndicator={false}
-        >
-          {categories.map((category, index) =>
-            renderCategoryButton(category, index)
+      <Modal
+        animationType="slide"
+        transparent={false}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <Text style={styles.modalHeader}>{currentCategory} Pictograms</Text>
+          {loading ? (
+            <ActivityIndicator size="large" color="#4CAF50" />
+          ) : (
+            <FlatList
+              data={pictograms}
+              keyExtractor={(item, index) => index.toString()}
+              renderItem={renderPictogramItem}
+              numColumns={3}
+              contentContainerStyle={styles.grid}
+            />
           )}
-        </ScrollView>
-      </View>
-
-      {/* Pictogram Grid */}
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading…</Text>
+          {selectedPictogram && (
+            <View style={styles.selectedContainer}>
+              <Text style={styles.selectedText}>
+                Selected: {selectedPictogram.description}
+              </Text>
+              <Button title="Speak" onPress={speakSelected} color="#4CAF50" />
+            </View>
+          )}
+          <Button title="Close" onPress={() => setModalVisible(false)} color="#f44336" />
         </View>
-      ) : (
-        <FlatList
-          data={pictograms}
-          keyExtractor={(item, index) => index.toString()}
-          renderItem={renderPictogramItem}
-          numColumns={3}
-          contentContainerStyle={styles.grid}
-        />
-      )}
-
-      {/* Speak Button */}
-      <View style={styles.speakButtonContainer}>
-        <Button title="Speak" onPress={speakSelected} color="#4CAF50" />
-      </View>
-      <View style={styles.buttonRow}>
-        <Button title={logVisible ? "Hide Log" : "View Log"} onPress={toggleLogVisibility} color="#2196F3" />
-      </View>
-
-      {/* Display Interaction Log if visible */}
-      {logVisible && interactionLog.length > 0 && (
-        <ScrollView style={styles.logContainer}>
-          <Text style={styles.logHeading}>User Interaction Log:</Text>
-          {interactionLog.map((log, index) => (
-            <Text key={index} style={styles.logText}>
-              {log.timestamp} - {log.action}{log.wordAdded ? `: ${log.wordAdded}` : ''}{log.sentence ? ` - ${log.sentence}` : ''}
-            </Text>
-          ))}
-        </ScrollView>
-      )}
-
+      </Modal>
       <StatusBar style="auto" />
     </View>
   );
@@ -194,30 +156,60 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#eef2f3',
-    paddingTop: 10,
-  },
-  categoryBarContainer: {
-    height: 50,
-    marginVertical: 10,
-  },
-  categoryBar: {
-    alignItems: 'center',
+    paddingTop: 20,
     paddingHorizontal: 10,
   },
-  categoryButton: {
-    backgroundColor: '#d0e8ff',
-    padding: 10,
-    marginHorizontal: 5,
-    borderRadius: 5,
+  header: {
+    fontSize: 26,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 20,
   },
-  categoryButtonText: {
+  categoryGrid: {
+    alignItems: 'center',
+  },
+  categoryCard: {
+    margin: 10,
+    borderRadius: 10,
+    overflow: 'hidden',
+    elevation: 3,
+    backgroundColor: '#fff',
+    width: 150,
+    height: 150,
+  },
+  categoryImage: {
+    width: '100%',
+    height: '80%',
+  },
+  categoryLabelContainer: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    paddingVertical: 5,
+    alignItems: 'center',
+  },
+  categoryLabel: {
+    color: '#fff',
     fontSize: 16,
-    color: '#333',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#eef2f3',
+    paddingTop: 40,
+    paddingHorizontal: 10,
+  },
+  modalHeader: {
+    fontSize: 24,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 15,
   },
   grid: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 5,
+    paddingBottom: 20,
   },
-  gridItem: {
+  pictogramItem: {
     flex: 1,
     margin: 5,
     alignItems: 'center',
@@ -232,45 +224,13 @@ const styles = StyleSheet.create({
     borderColor: '#4CAF50',
     borderRadius: 10,
   },
-  speakButtonContainer: {
-    margin: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    fontSize: 18,
-  },
   selectedContainer: {
     alignItems: 'center',
-    marginVertical: 5,
+    marginVertical: 10,
   },
   selectedText: {
     fontSize: 18,
-    fontWeight: 'bold',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginVertical: 10,
-  },
-  logContainer: {
-    marginTop: 20,
-    maxHeight: 150,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 10,
-  },
-  logHeading: {
-    fontSize: 18,
     fontWeight: '600',
     marginBottom: 5,
-  },
-  logText: {
-    fontSize: 14,
-    color: '#555',
   },
 });

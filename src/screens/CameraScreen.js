@@ -1,150 +1,115 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Text, Button, Image, Platform } from 'react-native';
-import * as ExpoCamera from 'expo-camera'; // Namespace import for Expo Camera
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Button } from 'react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { AntDesign } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
-import { StatusBar } from 'expo-status-bar';
 import { getImageCaption } from '../services/hfImageCaption';
+import PhotoPreviewSection from '@/components/PhotoPreviewSection';
 
 export default function CameraScreen() {
-  const [hasPermission, setHasPermission] = useState(null);
-  const [capturedImage, setCapturedImage] = useState(null);
+  // Use array destructuring as useCameraPermissions returns an array.
+  const [permission, requestPermission] = useCameraPermissions();
+  const [facing, setFacing] = useState('back');
+  const [photo, setPhoto] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const cameraRef = useRef(null);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const { status } = await ExpoCamera.Camera.requestCameraPermissionsAsync();
-        console.log("Camera permission status:", status);
-        setHasPermission(status === 'granted');
-      } catch (error) {
-        console.error("Error requesting camera permissions:", error);
-      }
-    })();
-  }, []);
-
-  if (hasPermission === null) {
+  // While permissions are still loading
+  if (!permission) {
     return (
-      <View style={[styles.container, styles.centered]}>
-        <Text>Requesting camera permission...</Text>
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" />
       </View>
     );
   }
 
-  if (hasPermission === false) {
+  // If permissions are not granted
+  if (!permission.granted) {
     return (
-      <View style={[styles.container, styles.centered]}>
-        <Text>No access to camera. Please enable camera permission in settings.</Text>
+      <View style={styles.centerContainer}>
+        <Text style={styles.text}>We need your permission to show the camera</Text>
+        <Button title="Grant Permission" onPress={requestPermission} />
       </View>
     );
   }
 
-  const toggleCameraType = () => {
-    setCameraType((current) =>
-      current === ExpoCamera.Camera.Constants.Type.back
-        ? ExpoCamera.Camera.Constants.Type.front
-        : ExpoCamera.Camera.Constants.Type.back
-    );
+  const toggleCameraFacing = () => {
+    setFacing((current) => (current === 'back' ? 'front' : 'back'));
   };
 
-  // Use a fallback for camera type if ExpoCamera.Camera.Constants.Type.back is undefined.
-  const cameraType = ExpoCamera.Camera?.Constants?.Type?.back || 0;
-
-  const takePicture = async () => {
+  const handleTakePhoto = async () => {
     if (cameraRef.current) {
+      setIsProcessing(true);
       try {
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.5 });
-        console.log("Picture taken:", photo.uri);
-        const description = await getImageCaption(photo.uri);
-        console.log("Caption:", description);
-        setCapturedImage({ uri: photo.uri, description });
+        const options = { quality: 1, base64: true, exif: false };
+        const capturedPhoto = await cameraRef.current.takePictureAsync(options);
+        const description = await getImageCaption(capturedPhoto.uri);
+        setPhoto({ ...capturedPhoto, description });
       } catch (error) {
-        console.error('Error taking picture:', error);
+        console.error('Error capturing photo:', error);
+      } finally {
+        setIsProcessing(false);
       }
     }
   };
 
-  const speakImageDescription = () => {
-    if (capturedImage && capturedImage.description) {
-      Speech.speak(capturedImage.description);
-    } else {
-      Speech.speak('No image captured');
-    }
-  };
+  const handleRetakePhoto = () => setPhoto(null);
 
-  // For Android-specific UI, use simple Buttons inside the Camera view.
-  const renderAndroidCameraUI = () => (
-    <View style={styles.androidButtonContainer}>
-      <Button title="Take Picture" onPress={takePicture} color="#4CAF50" />
-      <Button title="Flip Camera" onPress={toggleCameraType} color="#4CAF50" />
-    </View>
-  );
-
-  // For iOS, use similar UI (you can customize further if needed)
-  const renderIOSCameraUI = () => (
-    <View style={styles.buttonContainer}>
-      <Button title="Take Picture" onPress={takePicture} color="#4CAF50" />
-      <Button title="Flip Camera" onPress={toggleCameraType} color="#4CAF50" />
-    </View>
-  );
+  if (photo) {
+    return (
+      <PhotoPreviewSection photo={photo} handleRetakePhoto={handleRetakePhoto} />
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <ExpoCamera.Camera style={styles.camera} ref={cameraRef} type={cameraType}>
-        {Platform.OS === 'android' ? renderAndroidCameraUI() : renderIOSCameraUI()}
-      </ExpoCamera.Camera>
-      {capturedImage && (
-        <View style={styles.previewContainer}>
-          <Image source={{ uri: capturedImage.uri }} style={styles.previewImage} />
-          <Text style={styles.descriptionText}>{capturedImage.description}</Text>
-          <Button title="Speak Description" onPress={speakImageDescription} color="#4CAF50" />
+      <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={styles.button} onPress={toggleCameraFacing}>
+            <AntDesign name="retweet" size={44} color="black" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.button} onPress={handleTakePhoto} disabled={isProcessing}>
+            {isProcessing ? (
+              <ActivityIndicator color="black" />
+            ) : (
+              <AntDesign name="camera" size={44} color="black" />
+            )}
+          </TouchableOpacity>
         </View>
-      )}
-      <StatusBar style="auto" />
+      </CameraView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#eef2f3' 
+  container: {
+    flex: 1,
   },
-  centered: {
+  centerContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  camera: { 
-    flex: 1 
-  },
-  androidButtonContainer: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  camera: {
+    flex: 1,
   },
   buttonContainer: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
+    flex: 1,
     flexDirection: 'row',
+    backgroundColor: 'transparent',
+    margin: 64,
     justifyContent: 'space-between',
+    alignItems: 'flex-end',
   },
-  previewContainer: {
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingVertical: 10,
-  },
-  previewImage: {
-    width: 300,
-    height: 300,
+  button: {
+    backgroundColor: 'gray',
+    padding: 10,
     borderRadius: 10,
-    marginVertical: 10,
+    alignItems: 'center',
   },
-  descriptionText: { 
-    fontSize: 16, 
-    marginBottom: 10 
+  text: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 10,
   },
 });
