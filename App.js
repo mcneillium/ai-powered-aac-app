@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { loadModel } from './src/services/tfModel';
 
 import CommunicationStackScreen from './src/screens/CommunicationScreen';
 import EasySentenceBuilderScreen from './src/screens/EasySentenceBuilderScreen';
-import ImagePickerSpeechScreen from './src/screens/ImagePickerSpeechScreen';
 import CameraScreen from './src/screens/CameraScreen';
 import EmotionScreen from './src/screens/EmotionScreen';
 import LiveSceneModeScreen from './src/screens/LiveSceneModeScreen'; // New Live Scene screen
@@ -13,6 +13,10 @@ import LiveSceneModeScreen from './src/screens/LiveSceneModeScreen'; // New Live
 const Tab = createBottomTabNavigator();
 
 export default function App() {
+  useEffect(() => {
+    loadModel();
+  }, []);
+
   return (
     <NavigationContainer>
       <Tab.Navigator

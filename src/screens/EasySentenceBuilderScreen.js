@@ -14,7 +14,7 @@ import * as Speech from 'expo-speech';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { searchPictograms, getPictogramUrl } from '../services/arasaacService';
-import { getAISuggestions } from '../services/aiSuggestions';
+import { getAISuggestions } from '../services/getAISuggestions';
 
 export default function EasySentenceBuilderScreen() {
   const [sentenceWords, setSentenceWords] = useState([]);
