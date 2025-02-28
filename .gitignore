@@ -5,6 +5,7 @@ node_modules/
 
 #files
 files
+credentials
 
 # Expo
 .expo/
