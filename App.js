@@ -2,10 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, View, Text, StyleSheet } from 'react-native';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
+import SignupScreen from './src/screens/SignupScreen';
 import CommunicationStackScreen from './src/screens/CommunicationScreen';
 import EasySentenceBuilderScreen from './src/screens/EasySentenceBuilderScreen';
 import CameraScreen from './src/screens/CameraScreen';
@@ -14,6 +16,7 @@ import LiveSceneModeScreen from './src/screens/LiveSceneModeScreen';
 import { loadModel } from './src/services/tfModel';
 
 const Tab = createBottomTabNavigator();
+const AuthStack = createNativeStackNavigator();
 
 function MainApp() {
   return (
@@ -61,9 +64,18 @@ function MainApp() {
   );
 }
 
+function AuthStackScreen() {
+  return (
+    <AuthStack.Navigator>
+      <AuthStack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+      <AuthStack.Screen name="Signup" component={SignupScreen} options={{ headerShown: false }} />
+    </AuthStack.Navigator>
+  );
+}
+
 function AppNavigator() {
   const { user, loading, error } = useAuth();
-  
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -71,7 +83,7 @@ function AppNavigator() {
       </View>
     );
   }
-  
+
   if (error) {
     return (
       <View style={styles.container}>
@@ -80,8 +92,8 @@ function AppNavigator() {
       </View>
     );
   }
-  
-  return user ? <MainApp /> : <LoginScreen />;
+
+  return user ? <MainApp /> : <AuthStackScreen />;
 }
 
 export default function App() {
@@ -100,9 +112,16 @@ export default function App() {
         setModelLoading(false);
       }
     };
-    
     initModel();
   }, []);
+
+  if (modelLoading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#4CAF50" />
+      </View>
+    );
+  }
 
   if (modelError) {
     console.warn('App continuing without TensorFlow model. Some features may be limited.');
@@ -135,5 +154,5 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     paddingHorizontal: 20,
-  }
+  },
 });
