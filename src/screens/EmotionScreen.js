@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, FlatList, Button } from 'react-native';
 import * as Speech from 'expo-speech';
 import { StatusBar } from 'expo-status-bar';
+import { logEvent } from '../utils/logger'; // Import the logger
 
 const emotions = [
   { label: 'Happy', emoji: '😊' },
@@ -20,19 +21,26 @@ export default function EmotionScreen() {
 
   const selectEmotion = (emotion) => {
     setSelectedEmotion(emotion);
+    // Log when an emotion is selected
+    logEvent(`Emotion selected: ${emotion.label}`, { emotion });
   };
 
   const speakEmotion = () => {
     if (selectedEmotion) {
-      // Speak out the emotion in a full sentence.
       Speech.speak(`I am ${selectedEmotion.label}`);
+      // Log the action of speaking the emotion
+      logEvent(`Spoke emotion: ${selectedEmotion.label}`, { emotion: selectedEmotion });
     } else {
       Speech.speak('No emotion selected');
+      // Log an attempt to speak with no emotion selected
+      logEvent('Attempted to speak without selecting an emotion');
     }
   };
 
   const clearSelection = () => {
     setSelectedEmotion(null);
+    // Log clearing the emotion selection
+    logEvent('Cleared emotion selection');
   };
 
   const renderEmotionItem = ({ item }) => (
