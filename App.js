@@ -75,7 +75,6 @@ function AuthStackScreen() {
 
 function AppNavigator() {
   const { user, loading, error } = useAuth();
-
   if (loading) {
     return (
       <View style={styles.container}>
@@ -83,7 +82,6 @@ function AppNavigator() {
       </View>
     );
   }
-
   if (error) {
     return (
       <View style={styles.container}>
@@ -92,7 +90,6 @@ function AppNavigator() {
       </View>
     );
   }
-
   return user ? <MainApp /> : <AuthStackScreen />;
 }
 
@@ -100,7 +97,6 @@ export default function App() {
   const [modelLoading, setModelLoading] = useState(true);
   const [modelError, setModelError] = useState(null);
 
-  // Load your TensorFlow model when the app starts
   useEffect(() => {
     const initModel = async () => {
       try {
@@ -122,11 +118,9 @@ export default function App() {
       </View>
     );
   }
-
   if (modelError) {
     console.warn('App continuing without TensorFlow model. Some features may be limited.');
   }
-
   return (
     <AuthProvider>
       <NavigationContainer>
