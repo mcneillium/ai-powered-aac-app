@@ -1,6 +1,5 @@
-// src/screens/LoginScreen.js
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator, Alert, TouchableOpacity } from 'react-native';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { logEvent } from '../utils/logger';
 import { useNavigation } from '@react-navigation/native';
@@ -16,10 +15,10 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      logEvent('User logged in', { email, screen: 'LoginScreen' });
+      logEvent('User logged in', { email });
       navigation.navigate('MainApp');
     } catch (error) {
-      logEvent('Login error', { email, error: error.message, screen: 'LoginScreen' });
+      logEvent('Login error', { email, error: error.message });
       Alert.alert('Login Error', error.message);
     } finally {
       setLoading(false);
@@ -50,6 +49,9 @@ export default function LoginScreen() {
       ) : (
         <Button title="Log In" onPress={handleLogin} />
       )}
+      <TouchableOpacity onPress={() => navigation.navigate('Signup')} style={styles.signUpButton}>
+        <Text style={styles.signUpText}>Don't have an account? Sign Up</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -77,5 +79,14 @@ const styles = StyleSheet.create({
   },
   loader: {
     marginVertical: 20
+  },
+  signUpButton: {
+    marginTop: 20,
+    alignItems: 'center'
+  },
+  signUpText: {
+    color: '#4CAF50',
+    fontSize: 16,
+    textDecorationLine: 'underline'
   }
 });

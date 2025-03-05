@@ -1,19 +1,26 @@
-// src/screens/SignupScreen.js
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { getDatabase, ref, set } from 'firebase/database';
 
 export default function SignupScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const auth = getAuth();
+  const db = getDatabase();
 
   const handleSignUp = async () => {
     setLoading(true);
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      // Registration successful; navigate to MainApp
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      // Write user data to the Realtime Database
+      await set(ref(db, 'users/' + user.uid), {
+        uid: user.uid,
+        email: user.email,
+        createdAt: Date.now()
+      });
       navigation.navigate('MainApp');
     } catch (error) {
       alert('Sign up error: ' + error.message);
