@@ -14,6 +14,7 @@ import {
 import * as Speech from 'expo-speech';
 import { StatusBar } from 'expo-status-bar';
 import { searchPictograms, getPictogramUrl } from '../services/arasaacService';
+import { logEvent } from '../utils/logger';
 
 export default function CommunicationScreen() {
   const [pictograms, setPictograms] = useState([]);
@@ -22,32 +23,28 @@ export default function CommunicationScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [currentCategory, setCurrentCategory] = useState('');
 
-  // Define your categories
   const categories = ['Everyday', 'Food', 'Drinks', 'People', 'Places'];
-  // State to hold one representative pictogram for each category
   const [categoryImages, setCategoryImages] = useState({});
 
-  // Pre-fetch one pictogram for each category
   useEffect(() => {
     const fetchRepresentativeImages = async () => {
       const reps = {};
       for (let category of categories) {
         const data = await searchPictograms('en', category);
         if (data && data.length > 0) {
-          reps[category] = data[0]; // use the first pictogram as representative
+          reps[category] = data[0];
         }
       }
       setCategoryImages(reps);
     };
-
     fetchRepresentativeImages();
   }, []);
 
-  // When a category card is pressed, load its pictograms and show the modal.
   const handleCategoryCardPress = async (category) => {
     setCurrentCategory(category);
     setModalVisible(true);
     setLoading(true);
+    logEvent('Category selected', { category, screen: 'CommunicationScreen' });
     const data = await searchPictograms('en', category);
     if (data) {
       setPictograms(data);
@@ -62,6 +59,7 @@ export default function CommunicationScreen() {
         ? item.keywords[0].keyword
         : 'No description available';
     setSelectedPictogram({ ...item, description });
+    logEvent('Pictogram selected', { pictogramId: item._id, description, screen: 'CommunicationScreen' });
   };
 
   const speakSelected = () => {
@@ -72,16 +70,11 @@ export default function CommunicationScreen() {
     }
   };
 
-  // Render each category card using the representative pictogram image if available.
   const renderCategoryCard = ({ item }) => {
-    // Check if a representative image exists; otherwise use a placeholder
     const rep = categoryImages[item];
     const imageUri = rep ? getPictogramUrl(rep._id, 500) : `https://via.placeholder.com/150?text=${item}`;
     return (
-      <TouchableOpacity
-        style={styles.categoryCard}
-        onPress={() => handleCategoryCardPress(item)}
-      >
+      <TouchableOpacity style={styles.categoryCard} onPress={() => handleCategoryCardPress(item)}>
         <Image source={{ uri: imageUri }} style={styles.categoryImage} />
         <View style={styles.categoryLabelContainer}>
           <Text style={styles.categoryLabel}>{item}</Text>
@@ -90,7 +83,6 @@ export default function CommunicationScreen() {
     );
   };
 
-  // Render pictogram items within the modal.
   const renderPictogramItem = ({ item }) => (
     <TouchableOpacity
       style={[
@@ -99,10 +91,7 @@ export default function CommunicationScreen() {
       ]}
       onPress={() => selectPictogram(item)}
     >
-      <Image
-        style={styles.gridImage}
-        source={{ uri: getPictogramUrl(item._id, 500) }}
-      />
+      <Image style={styles.gridImage} source={{ uri: getPictogramUrl(item._id, 500) }} />
     </TouchableOpacity>
   );
 
