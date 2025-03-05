@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, FlatList, Button } from 'react-native';
 import * as Speech from 'expo-speech';
 import { StatusBar } from 'expo-status-bar';
-import { logEvent } from '../utils/logger'; // Import the logger
+import { logEvent } from '../utils/logger';
 
 const emotions = [
   { label: 'Happy', emoji: '😊' },
@@ -21,26 +21,22 @@ export default function EmotionScreen() {
 
   const selectEmotion = (emotion) => {
     setSelectedEmotion(emotion);
-    // Log when an emotion is selected
-    logEvent(`Emotion selected: ${emotion.label}`, { emotion });
+    logEvent(`Emotion selected: ${emotion.label}`, { emotion, screen: 'EmotionScreen' });
   };
 
   const speakEmotion = () => {
     if (selectedEmotion) {
       Speech.speak(`I am ${selectedEmotion.label}`);
-      // Log the action of speaking the emotion
-      logEvent(`Spoke emotion: ${selectedEmotion.label}`, { emotion: selectedEmotion });
+      logEvent(`Spoke emotion: ${selectedEmotion.label}`, { emotion: selectedEmotion, screen: 'EmotionScreen' });
     } else {
       Speech.speak('No emotion selected');
-      // Log an attempt to speak with no emotion selected
-      logEvent('Attempted to speak without selecting an emotion');
+      logEvent('Attempted to speak without selecting an emotion', { screen: 'EmotionScreen' });
     }
   };
 
   const clearSelection = () => {
     setSelectedEmotion(null);
-    // Log clearing the emotion selection
-    logEvent('Cleared emotion selection');
+    logEvent('Cleared emotion selection', { screen: 'EmotionScreen' });
   };
 
   const renderEmotionItem = ({ item }) => (
@@ -59,13 +55,11 @@ export default function EmotionScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.heading}>Express Your Emotions</Text>
-      
       {selectedEmotion && (
         <View style={styles.selectedContainer}>
           <Text style={styles.selectedText}>Selected: {selectedEmotion.label}</Text>
         </View>
       )}
-
       <FlatList
         data={emotions}
         keyExtractor={(item) => item.label}
@@ -73,7 +67,6 @@ export default function EmotionScreen() {
         numColumns={3}
         contentContainerStyle={styles.emotionGrid}
       />
-
       <View style={styles.buttonRow}>
         <Button title="Speak Emotion" onPress={speakEmotion} color="#4CAF50" />
         <Button title="Clear Selection" onPress={clearSelection} color="#f44336" />
