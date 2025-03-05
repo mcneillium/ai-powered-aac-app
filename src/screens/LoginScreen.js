@@ -1,30 +1,29 @@
 // src/screens/LoginScreen.js
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
-  ActivityIndicator 
-} from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { logEvent } from '../utils/logger'; // Ensure this path matches your project structure
+import { useNavigation } from '@react-navigation/native';
 
-export default function LoginScreen({ navigation }) {
+export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  
+  const navigation = useNavigation();
   const auth = getAuth();
 
   const handleLogin = async () => {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // Do not manually navigate to "MainApp".
-      // The AppNavigator will automatically render MainApp when the user is authenticated.
+      // Log successful login
+      logEvent('User logged in', { email });
+      // Navigate to the main app screen (adjust route name as needed)
+      navigation.navigate('MainApp');
     } catch (error) {
-      alert('Login error: ' + error.message);
+      // Log login error
+      logEvent('Login error', { email, error: error.message });
+      Alert.alert('Login Error', error.message);
     } finally {
       setLoading(false);
     }
@@ -36,69 +35,50 @@ export default function LoginScreen({ navigation }) {
       <TextInput
         style={styles.input}
         placeholder="Email"
-        autoCapitalize="none"
-        onChangeText={setEmail}
-        value={email}
         keyboardType="email-address"
+        autoCapitalize="none"
+        value={email}
+        onChangeText={setEmail}
       />
       <TextInput
         style={styles.input}
         placeholder="Password"
         secureTextEntry
-        onChangeText={setPassword}
+        autoCapitalize="none"
         value={password}
+        onChangeText={setPassword}
       />
       {loading ? (
-        <ActivityIndicator size="large" color="#4CAF50" />
+        <ActivityIndicator size="large" color="#4CAF50" style={styles.loader} />
       ) : (
-        <TouchableOpacity style={styles.button} onPress={handleLogin}>
-          <Text style={styles.buttonText}>Log In</Text>
-        </TouchableOpacity>
+        <Button title="Log In" onPress={handleLogin} />
       )}
-      <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
-        <Text style={styles.link}>Don't have an account? Sign Up</Text>
-      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    padding: 20, 
-    backgroundColor: '#fff' 
+  container: {
+    flex: 1,
+    padding: 20,
+    justifyContent: 'center',
+    backgroundColor: '#fff'
   },
-  title: { 
-    fontSize: 32, 
-    fontWeight: 'bold', 
-    marginBottom: 20 
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20
   },
-  input: { 
-    width: '100%', 
-    height: 50, 
-    borderWidth: 1, 
-    borderColor: '#ccc', 
-    borderRadius: 8, 
-    paddingHorizontal: 10, 
-    marginBottom: 15, 
-    fontSize: 16 
+  input: {
+    height: 50,
+    borderColor: '#ccc',
+    borderWidth: 1,
+    borderRadius: 5,
+    paddingHorizontal: 10,
+    marginBottom: 15
   },
-  button: { 
-    backgroundColor: '#4CAF50', 
-    paddingVertical: 15, 
-    paddingHorizontal: 30, 
-    borderRadius: 8, 
-    marginBottom: 15 
-  },
-  buttonText: { 
-    color: '#fff', 
-    fontSize: 18, 
-    fontWeight: '600' 
-  },
-  link: { 
-    color: '#4CAF50', 
-    fontSize: 16 
+  loader: {
+    marginVertical: 20
   }
 });
