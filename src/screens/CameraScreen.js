@@ -1,3 +1,4 @@
+// src/screens/CameraScreen.js
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Button, Image, Alert } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -14,7 +15,6 @@ export default function CombinedImageScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const cameraRef = useRef(null);
 
-  // Request both camera and media library permissions when component mounts
   useEffect(() => {
     (async () => {
       await requestCameraPermission();
@@ -25,7 +25,6 @@ export default function CombinedImageScreen() {
     })();
   }, []);
 
-  // Let user pick an image from the library
   const pickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -43,7 +42,6 @@ export default function CombinedImageScreen() {
     }
   };
 
-  // Take a picture with the camera
   const takePicture = async () => {
     if (cameraRef.current) {
       setIsProcessing(true);
@@ -62,7 +60,6 @@ export default function CombinedImageScreen() {
     }
   };
 
-  // If camera is open, display the camera view
   if (isCameraOpen) {
     return (
       <View style={styles.container}>
@@ -84,7 +81,6 @@ export default function CombinedImageScreen() {
     );
   }
 
-  // Main view: Show buttons to pick image or open camera, and display selected image & caption.
   return (
     <View style={styles.container}>
       <StatusBar style="auto" />
