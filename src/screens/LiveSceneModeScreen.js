@@ -1,4 +1,5 @@
-import '@tensorflow/tfjs-react-native'; // Initialize tfjs-react-native
+// src/screens/LiveSceneModeScreen.js
+import '@tensorflow/tfjs-react-native';
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Button } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -15,15 +16,13 @@ export default function LiveSceneModeScreen() {
   const [predictions, setPredictions] = useState([]);
   const [isTfReady, setIsTfReady] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isDetecting, setIsDetecting] = useState(false); // toggle detection on/off
+  const [isDetecting, setIsDetecting] = useState(false);
   const [currentDetection, setCurrentDetection] = useState(null);
   const cameraRef = useRef(null);
 
-  // Constants for performance tuning:
-  const CAPTURE_DELAY = 500; // delay between captures in ms when no detection (faster)
-  const DETECTION_COOLDOWN = 3000; // cooldown delay after detection in ms
+  const CAPTURE_DELAY = 500;
+  const DETECTION_COOLDOWN = 3000;
 
-  // Initialize TensorFlow and load model
   useEffect(() => {
     const initTf = async () => {
       try {
@@ -37,38 +36,26 @@ export default function LiveSceneModeScreen() {
         console.error('Error initializing TF:', error);
       }
     };
-
     initTf();
   }, []);
 
-  // Recursive frame processing function with adjustable delays
   const processFrame = useCallback(async () => {
     if (!model || !cameraRef.current || !isDetecting) return;
-    if (isProcessing) return; // safeguard
-
+    if (isProcessing) return;
     try {
       setIsProcessing(true);
-      // Use a lower quality value to speed up capture and decoding
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.2,
         base64: false,
         skipProcessing: true,
       });
-
-      // Fetch the image bytes from the photo URI.
       const response = await fetch(photo.uri);
       const imageData = await response.arrayBuffer();
       const raw = new Uint8Array(imageData);
-
-      // Decode the JPEG image using tfjs-react-native's decodeJpeg
       const imageTensor = decodeJpeg(raw);
-
-      // Get predictions
       const detections = await model.detect(imageTensor);
       console.log('Detections:', detections);
       setPredictions(detections);
-
-      // If a detection is found and it's new, announce it and start a cooldown
       if (detections.length > 0) {
         const bestDetection = detections.reduce((prev, curr) =>
           prev.score > curr.score ? prev : curr
@@ -76,7 +63,6 @@ export default function LiveSceneModeScreen() {
         if (!currentDetection || currentDetection.class !== bestDetection.class) {
           setCurrentDetection(bestDetection);
           Speech.speak(`I see a ${bestDetection.class}`, { rate: 0.9 });
-          // Cooldown: Do not process further frames for DETECTION_COOLDOWN
           setTimeout(() => {
             setCurrentDetection(null);
             processFrame();
@@ -86,20 +72,17 @@ export default function LiveSceneModeScreen() {
           return;
         }
       }
-
       tf.dispose(imageTensor);
     } catch (error) {
       console.error('Error processing frame:', error);
     } finally {
       setIsProcessing(false);
-      // Schedule next frame if not in cooldown
       if (isDetecting && !currentDetection) {
         setTimeout(processFrame, CAPTURE_DELAY);
       }
     }
   }, [model, isDetecting, isProcessing, currentDetection]);
 
-  // Start frame processing when detection is enabled
   useEffect(() => {
     if (isDetecting) {
       processFrame();
@@ -114,7 +97,6 @@ export default function LiveSceneModeScreen() {
     setIsDetecting((prev) => !prev);
   };
 
-  // While permissions are still loading
   if (!permission) {
     return (
       <View style={styles.centerContainer}>
@@ -122,8 +104,6 @@ export default function LiveSceneModeScreen() {
       </View>
     );
   }
-
-  // If permissions are not granted
   if (!permission.granted) {
     return (
       <View style={styles.centerContainer}>
@@ -132,8 +112,6 @@ export default function LiveSceneModeScreen() {
       </View>
     );
   }
-
-  // While TensorFlow or the model is loading
   if (!isTfReady || !model) {
     return (
       <View style={styles.centerContainer}>
@@ -158,7 +136,6 @@ export default function LiveSceneModeScreen() {
             </Text>
           </TouchableOpacity>
         </View>
-        {/* Show the current detection in the center */}
         {currentDetection && (
           <View style={styles.centerDetection}>
             <Text style={styles.centerText}>
