@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
-import { logEvent } from '../utils/logger'; // Ensure this path matches your project structure
+import { logEvent } from '../utils/logger';
 import { useNavigation } from '@react-navigation/native';
 
 export default function LoginScreen() {
@@ -16,13 +16,10 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // Log successful login
-      logEvent('User logged in', { email });
-      // Navigate to the main app screen (adjust route name as needed)
+      logEvent('User logged in', { email, screen: 'LoginScreen' });
       navigation.navigate('MainApp');
     } catch (error) {
-      // Log login error
-      logEvent('Login error', { email, error: error.message });
+      logEvent('Login error', { email, error: error.message, screen: 'LoginScreen' });
       Alert.alert('Login Error', error.message);
     } finally {
       setLoading(false);
