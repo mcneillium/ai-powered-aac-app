@@ -13,7 +13,7 @@ export default function SignupScreen({ navigation }) {
     setLoading(true);
     try {
       await createUserWithEmailAndPassword(auth, email, password);
-      // Registration successful; you might navigate to the main app screen or display a success message.
+      // Registration successful; navigate to MainApp
       navigation.navigate('MainApp');
     } catch (error) {
       alert('Sign up error: ' + error.message);
@@ -47,7 +47,6 @@ export default function SignupScreen({ navigation }) {
           <Text style={styles.buttonText}>Register</Text>
         </TouchableOpacity>
       )}
-      {/* Optionally, add a link to navigate back to Login */}
       <TouchableOpacity onPress={() => navigation.navigate('Login')}>
         <Text style={styles.link}>Already have an account? Log In</Text>
       </TouchableOpacity>
