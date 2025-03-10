@@ -1,4 +1,4 @@
-import { predictNextWordWithImprovedModel } from './improvedModel';
+import { predictNextWordWithImprovedModel } from './improvedModelLoader';
 
 export async function getAISuggestions(currentSentence) {
   if (!currentSentence.trim()) return [];
@@ -6,31 +6,28 @@ export async function getAISuggestions(currentSentence) {
 
   let attempts = 0;
   const maxAttempts = 10;
-  while ((!global.modelLoaded || !global.tokenizer) && attempts < maxAttempts) {
-    console.warn("⏳ Model or tokenizer not loaded yet. Waiting 500ms...");
+  // Wait until the model and tokenizer are loaded (if applicable)
+  while ((!global.betterWordPredictionModel || !global.tokenizer) && attempts < maxAttempts) {
+    console.warn("⏳ Improved model or tokenizer not loaded yet. Waiting 500ms...");
     await new Promise(resolve => setTimeout(resolve, 500));
     attempts++;
   }
-  if (!global.modelLoaded || !global.tokenizer) {
-    console.error("❌ Model/tokenizer still not loaded after waiting.");
+  if (!global.betterWordPredictionModel || !global.tokenizer) {
+    console.error("❌ Improved model or tokenizer still not loaded after waiting.");
     return [];
   }
 
   try {
-    if (global.betterWordPredictionModel) {
-      const suggestion = await predictNextWordWithImprovedModel(
-        global.betterWordPredictionModel,
-        global.tokenizer,
-        currentSentence,
-        1.0, // temperature (adjust as needed)
-        4    // sequence length
-      );
-      return [suggestion];
-    }
-    console.error("❌ No improved model available!");
-    return [];
+    const suggestion = await predictNextWordWithImprovedModel(
+      global.betterWordPredictionModel,
+      global.tokenizer,
+      currentSentence,
+      1.0, // Temperature parameter (adjust as needed)
+      4    // Sequence length (must match your training configuration)
+    );
+    return [suggestion];
   } catch (error) {
-    console.error("❌ Error during prediction:", error);
+    console.error("❌ Error during improved model prediction:", error);
     return [];
   }
 }
