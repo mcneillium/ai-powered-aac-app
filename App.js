@@ -12,8 +12,7 @@ import EasySentenceBuilderScreen from './src/screens/EasySentenceBuilderScreen';
 import CameraScreen from './src/screens/CameraScreen';
 import EmotionScreen from './src/screens/EmotionScreen';
 import LiveSceneModeScreen from './src/screens/LiveSceneModeScreen';
-import { loadModel } from './src/services/tfModel';
-import { createImprovedModel } from './src/services/improvedModel'; // Updated import
+import { loadImprovedModel } from './src/services/improvedModelLoader'; // New loader import
 import * as tf from '@tensorflow/tfjs';
 
 const Tab = createBottomTabNavigator();
@@ -101,27 +100,19 @@ export default function App() {
   const [modelLoading, setModelLoading] = useState(true);
   const [modelError, setModelError] = useState(null);
 
-  // Load both the original and the improved TensorFlow models when the app starts.
+  // Load the improved model when the app starts
   useEffect(() => {
-    const initModels = async () => {
+    const initModel = async () => {
       try {
-        // Load the original model (if needed)
-        await loadModel();
-        // Ensure TensorFlow is ready before creating the improved model.
-        await tf.ready();
-        const vocabSize = 21;        // Adjust based on your expanded vocabulary
-        const sequenceLength = 4;    // Or longer if your training data supports it
-        const improvedModel = createImprovedModel(vocabSize, sequenceLength);
-        global.betterWordPredictionModel = improvedModel;
-        console.log("✅ Improved model loaded successfully!");
+        await loadImprovedModel();
         setModelLoading(false);
       } catch (err) {
-        console.error('Error loading TensorFlow models:', err);
+        console.error('Error loading improved model:', err);
         setModelError(err);
         setModelLoading(false);
       }
     };
-    initModels();
+    initModel();
   }, []);
 
   if (modelLoading) {
@@ -133,7 +124,7 @@ export default function App() {
   }
 
   if (modelError) {
-    console.warn('App continuing without TensorFlow models. Some features may be limited.');
+    console.warn('App continuing without improved model. Some features may be limited.');
   }
 
   return (
