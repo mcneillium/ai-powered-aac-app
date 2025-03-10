@@ -1,4 +1,3 @@
-// App.js (Mobile)
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -14,6 +13,8 @@ import CameraScreen from './src/screens/CameraScreen';
 import EmotionScreen from './src/screens/EmotionScreen';
 import LiveSceneModeScreen from './src/screens/LiveSceneModeScreen';
 import { loadModel } from './src/services/tfModel';
+import { createImprovedModel } from './src/services/improvedModel'; // Updated import
+import * as tf from '@tensorflow/tfjs';
 
 const Tab = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -100,19 +101,27 @@ export default function App() {
   const [modelLoading, setModelLoading] = useState(true);
   const [modelError, setModelError] = useState(null);
 
-  // Load your TensorFlow model when the app starts
+  // Load both the original and the improved TensorFlow models when the app starts.
   useEffect(() => {
-    const initModel = async () => {
+    const initModels = async () => {
       try {
+        // Load the original model (if needed)
         await loadModel();
+        // Ensure TensorFlow is ready before creating the improved model.
+        await tf.ready();
+        const vocabSize = 21;        // Adjust based on your expanded vocabulary
+        const sequenceLength = 4;    // Or longer if your training data supports it
+        const improvedModel = createImprovedModel(vocabSize, sequenceLength);
+        global.betterWordPredictionModel = improvedModel;
+        console.log("✅ Improved model loaded successfully!");
         setModelLoading(false);
       } catch (err) {
-        console.error('Error loading TensorFlow model:', err);
+        console.error('Error loading TensorFlow models:', err);
         setModelError(err);
         setModelLoading(false);
       }
     };
-    initModel();
+    initModels();
   }, []);
 
   if (modelLoading) {
@@ -124,7 +133,7 @@ export default function App() {
   }
 
   if (modelError) {
-    console.warn('App continuing without TensorFlow model. Some features may be limited.');
+    console.warn('App continuing without TensorFlow models. Some features may be limited.');
   }
 
   return (

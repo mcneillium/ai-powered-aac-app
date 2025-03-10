@@ -1,4 +1,3 @@
-// src/screens/EasySentenceBuilderScreen.js
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
@@ -16,7 +15,6 @@ import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { searchPictograms, getPictogramUrl } from '../services/arasaacService';
 import { getAISuggestions } from '../services/getAISuggestions';
-import { logEvent } from '../utils/logger';
 
 export default function EasySentenceBuilderScreen() {
   const [sentenceWords, setSentenceWords] = useState([]);
@@ -29,13 +27,21 @@ export default function EasySentenceBuilderScreen() {
   const [logVisible, setLogVisible] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(null);
 
+  // Expanded Word Bank with more varied vocabulary
   const wordBank = [
+    // Pronouns & Connectors
     'I', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'us', 'my', 'your', 'our',
+    // Verbs (Actions)
     'want', 'need', 'have', 'go', 'come', 'do', 'make', 'eat', 'drink', 'play', 'sleep', 'read', 'write', 'look', 'see', 'get', 'give', 'take', 'help', 'start', 'stop', 'open', 'close', 'buy', 'sell',
+    // Adjectives (Qualities/States)
     'happy', 'sad', 'angry', 'excited', 'scared', 'calm', 'tired', 'hungry', 'thirsty', 'big', 'small', 'good', 'bad', 'new', 'old', 'fast', 'slow',
+    // Nouns (Common Objects and Places)
     'food', 'water', 'home', 'school', 'friend', 'family', 'car', 'book', 'toy', 'ball', 'bed', 'work', 'park', 'shop', 'phone',
+    // Emotions & States
     'love', 'like', 'more', 'please', 'okay', 'yes', 'no', 'maybe',
+    // Time & Direction
     'now', 'later', 'here', 'there', 'today', 'tomorrow',
+    // Additional Useful Words
     'help', 'stop', 'start', 'again', 'why', 'what', 'where'
   ];
 
@@ -46,6 +52,7 @@ export default function EasySentenceBuilderScreen() {
         )
       : wordBank;
 
+  // Pictogram categories for filtering the bank
   const categories = ['Everyday', 'Food', 'Drinks', 'People', 'Places'];
 
   useEffect(() => {
@@ -53,9 +60,12 @@ export default function EasySentenceBuilderScreen() {
   }, [selectedCategory]);
 
   useEffect(() => {
+    // Update AI-driven suggestions whenever the sentence changes
     const updateSuggestions = async () => {
       const currentSentence = sentenceWords.join(' ');
+      console.log("Current sentence for prediction:", currentSentence);
       const newSuggestions = await getAISuggestions(currentSentence);
+      console.log("New suggestions returned:", newSuggestions);
       setSuggestions(newSuggestions);
     };
     updateSuggestions();
@@ -70,19 +80,19 @@ export default function EasySentenceBuilderScreen() {
     setLoading(false);
   };
 
-  // Log interaction data to AsyncStorage and also log to Firebase
+  // Log interaction data to AsyncStorage
   const logUserInteraction = async (interactionData) => {
     try {
       const storedLog = await AsyncStorage.getItem('userInteractionLog');
       let logArray = storedLog ? JSON.parse(storedLog) : [];
       logArray.push(interactionData);
       await AsyncStorage.setItem('userInteractionLog', JSON.stringify(logArray));
-      logEvent(interactionData.action, { ...interactionData, screen: 'EasySentenceBuilderScreen' });
     } catch (error) {
       console.error('Error logging interaction:', error);
     }
   };
 
+  // Fetch log data from AsyncStorage
   const fetchLogData = async () => {
     try {
       const storedLog = await AsyncStorage.getItem('userInteractionLog');
@@ -94,6 +104,7 @@ export default function EasySentenceBuilderScreen() {
     }
   };
 
+  // Add a word to the sentence and log the interaction
   const addWord = (word) => {
     setSentenceWords((prev) => {
       const newSentence = [...prev, word];
@@ -107,6 +118,7 @@ export default function EasySentenceBuilderScreen() {
     });
   };
 
+  // Clear the sentence and log the interaction
   const clearSentence = () => {
     setSentenceWords([]);
     logUserInteraction({
@@ -115,6 +127,8 @@ export default function EasySentenceBuilderScreen() {
     });
   };
 
+  // Updated speakSentence function:
+  // It highlights each word sequentially as the sentence is spoken.
   const speakSentence = () => {
     const sentence = sentenceWords.join(' ');
     if (sentence.trim().length > 0) {
@@ -129,7 +143,8 @@ export default function EasySentenceBuilderScreen() {
           clearInterval(interval);
           setHighlightIndex(null);
         }
-      }, 500);
+      }, 500); // 500ms per word; adjust as needed
+
       Speech.speak(sentence);
       logUserInteraction({
         action: 'speakSentence',
@@ -141,6 +156,7 @@ export default function EasySentenceBuilderScreen() {
     }
   };
 
+  // Toggle log visibility and fetch log data when showing
   const toggleLogVisibility = () => {
     setLogVisible(prev => !prev);
     if (!logVisible) {
@@ -148,6 +164,7 @@ export default function EasySentenceBuilderScreen() {
     }
   };
 
+  // Helper: Extract a label from a pictogram item.
   const getPictogramLabel = (item) => {
     if (item.keywords && item.keywords.length > 0 && item.keywords[0].keyword) {
       return item.keywords[0].keyword;
@@ -169,19 +186,34 @@ export default function EasySentenceBuilderScreen() {
   );
 
   const renderPictogramItem = ({ item }) => (
-    <TouchableOpacity style={styles.pictogramItem} onPress={() => addWord(getPictogramLabel(item))}>
-      <Image style={styles.pictogramImage} source={{ uri: getPictogramUrl(item._id, 500) }} />
+    <TouchableOpacity
+      style={styles.pictogramItem}
+      onPress={() => addWord(getPictogramLabel(item))}
+    >
+      <Image
+        style={styles.pictogramImage}
+        source={{ uri: getPictogramUrl(item._id, 500) }}
+      />
     </TouchableOpacity>
   );
 
   const renderWordButton = (word, index) => (
-    <TouchableOpacity key={index} style={styles.wordButton} onPress={() => addWord(word)}>
+    <TouchableOpacity
+      key={index}
+      style={styles.wordButton}
+      onPress={() => addWord(word)}
+    >
       <Text style={styles.wordButtonText}>{word}</Text>
     </TouchableOpacity>
   );
 
+  // Render suggestion button for AI-generated suggestions (each suggestion is a single word)
   const renderSuggestionButton = (word, index) => (
-    <TouchableOpacity key={index} style={styles.suggestionButton} onPress={() => addWord(word)}>
+    <TouchableOpacity
+      key={index}
+      style={styles.suggestionButton}
+      onPress={() => addWord(word)}
+    >
       <Text style={styles.suggestionButtonText}>{word}</Text>
     </TouchableOpacity>
   );
@@ -189,16 +221,28 @@ export default function EasySentenceBuilderScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.heading}>Create Your Sentence</Text>
+      
+      {/* Sentence Preview */}
       <View style={styles.sentencePreview}>
         {sentenceWords.map((word, index) => (
-          <Text key={index} style={[styles.sentenceWord, highlightIndex === index && styles.highlightedWord]}>
+          <Text
+            key={index}
+            style={[
+              styles.sentenceWord,
+              highlightIndex === index && styles.highlightedWord,
+            ]}
+          >
             {word}{' '}
           </Text>
         ))}
       </View>
+
+      {/* AI-Driven Suggestion Bar */}
       <ScrollView horizontal contentContainerStyle={styles.suggestionBar}>
         {suggestions.map((suggestion, index) => renderSuggestionButton(suggestion, index))}
       </ScrollView>
+
+      {/* Expanded Word Bank with Search */}
       <Text style={styles.sectionHeading}>Word Bank</Text>
       <TextInput
         style={styles.searchInput}
@@ -209,10 +253,14 @@ export default function EasySentenceBuilderScreen() {
       <ScrollView horizontal contentContainerStyle={styles.wordBankContainer}>
         {filteredWordBank.map((word, index) => renderWordButton(word, index))}
       </ScrollView>
+
+      {/* Pictogram Categories */}
       <Text style={styles.sectionHeading}>Pictogram Categories</Text>
       <ScrollView horizontal contentContainerStyle={styles.categoryBar}>
         {categories.map((category, index) => renderCategoryButton(category, index))}
       </ScrollView>
+
+      {/* Pictogram Bank */}
       <Text style={styles.sectionHeading}>Pictogram Bank</Text>
       {loading ? (
         <Text style={styles.loadingText}>Loading pictograms...</Text>
@@ -225,6 +273,8 @@ export default function EasySentenceBuilderScreen() {
           contentContainerStyle={styles.pictogramContainer}
         />
       )}
+
+      {/* Action Buttons */}
       <View style={styles.buttonRow}>
         <Button title="Speak Sentence" onPress={speakSentence} color="#4CAF50" />
         <Button title="Clear Sentence" onPress={clearSentence} color="#f44336" />
@@ -232,6 +282,8 @@ export default function EasySentenceBuilderScreen() {
       <View style={styles.buttonRow}>
         <Button title={logVisible ? "Hide Log" : "View Log"} onPress={toggleLogVisibility} color="#2196F3" />
       </View>
+
+      {/* Display Interaction Log if visible */}
       {logVisible && interactionLog.length > 0 && (
         <ScrollView style={styles.logContainer}>
           <Text style={styles.logHeading}>User Interaction Log:</Text>
@@ -242,6 +294,7 @@ export default function EasySentenceBuilderScreen() {
           ))}
         </ScrollView>
       )}
+
       <StatusBar style="auto" />
     </View>
   );
@@ -294,7 +347,11 @@ const styles = StyleSheet.create({
   pictogramItem: { marginRight: 10 },
   pictogramImage: { width: 100, height: 100, borderRadius: 10 },
   loadingText: { fontSize: 18, textAlign: 'center' },
-  buttonRow: { flexDirection: 'row', justifyContent: 'space-around', marginVertical: 10 },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginVertical: 10,
+  },
   suggestionBar: { flexDirection: 'row', marginBottom: 10 },
   suggestionButton: {
     backgroundColor: '#ffcccb',
