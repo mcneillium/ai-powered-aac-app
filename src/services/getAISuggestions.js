@@ -1,4 +1,4 @@
-import { predictNextWordWithImprovedModel } from './improvedModelLoader';
+import { predictTopKWordsWithImprovedModel } from './improvedModelLoader';
 
 export async function getAISuggestions(currentSentence) {
   if (!currentSentence.trim()) return [];
@@ -6,26 +6,27 @@ export async function getAISuggestions(currentSentence) {
 
   let attempts = 0;
   const maxAttempts = 10;
-  // Wait until the model and tokenizer are loaded (if applicable)
   while ((!global.betterWordPredictionModel || !global.tokenizer) && attempts < maxAttempts) {
-    console.warn("⏳ Improved model or tokenizer not loaded yet. Waiting 500ms...");
+    console.warn("⏳ Model or tokenizer not loaded yet. Waiting 500ms...");
     await new Promise(resolve => setTimeout(resolve, 500));
     attempts++;
   }
   if (!global.betterWordPredictionModel || !global.tokenizer) {
-    console.error("❌ Improved model or tokenizer still not loaded after waiting.");
+    console.error("❌ Model or tokenizer still not loaded after waiting.");
     return [];
   }
 
   try {
-    const suggestion = await predictNextWordWithImprovedModel(
+    // Return the top 4 predictions
+    const suggestions = await predictTopKWordsWithImprovedModel(
       global.betterWordPredictionModel,
       global.tokenizer,
       currentSentence,
-      1.0, // Temperature parameter (adjust as needed)
-      4    // Sequence length (must match your training configuration)
+      1.0,  // temperature
+      4,    // sequenceLength
+      4     // topK
     );
-    return [suggestion];
+    return suggestions;
   } catch (error) {
     console.error("❌ Error during improved model prediction:", error);
     return [];
