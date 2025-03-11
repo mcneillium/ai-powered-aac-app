@@ -8,12 +8,15 @@ const modelWeights = [require('../../assets/tf_model/word_prediction_tfjs/group1
 // Load the tokenizer JSON file
 const tokenizer = require('../../assets/tf_model/word_prediction_tfjs/tokenizer.json');
 
+/**
+ * Loads the improved model and tokenizer, and stores them globally.
+ */
 export async function loadImprovedModel() {
   await tf.ready();
   try {
     const model = await tf.loadLayersModel(bundleResourceIO(modelJson, modelWeights));
     console.log("✅ Improved model loaded successfully!");
-    // Store the improved model and tokenizer globally for later use
+    // Store globally for use in prediction functions
     global.betterWordPredictionModel = model;
     global.tokenizer = tokenizer;
     return model;
@@ -34,41 +37,71 @@ export async function loadImprovedModel() {
  * @returns {Promise<string>} - The predicted next word.
  */
 export async function predictNextWordWithImprovedModel(model, tokenizer, sentence, temperature = 1.0, sequenceLength = 4) {
-  // Preprocess the sentence: lower case and split into tokens
   const tokens = sentence.toLowerCase().split(" ");
-  // Use only the last `sequenceLength` tokens; pad with "0" if necessary (assuming "0" is padding)
   let inputTokens = tokens.slice(-sequenceLength);
   while (inputTokens.length < sequenceLength) {
     inputTokens.unshift("0");
   }
-  // Convert tokens to indices using the tokenizer; default to 0 if not found
   const inputIndices = inputTokens.map(token => tokenizer[token] || 0);
-  
-  // Create a tensor of shape [1, sequenceLength]
   const inputTensor = tf.tensor2d([inputIndices], [1, sequenceLength], "int32");
-  
-  // Run prediction; assume the model outputs logits of shape [1, vocabSize]
+
   const logitsTensor = model.predict(inputTensor);
-  // Get the logits as an array
   const logits = Array.from(logitsTensor.dataSync());
-  
-  // Apply temperature scaling: new logits = logits / temperature
   const scaledLogits = logits.map(logit => logit / temperature);
-  
-  // Compute softmax probabilities from scaled logits
   const expLogits = scaledLogits.map(Math.exp);
   const sumExp = expLogits.reduce((a, b) => a + b, 0);
-  const probs = expLogits.map(expLogit => expLogit / sumExp);
-  
-  // Sample an index from the probability distribution
-  const sampledIndex = sampleFromDistribution(probs);
-  
-  // Build a reverse mapping from index to word
+  const probs = expLogits.map(expVal => expVal / sumExp);
+  const predictedIndex = probs.indexOf(Math.max(...probs));
+
   const indexToWord = Object.fromEntries(
     Object.entries(tokenizer).map(([word, idx]) => [idx, word])
   );
-  
-  return indexToWord[sampledIndex] || "[UNKNOWN]";
+  return indexToWord[predictedIndex] || "[UNKNOWN]";
+}
+
+/**
+ * Predicts the top K words using the improved model with temperature sampling.
+ *
+ * @param {tf.LayersModel} model - The loaded improved model.
+ * @param {Object} tokenizer - The tokenizer mapping (word -> index).
+ * @param {string} sentence - The input sentence.
+ * @param {number} temperature - Temperature parameter for sampling (default 1.0).
+ * @param {number} sequenceLength - The number of tokens expected by the model.
+ * @param {number} topK - Number of top predictions to return (default 4).
+ * @returns {Promise<string[]>} - An array of the top K predicted words, sorted by descending probability.
+ */
+export async function predictTopKWordsWithImprovedModel(
+  model,
+  tokenizer,
+  sentence,
+  temperature = 1.0,
+  sequenceLength = 4,
+  topK = 4
+) {
+  const tokens = sentence.toLowerCase().split(" ");
+  let inputTokens = tokens.slice(-sequenceLength);
+  while (inputTokens.length < sequenceLength) {
+    inputTokens.unshift("0");
+  }
+  const inputIndices = inputTokens.map(token => tokenizer[token] || 0);
+  const inputTensor = tf.tensor2d([inputIndices], [1, sequenceLength], "int32");
+
+  const logitsTensor = model.predict(inputTensor);
+  const logits = Array.from(logitsTensor.dataSync());
+  const scaledLogits = logits.map(logit => logit / temperature);
+  const expLogits = scaledLogits.map(Math.exp);
+  const sumExp = expLogits.reduce((a, b) => a + b, 0);
+  const probs = expLogits.map(expVal => expVal / sumExp);
+
+  // Get indices and probabilities sorted in descending order
+  const probIndices = probs.map((prob, index) => ({ index, prob }));
+  const sorted = probIndices.sort((a, b) => b.prob - a.prob);
+  const topKIndices = sorted.slice(0, topK).map(item => item.index);
+
+  const indexToWord = Object.fromEntries(
+    Object.entries(tokenizer).map(([word, idx]) => [idx, word])
+  );
+  return topKIndices.map(idx => indexToWord[idx] || "[UNKNOWN]");
 }
 
 /**
