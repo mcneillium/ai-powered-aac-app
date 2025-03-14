@@ -10,7 +10,8 @@ import {
   ScrollView,
   Image,
   TextInput,
-  Alert
+  Alert,
+  SafeAreaView
 } from 'react-native';
 import * as Speech from 'expo-speech';
 import { StatusBar } from 'expo-status-bar';
@@ -33,9 +34,13 @@ export default function EasySentenceBuilderScreen() {
 
   const wordBank = [
     'I', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'us', 'my', 'your', 'our',
-    'want', 'need', 'have', 'go', 'come', 'do', 'make', 'eat', 'drink', 'play', 'sleep', 'read', 'write', 'look', 'see', 'get', 'give', 'take', 'help', 'start', 'stop', 'open', 'close', 'buy', 'sell',
-    'happy', 'sad', 'angry', 'excited', 'scared', 'calm', 'tired', 'hungry', 'thirsty', 'big', 'small', 'good', 'bad', 'new', 'old', 'fast', 'slow',
-    'food', 'water', 'home', 'school', 'friend', 'family', 'car', 'book', 'toy', 'ball', 'bed', 'work', 'park', 'shop', 'phone',
+    'want', 'need', 'have', 'go', 'come', 'do', 'make', 'eat', 'drink', 'play', 'sleep',
+    'read', 'write', 'look', 'see', 'get', 'give', 'take', 'help', 'start', 'stop',
+    'open', 'close', 'buy', 'sell',
+    'happy', 'sad', 'angry', 'excited', 'scared', 'calm', 'tired', 'hungry', 'thirsty',
+    'big', 'small', 'good', 'bad', 'new', 'old', 'fast', 'slow',
+    'food', 'water', 'home', 'school', 'friend', 'family', 'car', 'book', 'toy', 'ball',
+    'bed', 'work', 'park', 'shop', 'phone',
     'love', 'like', 'more', 'please', 'okay', 'yes', 'no', 'maybe',
     'now', 'later', 'here', 'there', 'today', 'tomorrow',
     'help', 'stop', 'start', 'again', 'why', 'what', 'where'
@@ -148,7 +153,7 @@ export default function EasySentenceBuilderScreen() {
     }
   };
 
-  // Button handler to push locally stored logs to Firebase
+  // Push logs to Firebase when the button is pressed.
   const handlePushLogs = async () => {
     try {
       await pushLogsToFirebase();
@@ -158,7 +163,7 @@ export default function EasySentenceBuilderScreen() {
     }
   };
 
-  // Button handler to fine-tune the predictive model using user logs
+  // Fine-tune model using user logs.
   const handleFineTuneModel = async () => {
     try {
       await fineTuneUserModel(3); // Fine-tune for 3 epochs (adjust as needed)
@@ -174,7 +179,7 @@ export default function EasySentenceBuilderScreen() {
       key={index}
       style={[
         styles.categoryButton,
-        category === selectedCategory ? styles.categoryButtonSelected : null,
+        category === selectedCategory && styles.categoryButtonSelected,
       ]}
       onPress={() => setSelectedCategory(category)}
     >
@@ -222,122 +227,155 @@ export default function EasySentenceBuilderScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Create Your Sentence</Text>
-      
-      {/* Sentence Preview */}
-      <View style={styles.sentencePreview}>
-        {sentenceWords.map((word, index) => (
-          <Text
-            key={index}
-            style={[
-              styles.sentenceWord,
-              highlightIndex === index && styles.highlightedWord,
-            ]}
-          >
-            {word}{' '}
-          </Text>
-        ))}
-      </View>
-
-      {/* AI-Driven Suggestion Bar */}
-      <ScrollView horizontal contentContainerStyle={styles.suggestionBar}>
-        {suggestions.map((suggestion, index) =>
-          renderSuggestionButton(suggestion, index)
-        )}
-      </ScrollView>
-
-      {/* Word Bank with Search */}
-      <Text style={styles.sectionHeading}>Word Bank</Text>
-      <TextInput
-        style={styles.searchInput}
-        placeholder="Search words..."
-        value={wordSearch}
-        onChangeText={setWordSearch}
-      />
-      <ScrollView horizontal contentContainerStyle={styles.wordBankContainer}>
-        {filteredWordBank.map((word, index) => renderWordButton(word, index))}
-      </ScrollView>
-
-      {/* Pictogram Categories */}
-      <Text style={styles.sectionHeading}>Pictogram Categories</Text>
-      <ScrollView horizontal contentContainerStyle={styles.categoryBar}>
-        {categories.map((category, index) => renderCategoryButton(category, index))}
-      </ScrollView>
-
-      {/* Pictogram Bank */}
-      <Text style={styles.sectionHeading}>Pictogram Bank</Text>
-      {loading ? (
-        <Text style={styles.loadingText}>Loading pictograms...</Text>
-      ) : (
-        <FlatList
-          data={availablePictures}
-          horizontal
-          keyExtractor={(item, index) => index.toString()}
-          renderItem={renderPictogramItem}
-          contentContainerStyle={styles.pictogramContainer}
-        />
-      )}
-
-      {/* Action Buttons */}
-      <View style={styles.buttonRow}>
-        <Button title="Speak Sentence" onPress={speakSentence} color="#4CAF50" />
-        <Button title="Clear Sentence" onPress={clearSentence} color="#f44336" />
-      </View>
-
-      <View style={styles.buttonRow}>
-        <Button title={logVisible ? "Hide Log" : "View Log"} onPress={toggleLogVisibility} color="#2196F3" />
-      </View>
-
-      <View style={styles.buttonRow}>
-        <Button title="Push Logs to Firebase" onPress={handlePushLogs} color="#FF9800" />
-      </View>
-
-      <View style={styles.buttonRow}>
-        <Button title="Fine-Tune Model" onPress={handleFineTuneModel} color="#FF5722" />
-      </View>
-
-      {logVisible && interactionLog.length > 0 && (
-        <ScrollView style={styles.logContainer}>
-          <Text style={styles.logHeading}>User Interaction Log:</Text>
-          {interactionLog.map((log, index) => (
-            <Text key={index} style={styles.logText}>
-              {log.timestamp} - {log.action}{log.wordAdded ? `: ${log.wordAdded}` : ''}{log.sentence ? ` - ${log.sentence}` : ''}
+    <SafeAreaView style={styles.safeContainer}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.heading}>Create Your Sentence</Text>
+        {/* Sentence Preview */}
+        <View style={styles.sentencePreview}>
+          {sentenceWords.map((word, index) => (
+            <Text
+              key={index}
+              style={[
+                styles.sentenceWord,
+                highlightIndex === index && styles.highlightedWord,
+              ]}
+            >
+              {word}{' '}
             </Text>
           ))}
-        </ScrollView>
-      )}
+        </View>
 
-      <StatusBar style="auto" />
-    </View>
+        {/* AI-Driven Suggestion Bar */}
+        <ScrollView horizontal contentContainerStyle={styles.suggestionBar}>
+          {suggestions.map((suggestion, index) =>
+            renderSuggestionButton(suggestion, index)
+          )}
+        </ScrollView>
+
+        {/* Word Bank with Search */}
+        <Text style={styles.sectionHeading}>Word Bank</Text>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search words..."
+          value={wordSearch}
+          onChangeText={setWordSearch}
+        />
+        <ScrollView horizontal contentContainerStyle={styles.wordBankContainer}>
+          {filteredWordBank.map((word, index) => renderWordButton(word, index))}
+        </ScrollView>
+
+        {/* Pictogram Categories */}
+        <Text style={styles.sectionHeading}>Pictogram Categories</Text>
+        <ScrollView horizontal contentContainerStyle={styles.categoryBar}>
+          {categories.map((category, index) =>
+            renderCategoryButton(category, index)
+          )}
+        </ScrollView>
+
+        {/* Pictogram Bank */}
+        <Text style={styles.sectionHeading}>Pictogram Bank</Text>
+        {loading ? (
+          <Text style={styles.loadingText}>Loading pictograms...</Text>
+        ) : (
+          <FlatList
+            data={availablePictures}
+            horizontal
+            keyExtractor={(item, index) => index.toString()}
+            renderItem={renderPictogramItem}
+            contentContainerStyle={styles.pictogramContainer}
+          />
+        )}
+
+        {/* Action Buttons */}
+        <View style={styles.buttonRow}>
+          <Button title="Speak Sentence" onPress={speakSentence} color="#4CAF50" />
+          <Button title="Clear Sentence" onPress={clearSentence} color="#f44336" />
+        </View>
+
+        <View style={styles.buttonRow}>
+          <Button title={logVisible ? "Hide Log" : "View Log"} onPress={toggleLogVisibility} color="#2196F3" />
+        </View>
+
+        <View style={styles.buttonRow}>
+          <Button title="Push Logs to Firebase" onPress={handlePushLogs} color="#FF9800" />
+        </View>
+
+        <View style={styles.buttonRow}>
+          <Button title="Fine-Tune Model" onPress={handleFineTuneModel} color="#FF5722" />
+        </View>
+
+        {logVisible && interactionLog.length > 0 && (
+          <ScrollView style={styles.logContainer}>
+            <Text style={styles.logHeading}>User Interaction Log:</Text>
+            {interactionLog.map((log, index) => (
+              <Text key={index} style={styles.logText}>
+                {log.timestamp} - {log.action}{log.wordAdded ? `: ${log.wordAdded}` : ''}{log.sentence ? ` - ${log.sentence}` : ''}
+              </Text>
+            ))}
+          </ScrollView>
+        )}
+
+        <StatusBar style="auto" />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#fff' },
-  heading: { fontSize: 28, textAlign: 'center', marginBottom: 15, fontWeight: 'bold' },
+  safeContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  container: {
+    padding: 20,
+    paddingBottom: 40,
+    alignItems: 'center',
+  },
+  heading: {
+    fontSize: 28,
+    textAlign: 'center',
+    marginVertical: 15,
+    fontWeight: 'bold',
+  },
   sentencePreview: {
+    width: '100%',
     borderWidth: 1,
     borderColor: '#ccc',
     borderRadius: 10,
     padding: 15,
     marginBottom: 20,
-    minHeight: 50,
+    minHeight: 60,
     flexDirection: 'row',
     flexWrap: 'wrap',
+    backgroundColor: '#fafafa'
   },
-  sentenceWord: { fontSize: 20, color: '#333' },
-  highlightedWord: { backgroundColor: '#ffff00' },
-  sectionHeading: { fontSize: 22, marginBottom: 10, fontWeight: '600' },
+  sentenceWord: {
+    fontSize: 20,
+    color: '#333',
+  },
+  highlightedWord: {
+    backgroundColor: '#ffff00',
+  },
+  sectionHeading: {
+    fontSize: 22,
+    marginBottom: 10,
+    fontWeight: '600',
+    width: '100%',
+  },
   searchInput: {
+    width: '100%',
     borderWidth: 1,
     borderColor: '#ccc',
     borderRadius: 8,
-    padding: 8,
+    padding: 10,
     marginBottom: 10,
     fontSize: 16,
   },
-  wordBankContainer: { flexDirection: 'row', marginBottom: 20 },
+  wordBankContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    paddingHorizontal: 5,
+  },
   wordButton: {
     backgroundColor: '#d0e8ff',
     paddingVertical: 10,
@@ -345,8 +383,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginRight: 10,
   },
-  wordButtonText: { fontSize: 18, color: '#333' },
-  categoryBar: { flexDirection: 'row', marginBottom: 20 },
+  wordButtonText: {
+    fontSize: 18,
+    color: '#333',
+  },
+  categoryBar: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    paddingHorizontal: 5,
+  },
   categoryButton: {
     backgroundColor: '#e0e0e0',
     paddingVertical: 8,
@@ -354,18 +399,40 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginRight: 10,
   },
-  categoryButtonSelected: { backgroundColor: '#4CAF50' },
-  categoryButtonText: { fontSize: 16, color: '#333' },
-  pictogramContainer: { alignItems: 'center', paddingVertical: 10 },
-  pictogramItem: { marginRight: 10 },
-  pictogramImage: { width: 100, height: 100, borderRadius: 10 },
-  loadingText: { fontSize: 18, textAlign: 'center' },
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+  categoryButtonSelected: {
+    backgroundColor: '#4CAF50',
+  },
+  categoryButtonText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  pictogramContainer: {
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  pictogramItem: {
+    marginRight: 10,
+  },
+  pictogramImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 10,
+  },
+  loadingText: {
+    fontSize: 18,
+    textAlign: 'center',
     marginVertical: 10,
   },
-  suggestionBar: { flexDirection: 'row', marginBottom: 10 },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginVertical: 8,
+  },
+  suggestionBar: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
   suggestionButton: {
     backgroundColor: '#ffcccb',
     paddingVertical: 8,
@@ -373,8 +440,27 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginRight: 10,
   },
-  suggestionButtonText: { fontSize: 16, color: '#333' },
-  logContainer: { marginTop: 20, maxHeight: 150, borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10 },
-  logHeading: { fontSize: 18, fontWeight: '600', marginBottom: 5 },
-  logText: { fontSize: 14, color: '#555' },
+  suggestionButtonText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  logContainer: {
+    marginTop: 20,
+    maxHeight: 150,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    padding: 10,
+  },
+  logHeading: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 5,
+  },
+  logText: {
+    fontSize: 14,
+    color: '#555',
+    marginVertical: 2,
+  },
 });
