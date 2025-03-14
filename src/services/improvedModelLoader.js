@@ -74,7 +74,7 @@ export async function predictTopKWordsWithImprovedModel(
   model,
   tokenizer,
   sentence,
-  temperature = 1.0,
+  temperature = 1.5, // Increased temperature for more randomness
   sequenceLength = 4,
   topK = 4
 ) {
