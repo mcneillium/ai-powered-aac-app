@@ -1,31 +1,34 @@
 // src/utils/logger.js
 import { getAuth } from 'firebase/auth';
 import { ref, push } from 'firebase/database';
-import * as Device from 'expo-device';
-import { db } from 'firebaseConfig'; // Ensure relative path is correct
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { db } from 'firebaseConfig.js';
 
-/**
- * Logs an event with extended metadata to the "userLogs" node.
- * @param {string} action - Description of the event.
- * @param {Object} [metadata={}] - Additional data for context.
- */
-export function logEvent(action, metadata = {}) {
+export async function logEvent(action, metadata = {}) {
   const auth = getAuth();
   const currentUser = auth.currentUser;
+  const targetUserId = metadata.targetUserId || (currentUser ? currentUser.uid : null);
+  const carerId = currentUser ? currentUser.uid : null;
   
-  // Gather additional device info if available.
-  const deviceInfo = {
-    model: Device.modelName,
-    osName: Device.osName,
-    osVersion: Device.osVersion,
-  };
-
-  const logsRef = ref(db, 'userLogs');
-  push(logsRef, {
-    userId: currentUser ? currentUser.uid : null,
+  const logEntry = {
+    targetUserId,
+    carerId,
     action,
     timestamp: Date.now(),
-    deviceInfo, // Include device info in every log
-    ...metadata,
-  });
+    ...metadata
+  };
+
+  // Push to Firebase
+  const logsRef = ref(db, 'userLogs');
+  push(logsRef, logEntry);
+
+  // Also save to AsyncStorage
+  try {
+    const storedLogs = await AsyncStorage.getItem('userInteractionLog');
+    let logsArray = storedLogs ? JSON.parse(storedLogs) : [];
+    logsArray.push(logEntry);
+    await AsyncStorage.setItem('userInteractionLog', JSON.stringify(logsArray));
+  } catch (error) {
+    console.error('Error saving log to AsyncStorage:', error);
+  }
 }
