@@ -5,7 +5,7 @@ import { ref, push } from 'firebase/database';
 import { db } from 'firebaseConfig';
 
 /**
- * Retrieves all user training logs stored locally.
+ * Retrieves user training logs stored locally in AsyncStorage.
  */
 export async function getUserTrainingLogs() {
   try {
@@ -18,16 +18,14 @@ export async function getUserTrainingLogs() {
 }
 
 /**
- * Splits a sentence into tokens and builds training examples using a sliding window.
- * For example, with sequenceLength = 4, for sentence "i need to eat food",
- * it creates: Input: ["i", "need", "to", "eat"] → Target: "food"
+ * Splits a sentence into tokens and creates training examples using a sliding window.
+ * For example, for sentence "i need to eat food" with sequenceLength = 4:
+ * Input: ["i", "need", "to", "eat"] → Target: "food"
  */
 function buildTrainingExamplesFromSentence(sentence, tokenizer, sequenceLength = 4) {
   const tokens = sentence.trim().toLowerCase().split(/\s+/);
   const examples = [];
-  if (tokens.length < sequenceLength + 1) {
-    return examples;
-  }
+  if (tokens.length < sequenceLength + 1) return examples;
   for (let i = 0; i <= tokens.length - sequenceLength - 1; i++) {
     const inputTokens = tokens.slice(i, i + sequenceLength);
     const targetToken = tokens[i + sequenceLength];
@@ -58,9 +56,9 @@ export async function buildTrainingExamples(tokenizer, sequenceLength = 4) {
 
 /**
  * Fine-tunes the global predictive model using the user's logged inputs.
- * During each epoch, training metrics are pushed to Firebase under "fineTuneMetrics".
+ * After each epoch, training metrics (loss and accuracy) are pushed to Firebase under "fineTuneMetrics".
  *
- * @param {number} epochs - Number of epochs to fine-tune.
+ * @param {number} epochs - Number of epochs for fine-tuning (default: 3)
  */
 export async function fineTuneUserModel(epochs = 3) {
   if (!global.betterWordPredictionModel || !global.tokenizer) {
@@ -77,37 +75,42 @@ export async function fineTuneUserModel(epochs = 3) {
   
   console.log(`Fine-tuning on ${trainingExamples.length} training examples.`);
   
-  // Create tensors from training examples.
+  // Create a tensor for inputs (shape: [numExamples, sequenceLength])
   const xs = tf.tensor2d(
     trainingExamples.map(example => example.inputSequence),
     [trainingExamples.length, trainingExamples[0].inputSequence.length],
     'int32'
   );
-  const ys = tf.tensor1d(
+  
+  // Instead of using int32 labels (which can trigger issues with tf.floor in loss computations),
+  // one-hot encode the targets and cast to float32.
+  const vocabSize = 21; // Adjust this value to match your model's output size.
+  const yIndices = tf.tensor1d(
     trainingExamples.map(example => example.targetWord),
     'int32'
   );
+  const ys = tf.oneHot(yIndices, vocabSize).toFloat();
   
   // Unfreeze all layers for fine-tuning.
   global.betterWordPredictionModel.layers.forEach(layer => {
     layer.trainable = true;
   });
   
-  // Recompile model with a low learning rate.
+  // Compile model with a low learning rate and categoricalCrossentropy loss.
   global.betterWordPredictionModel.compile({
     optimizer: tf.train.adam(0.0001),
-    loss: 'sparseCategoricalCrossentropy',
+    loss: 'categoricalCrossentropy',
     metrics: ['accuracy']
   });
   
   // Callback to push training metrics to Firebase after each epoch.
   const epochEndCallback = {
     onEpochEnd: async (epoch, logs) => {
-      console.log(`Epoch ${epoch + 1}: Loss = ${logs.loss}, Accuracy = ${logs.acc}`);
+      console.log(`Epoch ${epoch + 1}: Loss = ${logs.loss}, Accuracy = ${logs.acc || logs.accuracy}`);
       const progressEntry = {
         epoch: epoch + 1,
         loss: logs.loss,
-        accuracy: logs.acc, // sometimes logs.accuracy instead of logs.acc
+        accuracy: logs.acc || logs.accuracy,
         timestamp: Date.now()
       };
       try {
@@ -127,8 +130,11 @@ export async function fineTuneUserModel(epochs = 3) {
     shuffle: true,
     callbacks: epochEndCallback
   });
+  
   console.log("User-specific fine-tuning complete.");
   
+  // Dispose tensors to free memory.
   xs.dispose();
+  yIndices.dispose();
   ys.dispose();
 }
