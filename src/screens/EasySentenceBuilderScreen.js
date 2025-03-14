@@ -33,7 +33,7 @@ export default function EasySentenceBuilderScreen() {
   const [highlightIndex, setHighlightIndex] = useState(null);
 
   const wordBank = [
-    'I', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'us', 'my', 'your', 'our',
+    'I', 'a', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'us', 'my', 'your', 'our',
     'want', 'need', 'have', 'go', 'come', 'do', 'make', 'eat', 'drink', 'play', 'sleep',
     'read', 'write', 'look', 'see', 'get', 'give', 'take', 'help', 'start', 'stop',
     'open', 'close', 'buy', 'sell',
