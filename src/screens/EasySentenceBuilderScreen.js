@@ -183,7 +183,7 @@ export default function EasySentenceBuilderScreen() {
   }
 
   // Replace with your access token (secure this in production)
-  const ACCESS_TOKEN = 'ya29.a0AeXRPp5IULB9v-k6B-6X-Mk-lGU_SW0zCxctBcpkJC_Dml5LtaW_5iM2BJDquFPaqUVkX3n8wZfERPL1-l4n-E_950qWwh-gKDcb9uNFp8Z3qQeTfEZ7mjahQmaI6-QJwjBGW1iyU88lA86SCW5k3mRg2q8f9pYwNStxlNwuIdULdkgaCgYKAaMSAQ8SFQHGX2MihTU7cX8aqewP2VRYRpG64A0182';
+  const ACCESS_TOKEN = 'ya29.a0AeXRPp7IViOYK1KJjweDBZPFmb3VOfaYsCkkx2cPpV4kugcO2G-NeVdGFVyVGeo3-lA1EK74HEixEl1icf_rDmJQrXsfq4wCZzpwOxunuQOA2FEJVXLqaduusp-D9nxx1CiQX_x6QesDkgJStEwqQGerTjhRVYSEFhHcfi7K6hzUO6oaCgYKAacSAQ8SFQHGX2Mix2uICtSWbhzXIecVv5edCg0182';
 
   // Updated prediction function that uses Vertex AI and decodes the probability vector.
   const handlePredictNextWord = async () => {
@@ -192,12 +192,10 @@ export default function EasySentenceBuilderScreen() {
       Alert.alert("Please enter some text first.");
       return;
     }
-
+  
     try {
-      // Tokenize the sentence for the Vertex model.
-      const inputTokens = tokenizeSentence(currentSentence);
-      // Call the Vertex AI prediction endpoint.
-      const predictionVector = await fetchAACPrediction(inputTokens, ACCESS_TOKEN);
+      // Send raw sentence directly to Vertex AI prediction.
+      const predictionVector = await fetchAACPrediction(currentSentence, ACCESS_TOKEN);
       console.log("Vertex prediction vector:", predictionVector);
       if (!predictionVector) {
         Alert.alert("Prediction Error", "Received a null prediction vector from Vertex AI.");
@@ -221,6 +219,7 @@ export default function EasySentenceBuilderScreen() {
       Alert.alert("Prediction Failed", error.message);
     }
   };
+  
 
   const toggleLogVisibility = () => {
     setLogVisible(prev => !prev);
