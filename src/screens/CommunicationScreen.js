@@ -1,5 +1,4 @@
-// src/screens/CommunicationScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,219 +6,148 @@ import {
   Image,
   TouchableOpacity,
   Text,
-  Modal,
   ActivityIndicator,
-  Button,
+  Alert,
 } from 'react-native';
 import * as Speech from 'expo-speech';
 import { StatusBar } from 'expo-status-bar';
-import { searchPictograms, getPictogramUrl } from '../services/arasaacService';
+import { searchPictograms } from '../services/arasaacService';
 import { logEvent } from '../utils/logger';
+import { useSettings } from '../contexts/SettingsContext';
 
 export default function CommunicationScreen() {
+  const { settings, loading: settingsLoading } = useSettings();
   const [pictograms, setPictograms] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedPictogram, setSelectedPictogram] = useState(null);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [currentCategory, setCurrentCategory] = useState('');
-
-  const categories = ['Everyday', 'Food', 'Drinks', 'People', 'Places'];
+  const [selected, setSelected] = useState(null);
   const [categoryImages, setCategoryImages] = useState({});
+  const categories = ['Everyday', 'Food', 'Drinks', 'People', 'Places'];
+
+  const palettes = {
+    light:       { background: '#fff', text: '#000' },
+    dark:        { background: '#000', text: '#fff' },
+    highContrast:{ background: '#000', text: '#FFD600' },
+  };
+  const palette = palettes[settings.theme];
 
   useEffect(() => {
-    const fetchRepresentativeImages = async () => {
+    (async () => {
       const reps = {};
-      for (let category of categories) {
-        const data = await searchPictograms('en', category);
-        if (data && data.length > 0) {
-          reps[category] = data[0];
-        }
+      for (let cat of categories) {
+        try {
+          const data = await searchPictograms('en', cat);
+          if (data?.length) reps[cat] = data[0];
+        } catch {}
       }
       setCategoryImages(reps);
-    };
-    fetchRepresentativeImages();
+    })();
   }, []);
 
-  const handleCategoryCardPress = async (category) => {
-    setCurrentCategory(category);
-    setModalVisible(true);
+  useEffect(() => {
+    loadCategory('Everyday');
+  }, []);
+
+  const loadCategory = useCallback(async (cat) => {
     setLoading(true);
-    logEvent('Category selected', { category, screen: 'CommunicationScreen' });
-    const data = await searchPictograms('en', category);
-    if (data) {
-      setPictograms(data);
+    try {
+      logEvent('Category selected', { category: cat });
+      const data = await searchPictograms('en', cat);
+      setPictograms(data || []);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to load pictograms.');
+      setPictograms([]);
+    } finally {
+      setSelected(null);
+      setLoading(false);
     }
-    setLoading(false);
-    setSelectedPictogram(null);
-  };
+  }, []);
 
   const selectPictogram = (item) => {
-    const description =
-      item.keywords && item.keywords.length > 0 && item.keywords[0].keyword
-        ? item.keywords[0].keyword
-        : 'No description available';
-    setSelectedPictogram({ ...item, description });
-    logEvent('Pictogram selected', { pictogramId: item._id, description, screen: 'CommunicationScreen' });
+    const desc = item.keywords?.[0]?.keyword || 'No description';
+    setSelected({ ...item, description: desc });
+    logEvent('Pictogram selected', { id: item._id });
+    Speech.speak(desc);
   };
 
-  const speakSelected = () => {
-    if (selectedPictogram) {
-      Speech.speak(selectedPictogram.description);
-    } else {
-      Speech.speak('No pictogram selected');
-    }
-  };
-
-  const renderCategoryCard = ({ item }) => {
-    const rep = categoryImages[item];
-    const imageUri = rep ? getPictogramUrl(rep._id, 500) : `https://via.placeholder.com/150?text=${item}`;
+  if (settingsLoading) {
     return (
-      <TouchableOpacity style={styles.categoryCard} onPress={() => handleCategoryCardPress(item)}>
-        <Image source={{ uri: imageUri }} style={styles.categoryImage} />
-        <View style={styles.categoryLabelContainer}>
-          <Text style={styles.categoryLabel}>{item}</Text>
-        </View>
-      </TouchableOpacity>
+      <View style={[styles.center, { backgroundColor: palette.background }]}>  
+        <ActivityIndicator size="large" color="#4CAF50" />
+      </View>
     );
-  };
-
-  const renderPictogramItem = ({ item }) => (
-    <TouchableOpacity
-      style={[
-        styles.pictogramItem,
-        selectedPictogram && selectedPictogram._id === item._id ? styles.selectedItem : null,
-      ]}
-      onPress={() => selectPictogram(item)}
-    >
-      <Image style={styles.gridImage} source={{ uri: getPictogramUrl(item._id, 500) }} />
-    </TouchableOpacity>
-  );
+  }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Select a Category</Text>
+    <View style={[styles.container, { backgroundColor: palette.background }]}>  
+      {/* Category picker */}
       <FlatList
         data={categories}
-        renderItem={renderCategoryCard}
-        keyExtractor={(item) => item}
-        numColumns={2}
-        contentContainerStyle={styles.categoryGrid}
+        horizontal
+        keyExtractor={(cat) => cat}
+        style={styles.categoryList}
+        contentContainerStyle={styles.categoryListContent}
+        showsHorizontalScrollIndicator={false}
+        renderItem={({ item }) => {
+          const rep = categoryImages[item];
+          const uri = rep
+            ? `https://static.arasaac.org/pictograms/${rep._id}/${rep._id}_500.png`
+            : `https://via.placeholder.com/80?text=${item}`;
+          return (
+            <TouchableOpacity style={styles.categoryCard} onPress={() => loadCategory(item)}>
+              <Image source={{ uri }} style={styles.categoryImage} />
+              <Text style={[styles.categoryLabel, { color: palette.text }]}>{item}</Text>
+            </TouchableOpacity>
+          );
+        }}
       />
 
-      <Modal
-        animationType="slide"
-        transparent={false}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <Text style={styles.modalHeader}>{currentCategory} Pictograms</Text>
-          {loading ? (
-            <ActivityIndicator size="large" color="#4CAF50" />
-          ) : (
-            <FlatList
-              data={pictograms}
-              keyExtractor={(item, index) => index.toString()}
-              renderItem={renderPictogramItem}
-              numColumns={3}
-              contentContainerStyle={styles.grid}
-            />
+      {/* Grid of pictograms */}
+      {loading ? (
+        <ActivityIndicator style={styles.loader} size="large" color="#4CAF50" />
+      ) : (
+        <FlatList
+          data={pictograms}
+          keyExtractor={(item) => item._id.toString()}
+          numColumns={settings.gridSize}
+          contentContainerStyle={styles.grid}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[
+                { flex: 1 / settings.gridSize },
+                styles.picItem,
+                selected?._id === item._id && styles.selectedItem
+              ]}
+              onPress={() => selectPictogram(item)}
+            >
+              <Image
+                source={{ uri: `https://static.arasaac.org/pictograms/${item._id}/${item._id}_500.png` }}
+                style={styles.picImage}
+              />
+            </TouchableOpacity>
           )}
-          {selectedPictogram && (
-            <View style={styles.selectedContainer}>
-              <Text style={styles.selectedText}>
-                Selected: {selectedPictogram.description}
-              </Text>
-              <Button title="Speak" onPress={speakSelected} color="#4CAF50" />
-            </View>
+          ListEmptyComponent={() => (
+            <Text style={[styles.emptyText, { color: palette.text }]}>No pictograms.</Text>
           )}
-          <Button title="Close" onPress={() => setModalVisible(false)} color="#f44336" />
-        </View>
-      </Modal>
-      <StatusBar style="auto" />
+        />
+      )}
+
+      <StatusBar style={settings.theme === 'dark' ? 'light' : 'dark'} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#eef2f3',
-    paddingTop: 20,
-    paddingHorizontal: 10,
-  },
-  header: {
-    fontSize: 26,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  categoryGrid: {
-    alignItems: 'center',
-  },
-  categoryCard: {
-    margin: 10,
-    borderRadius: 10,
-    overflow: 'hidden',
-    elevation: 3,
-    backgroundColor: '#fff',
-    width: 150,
-    height: 150,
-  },
-  categoryImage: {
-    width: '100%',
-    height: '80%',
-  },
-  categoryLabelContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    position: 'absolute',
-    bottom: 0,
-    width: '100%',
-    paddingVertical: 5,
-    alignItems: 'center',
-  },
-  categoryLabel: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#eef2f3',
-    paddingTop: 40,
-    paddingHorizontal: 10,
-  },
-  modalHeader: {
-    fontSize: 24,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 15,
-  },
-  grid: {
-    paddingHorizontal: 5,
-    paddingBottom: 20,
-  },
-  pictogramItem: {
-    flex: 1,
-    margin: 5,
-    alignItems: 'center',
-  },
-  gridImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 10,
-  },
-  selectedItem: {
-    borderWidth: 3,
-    borderColor: '#4CAF50',
-    borderRadius: 10,
-  },
-  selectedContainer: {
-    alignItems: 'center',
-    marginVertical: 10,
-  },
-  selectedText: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 5,
-  },
+  container:       { flex: 1 },
+  center:          { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  categoryList:    { flexGrow: 0, maxHeight: 120 },
+  categoryListContent: { paddingHorizontal: 8 },
+  categoryCard:    { margin: 8, alignItems: 'center' },
+  categoryImage:   { width: 60, height: 60, borderRadius: 8 },
+  categoryLabel:   { marginTop: 4, fontSize: 12, fontWeight: 'bold' },
+  loader:          { marginTop: 30 },
+  grid:            { padding: 4 },
+  picItem:         { aspectRatio: 1, margin: 4, backgroundColor: '#eee', borderRadius: 8 },
+  picImage:        { width: '100%', height: '100%', borderRadius: 8 },
+  selectedItem:    { borderWidth: 2, borderColor: '#4CAF50' },
+  emptyText:       { textAlign: 'center', marginTop: 20, fontSize: 16 }
 });

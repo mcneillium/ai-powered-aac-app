@@ -1,213 +1,107 @@
-// src/screens/LiveSceneModeScreen.js
 import '@tensorflow/tfjs-react-native';
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Button } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator
+} from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { AntDesign } from '@expo/vector-icons';
 import * as tf from '@tensorflow/tfjs';
 import { decodeJpeg } from '@tensorflow/tfjs-react-native';
 import * as cocossd from '@tensorflow-models/coco-ssd';
 import * as Speech from 'expo-speech';
+import { StatusBar } from 'expo-status-bar';
+import { useSettings } from '../contexts/SettingsContext';
 
 export default function LiveSceneModeScreen() {
+  const { settings, loading: settingsLoading } = useSettings();
   const [permission, requestPermission] = useCameraPermissions();
-  const [facing, setFacing] = useState('back');
   const [model, setModel] = useState(null);
-  const [predictions, setPredictions] = useState([]);
   const [isTfReady, setIsTfReady] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [currentDetection, setCurrentDetection] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const cameraRef = useRef(null);
 
-  const CAPTURE_DELAY = 500;
-  const DETECTION_COOLDOWN = 3000;
+  const palettes = {
+    light: { background: '#fff', text: '#000' },
+    dark:  { background: '#000', text: '#fff' },
+    highContrast: { background: '#000', text: '#FFD600' },
+  };
+  const palette = palettes[settings.theme];
 
+  // Load TF and model
   useEffect(() => {
-    const initTf = async () => {
-      try {
-        await tf.ready();
-        console.log('TensorFlow ready');
-        setIsTfReady(true);
-        const loadedModel = await cocossd.load({ base: 'lite_mobilenet_v2' });
-        console.log('Model loaded');
-        setModel(loadedModel);
-      } catch (error) {
-        console.error('Error initializing TF:', error);
-      }
-    };
-    initTf();
+    (async () => {
+      await tf.ready();
+      setIsTfReady(true);
+      setModel(await cocossd.load({ base: 'lite_mobilenet_v2' }));
+    })();
   }, []);
 
-  const processFrame = useCallback(async () => {
-    if (!model || !cameraRef.current || !isDetecting) return;
-    if (isProcessing) return;
-    try {
-      setIsProcessing(true);
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.2,
-        base64: false,
-        skipProcessing: true,
-      });
-      const response = await fetch(photo.uri);
-      const imageData = await response.arrayBuffer();
-      const raw = new Uint8Array(imageData);
-      const imageTensor = decodeJpeg(raw);
-      const detections = await model.detect(imageTensor);
-      console.log('Detections:', detections);
-      setPredictions(detections);
-      if (detections.length > 0) {
-        const bestDetection = detections.reduce((prev, curr) =>
-          prev.score > curr.score ? prev : curr
-        );
-        if (!currentDetection || currentDetection.class !== bestDetection.class) {
-          setCurrentDetection(bestDetection);
-          Speech.speak(`I see a ${bestDetection.class}`, { rate: 0.9 });
-          setTimeout(() => {
-            setCurrentDetection(null);
-            processFrame();
-          }, DETECTION_COOLDOWN);
-          tf.dispose(imageTensor);
-          setIsProcessing(false);
-          return;
-        }
-      }
-      tf.dispose(imageTensor);
-    } catch (error) {
-      console.error('Error processing frame:', error);
-    } finally {
-      setIsProcessing(false);
-      if (isDetecting && !currentDetection) {
-        setTimeout(processFrame, CAPTURE_DELAY);
-      }
-    }
-  }, [model, isDetecting, isProcessing, currentDetection]);
-
+  // Trigger frame processing when detection toggled on
   useEffect(() => {
     if (isDetecting) {
       processFrame();
     }
-  }, [isDetecting, processFrame]);
+  }, [isDetecting]);
 
-  const toggleCameraFacing = () => {
-    setFacing((current) => (current === 'back' ? 'front' : 'back'));
-  };
+  const processFrame = useCallback(async () => {
+    if (!model || !cameraRef.current || !isDetecting || isProcessing) return;
+    setIsProcessing(true);
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.2, skipProcessing: true
+      });
+      const resp = await fetch(photo.uri);
+      const buf = await resp.arrayBuffer();
+      const imgT = decodeJpeg(new Uint8Array(buf));
+      const detections = await model.detect(imgT);
+      if (detections.length && detections[0].class !== currentDetection?.class) {
+        setCurrentDetection(detections[0]);
+        Speech.speak(`I see a ${detections[0].class}`);
+      }
+      tf.dispose(imgT);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsProcessing(false);
+      if (isDetecting) setTimeout(processFrame, 500);
+    }
+  }, [model, isDetecting, isProcessing, currentDetection]);
 
-  const toggleDetection = () => {
-    setIsDetecting((prev) => !prev);
-  };
-
-  if (!permission) {
+  // Show loading while settings/model/permissions not ready
+  if (settingsLoading || !isTfReady || permission?.status !== 'granted') {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
-  if (!permission.granted) {
-    return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.text}>We need your permission to show the camera</Text>
-        <Button title="Grant Permission" onPress={requestPermission} />
-      </View>
-    );
-  }
-  if (!isTfReady || !model) {
-    return (
-      <View style={styles.centerContainer}>
+      <View style={[styles.center, { backgroundColor: palette.background }]}>  
         <ActivityIndicator size="large" color="#4CAF50" />
-        <Text style={styles.text}>
-          {!isTfReady ? 'Loading TensorFlow...' : 'Loading model...'}
-        </Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.button} onPress={toggleCameraFacing}>
-            <AntDesign name="retweet" size={44} color="black" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.button} onPress={toggleDetection}>
-            <Text style={{ color: '#FFF', fontSize: 18 }}>
-              {isDetecting ? 'Stop Detection' : 'Start Detection'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-        {currentDetection && (
-          <View style={styles.centerDetection}>
-            <Text style={styles.centerText}>
-              {currentDetection.class} ({(currentDetection.score * 100).toFixed(0)}%)
-            </Text>
-          </View>
-        )}
-        <View style={styles.predictionsContainer}>
-          <Text style={styles.predictionText}>
-            Found {predictions.length} objects
-          </Text>
-          {predictions.map((prediction, index) => (
-            <Text key={index} style={styles.predictionText}>
-              {prediction.class} ({(prediction.score * 100).toFixed(0)}%)
-            </Text>
-          ))}
-        </View>
-      </CameraView>
+    <View style={[styles.container, { backgroundColor: palette.background }]}>  
+      <CameraView style={styles.camera} ref={cameraRef} />
+      <TouchableOpacity
+        style={[styles.toggle, { backgroundColor: '#4CAF50' }]}
+        onPress={() => setIsDetecting(d => !d)}
+      >
+        <Text style={{ color: palette.text }}>
+          {isDetecting ? 'Stop Detecting' : 'Start Detecting'}
+        </Text>
+      </TouchableOpacity>
+      {isProcessing && <ActivityIndicator style={styles.loader} />}
+      <StatusBar style={settings.theme === 'dark' ? 'light' : 'dark'} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  camera: { flex: 1 },
-  buttonContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    backgroundColor: 'transparent',
-    margin: 64,
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  button: {
-    backgroundColor: 'gray',
-    padding: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  text: { fontSize: 16, textAlign: 'center', marginBottom: 10 },
-  predictionsContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: 16,
-  },
-  predictionText: {
-    color: '#FFF',
-    fontSize: 16,
-    marginVertical: 4,
-  },
-  centerDetection: {
-    position: 'absolute',
-    top: '40%',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  centerText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#FFF',
-    textShadowColor: '#000',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 5,
-  },
+  center:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  camera:    { flex: 1 },
+  toggle:    { position: 'absolute', bottom: 32, alignSelf: 'center', padding: 12, borderRadius: 8 },
+  loader:    { position: 'absolute', top: 50, right: 20 },
 });
