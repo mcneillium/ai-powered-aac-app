@@ -22,8 +22,10 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "This app needs access to the camera to capture images for AAC purposes."
-      }
+        "NSCameraUsageDescription": "This app needs access to the camera to capture images for AAC purposes.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.elpabloawakens.aipoweredaacapp"
     },
     "android": {
       "adaptiveIcon": {
