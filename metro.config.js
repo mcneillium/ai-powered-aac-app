@@ -1,8 +1,12 @@
+// metro.config.js
 const { getDefaultConfig } = require('@expo/metro-config');
 
 const defaultConfig = getDefaultConfig(__dirname);
 
-// Add "mjs" to the list of source file extensions
+// Disable the new package-exports resolution
+defaultConfig.resolver.unstable_enablePackageExports = false;
+
+// Add "mjs" (and your other custom) extensions
 defaultConfig.resolver.sourceExts = [
   ...defaultConfig.resolver.sourceExts,
   'mjs',
@@ -10,7 +14,7 @@ defaultConfig.resolver.sourceExts = [
   'js',
   'ts',
   'tsx',
-  'json'
+  'json',
 ];
 
 // Keep your existing asset extensions
@@ -19,7 +23,7 @@ defaultConfig.resolver.assetExts.push('bin');
 // Map problematic modules to an empty module if needed
 defaultConfig.resolver.extraNodeModules = {
   ...defaultConfig.resolver.extraNodeModules,
-  'idb': require.resolve('./empty-module.js'),
+  idb: require.resolve('./empty-module.js'),
   './postinstall.mjs': require.resolve('./empty-module.js'),
 };
 
