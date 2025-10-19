@@ -4,16 +4,16 @@ import '@tensorflow/tfjs-react-native';
 import { bundleResourceIO } from '@tensorflow/tfjs-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// --- ASSET HANDLES -----------------------------------------------------------
+// --- ASSET HANDLES (MODEL B) -------------------------------------------------
 // IMPORTANT: These must match your model.json exactly.
-import modelJsonObj from '../../assets/tf_model/model.json';
-const modelJsonRes = require('../../assets/tf_model/model.json');
+import modelJsonObj from '../../assets/tf_model/word_prediction_tfjs/model.json';
+const modelJsonRes = require('../../assets/tf_model/word_prediction_tfjs/model.json');
 const modelWeightResList = [
-  require('../../assets/tf_model/group1-shard1of1.bin'),
+  require('../../assets/tf_model/word_prediction_tfjs/group1-shard1of1.bin'),
 ];
 
-// Use ONLY the canonical tokenizer
-const tokenizerData = require('../../assets/tf_model/tokenizer.json');
+// Use ONLY the canonical tokenizer for Model B
+const tokenizerData = require('../../assets/tf_model/word_prediction_tfjs/tokenizer.json');
 
 // --- INTERNAL STATE ----------------------------------------------------------
 let model = null;
@@ -21,6 +21,7 @@ let tokenizer = null;
 let indexToWord = null;
 let wordIndex = null;
 
+// Default; we’ll still auto-detect from model input if available
 const CONTEXT_LEN = 4;
 
 let __ready = false;
@@ -39,8 +40,16 @@ function leftPadZeros(arr, target) {
 }
 
 function buildMaps(tok) {
-  const wi = tok?.word_index || tok?.wordIndex || null;
-  const iw = tok?.index_word || tok?.indexWord || null;
+  const wi = tok?.word_index || tok?.wordIndex || tok?.config?.word_index || tok?.config?.wordIndex || null;
+  let  iw = tok?.index_word || tok?.indexWord || tok?.config?.index_word || tok?.config?.indexWord || null;
+
+  // If indexWord came as an array, convert to object
+  if (Array.isArray(iw)) {
+    const obj = {};
+    iw.forEach((w, i) => { if (w != null) obj[String(i)] = w; });
+    iw = obj;
+  }
+
   if (wi && iw) return { wordIndex: wi, indexToWord: iw };
 
   // Flat map fallback
@@ -116,12 +125,13 @@ export async function loadImprovedModel() {
   }
 
   console.log('[TFJS] manifest paths:', modelJsonObj?.weightsManifest?.[0]?.paths);
-console.log('[TFJS] code shards:', modelWeightResList.map(String));
+  console.log('[TFJS] code shards:', modelWeightResList.map(() => 'group1-shard1of1.bin'));
 
-  // Load model
+  // Load model (Model B)
   try {
     model = await tf.loadLayersModel(bundleResourceIO(modelJsonRes, modelWeightResList));
-    console.log('✅ Improved model loaded successfully!');
+    console.log('✅ Improved model (Model B) loaded!');
+    console.log('[TFJS] IO shapes:', model.inputs?.[0]?.shape, '→', model.outputs?.[0]?.shape);
   } catch (err) {
     throw new Error(
       `Failed to load layers model. This usually means the .bin file(s) do NOT belong to this model.json.\n` +
@@ -140,9 +150,10 @@ console.log('[TFJS] code shards:', modelWeightResList.map(String));
     throw new Error('Tokenizer missing usable word_index/index_word mappings.');
   }
 
-  // Warmup (optional)
+  // Warmup with detected context length (if available)
   try {
-    const dummy = tf.tensor2d([leftPadZeros([], CONTEXT_LEN)], [1, CONTEXT_LEN], 'int32');
+    const seqLen = model.inputs?.[0]?.shape?.[1] || CONTEXT_LEN;
+    const dummy = tf.tensor2d([leftPadZeros([], seqLen)], [1, seqLen], 'int32');
     const out = model.predict(dummy);
     (Array.isArray(out) ? out : [out]).forEach(t => t?.dispose?.());
     dummy.dispose();
@@ -204,10 +215,11 @@ export async function predictNextWordWithImprovedModel(
   }
 
   const tokens = String(sentence || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
-  const last = tokens.slice(-sequenceLength);
-  const idxs = leftPadZeros(last.map(w => (wordIndex?.[w] ?? tok.word_index?.[w] ?? tok[w] ?? 0)), sequenceLength);
+  const seqLen = mdl.inputs?.[0]?.shape?.[1] || sequenceLength;
+  const last = tokens.slice(-seqLen);
+  const idxs = leftPadZeros(last.map(w => (wordIndex?.[w] ?? tok.word_index?.[w] ?? tok[w] ?? 0)), seqLen);
 
-  const input = tf.tensor2d([idxs], [1, sequenceLength], 'int32');
+  const input = tf.tensor2d([idxs], [1, seqLen], 'int32');
 
   let logits1d;
   try {
@@ -243,10 +255,11 @@ export async function predictTopKWordsWithImprovedModel(
   }
 
   const tokens = String(sentence || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
-  const last = tokens.slice(-sequenceLength);
-  const idxs = leftPadZeros(last.map(w => (wordIndex?.[w] ?? tok.word_index?.[w] ?? tok[w] ?? 0)), sequenceLength);
+  const seqLen = mdl.inputs?.[0]?.shape?.[1] || sequenceLength;
+  const last = tokens.slice(-seqLen);
+  const idxs = leftPadZeros(last.map(w => (wordIndex?.[w] ?? tok.word_index?.[w] ?? tok[w] ?? 0)), seqLen);
 
-  const input = tf.tensor2d([idxs], [1, sequenceLength], 'int32');
+  const input = tf.tensor2d([idxs], [1, seqLen], 'int32');
 
   let logits1d;
   try {
@@ -260,6 +273,8 @@ export async function predictTopKWordsWithImprovedModel(
   const probs = softmaxWithTemp(Float32Array.from(logits1d.dataSync()), temperature);
   logits1d.dispose();
 
-  const idxsSorted = Array.from(probs.keys()).sort((a, b) => probs[b] - probs[a]).slice(0, Math.max(1, topK));
+  const idxsSorted = Array.from(probs.keys())
+    .sort((a, b) => probs[b] - probs[a])
+    .slice(0, Math.max(1, topK));
   return idxsSorted.map(i => idxToToken(i));
 }
