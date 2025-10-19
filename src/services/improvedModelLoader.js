@@ -1,84 +1,265 @@
+// src/services/improvedModelLoader.js
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-react-native';
 import { bundleResourceIO } from '@tensorflow/tfjs-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Load model.json, weights, and tokenizer from your assets folder
-const modelJson = require('../../assets/tf_model/model.json');
-const modelWeights = [require('../../assets/tf_model/group1-shard1of1.bin')];
+// --- ASSET HANDLES -----------------------------------------------------------
+// IMPORTANT: These must match your model.json exactly.
+import modelJsonObj from '../../assets/tf_model/model.json';
+const modelJsonRes = require('../../assets/tf_model/model.json');
+const modelWeightResList = [
+  require('../../assets/tf_model/group1-shard1of1.bin'),
+];
+
+// Use ONLY the canonical tokenizer
 const tokenizerData = require('../../assets/tf_model/tokenizer.json');
 
-/**
- * Loads the improved model and tokenizer, and stores them globally.
- */
-export async function loadImprovedModel() {
+// --- INTERNAL STATE ----------------------------------------------------------
+let model = null;
+let tokenizer = null;
+let indexToWord = null;
+let wordIndex = null;
+
+const CONTEXT_LEN = 4;
+
+let __ready = false;
+let __loaderPromise = null;
+
+// --- HELPERS -----------------------------------------------------------------
+async function initTf() {
   await tf.ready();
+  try { await tf.setBackend('rn-webgl'); } catch { await tf.setBackend('cpu'); }
+}
+
+function leftPadZeros(arr, target) {
+  const a = (arr || []).slice(-target);
+  const pad = Math.max(0, target - a.length);
+  return [...Array(pad).fill(0), ...a];
+}
+
+function buildMaps(tok) {
+  const wi = tok?.word_index || tok?.wordIndex || null;
+  const iw = tok?.index_word || tok?.indexWord || null;
+  if (wi && iw) return { wordIndex: wi, indexToWord: iw };
+
+  // Flat map fallback
+  const wordIndexGuess = {};
+  const indexToWordGuess = {};
+  for (const [k, v] of Object.entries(tok || {})) {
+    if (typeof v === 'number') {
+      wordIndexGuess[k] = v;
+      indexToWordGuess[String(v)] = k;
+    }
+  }
+  return { wordIndex: wordIndexGuess, indexToWord: indexToWordGuess };
+}
+
+function softmaxWithTemp(logits, temperature = 1.0) {
+  const t = Math.max(1e-6, temperature);
+  let maxLogit = -Infinity;
+  for (let i = 0; i < logits.length; i++) {
+    const v = logits[i] / t;
+    if (v > maxLogit) maxLogit = v;
+    logits[i] = v;
+  }
+  let denom = 0;
+  for (let i = 0; i < logits.length; i++) {
+    logits[i] = Math.exp(logits[i] - maxLogit);
+    denom += logits[i];
+  }
+  for (let i = 0; i < logits.length; i++) logits[i] /= denom || 1;
+  return logits;
+}
+
+function getLastStepLogits(t) {
+  if (t.rank === 2) return t.squeeze(); // [vocab]
+  if (t.rank === 3) {
+    const T = t.shape[1];
+    const last = t.slice([0, T - 1, 0], [1, 1, t.shape[2]]);
+    const s = last.squeeze();
+    last.dispose();
+    return s;
+  }
+  throw new Error(`Unexpected output rank ${t.rank}; expected 2 or 3.`);
+}
+
+function idxToToken(idx) {
+  return indexToWord?.[String(idx)] ?? '[UNKNOWN]';
+}
+
+// --- PUBLIC: LOADING + READINESS --------------------------------------------
+export async function loadImprovedModel() {
+  await initTf();
+
+  // Avoid stale remote cache collisions
+  try { await AsyncStorage.removeItem('wordPredictionModel'); } catch {}
+
+  // Sanity-check model.json
+  const format = modelJsonObj?.format;
+  const manifest = modelJsonObj?.weightsManifest;
+  if (format !== 'layers-model') {
+    throw new Error(
+      `model.json format is "${format}" (expected "layers-model"). ` +
+      `Reconvert as a tfjs_layers_model or swap to tf.loadGraphModel().`
+    );
+  }
+  const expectedPaths = manifest?.[0]?.paths || [];
+  if (!expectedPaths.length) {
+    throw new Error('model.json has no weightsManifest paths.');
+  }
+  if ((modelWeightResList?.length || 0) !== expectedPaths.length) {
+    throw new Error(
+      `Shard count mismatch. model.json expects ${expectedPaths.length}: ${JSON.stringify(expectedPaths)} ` +
+      `but code provides ${modelWeightResList.length}.`
+    );
+  }
+
+  console.log('[TFJS] manifest paths:', modelJsonObj?.weightsManifest?.[0]?.paths);
+console.log('[TFJS] code shards:', modelWeightResList.map(String));
+
+  // Load model
   try {
-    const model = await tf.loadLayersModel(bundleResourceIO(modelJson, modelWeights));
-    console.log("✅ Improved model loaded successfully!");
+    model = await tf.loadLayersModel(bundleResourceIO(modelJsonRes, modelWeightResList));
+    console.log('✅ Improved model loaded successfully!');
+  } catch (err) {
+    throw new Error(
+      `Failed to load layers model. This usually means the .bin file(s) do NOT belong to this model.json.\n` +
+      `Expected shards: ${JSON.stringify(expectedPaths)}.\n` +
+      `Fix: ensure Metro bundles .bin, delete stale assets/tf_model/*.bin, and clear cache. Original: ${err}`
+    );
+  }
 
-    const tokenizer = tokenizerData;
-    const indexToWord = tokenizer.index_word 
-      ? tokenizer.index_word 
-      : Object.fromEntries(Object.entries(tokenizer).map(([word, idx]) => [idx, word]));
+  // Tokenizer maps
+  tokenizer = tokenizerData;
+  const maps = buildMaps(tokenizer);
+  wordIndex = maps.wordIndex;
+  indexToWord = maps.indexToWord;
 
-    global.betterWordPredictionModel = model;
-    global.tokenizer = tokenizer;
-    global.indexToWord = indexToWord;
-    global.predictNextWordWithImprovedModel = predictNextWordWithImprovedModel;
+  if (!Object.keys(wordIndex).length || !Object.keys(indexToWord).length) {
+    throw new Error('Tokenizer missing usable word_index/index_word mappings.');
+  }
 
-    return { model, tokenizer };
-  } catch (error) {
-    console.error("❌ Error loading improved model:", error);
-    throw error;
+  // Warmup (optional)
+  try {
+    const dummy = tf.tensor2d([leftPadZeros([], CONTEXT_LEN)], [1, CONTEXT_LEN], 'int32');
+    const out = model.predict(dummy);
+    (Array.isArray(out) ? out : [out]).forEach(t => t?.dispose?.());
+    dummy.dispose();
+  } catch (e) {
+    console.warn('Model warmup failed (check expected input shape):', e);
+  }
+
+  // Globals for legacy code paths
+  global.betterWordPredictionModel = model;
+  global.tokenizer = tokenizer;
+  global.indexToWord = indexToWord;
+  global.predictNextWordWithImprovedModel = predictNextWordWithImprovedModel;
+
+  __ready = true;
+  return { model, tokenizer };
+}
+
+// Call this when you want to ensure model is loaded (idempotent).
+export async function ensureImprovedModelLoaded() {
+  if (__ready && model && tokenizer) return;
+  if (__loaderPromise) { await __loaderPromise; return; }
+  __loaderPromise = (async () => {
+    await loadImprovedModel();
+  })().finally(() => { __loaderPromise = null; });
+  await __loaderPromise;
+}
+
+export function isImprovedModelReady() {
+  return !!(__ready && model && tokenizer);
+}
+
+export async function waitUntilModelReady(timeoutMs = 5000, pollMs = 100) {
+  const deadline = Date.now() + timeoutMs;
+  // Kick off a load in case nothing started it yet
+  await ensureImprovedModelLoaded();
+
+  while (!isImprovedModelReady()) {
+    if (Date.now() > deadline) {
+      throw new Error('Model or tokenizer still not loaded after waiting.');
+    }
+    await new Promise(r => setTimeout(r, pollMs));
   }
 }
 
-/**
- * Predicts the next word using the improved model with temperature sampling.
- */
-export async function predictNextWordWithImprovedModel(model, tokenizer, sentence, temperature = 1.0, sequenceLength = 4) {
-  const tokens = sentence.toLowerCase().split(/\s+/);
-  let inputTokens = tokens.slice(-sequenceLength);
-  while (inputTokens.length < sequenceLength) inputTokens.unshift("0");
+// --- PUBLIC: PREDICT ---------------------------------------------------------
+export async function predictNextWordWithImprovedModel(
+  mdl,
+  tok,
+  sentence,
+  temperature = 1.0,
+  sequenceLength = CONTEXT_LEN
+) {
+  mdl = mdl || model;
+  tok = tok || tokenizer;
 
-  const inputIndices = inputTokens.map(token => tokenizer.word_index?.[token] || tokenizer[token] || 0);
-  const inputTensor = tf.tensor2d([inputIndices], [1, sequenceLength], "int32");
+  if (!mdl || !tok) {
+    await ensureImprovedModelLoaded();
+    mdl = model; tok = tokenizer;
+  }
 
-  const logitsTensor = model.predict(inputTensor);
-  const logits = Array.from(logitsTensor.dataSync());
-  const scaledLogits = logits.map(logit => logit / temperature);
-  const expLogits = scaledLogits.map(Math.exp);
-  const sumExp = expLogits.reduce((a, b) => a + b, 0);
-  const probs = expLogits.map(expVal => expVal / sumExp);
+  const tokens = String(sentence || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const last = tokens.slice(-sequenceLength);
+  const idxs = leftPadZeros(last.map(w => (wordIndex?.[w] ?? tok.word_index?.[w] ?? tok[w] ?? 0)), sequenceLength);
 
-  const predictedIndex = probs.indexOf(Math.max(...probs));
-  const indexToWord = global.indexToWord || Object.fromEntries(Object.entries(tokenizer).map(([word, idx]) => [idx, word]));
+  const input = tf.tensor2d([idxs], [1, sequenceLength], 'int32');
 
-  return indexToWord[predictedIndex] || "[UNKNOWN]";
+  let logits1d;
+  try {
+    const out = mdl.predict(input);
+    const outTensor = Array.isArray(out) ? out[0] : out;
+    logits1d = getLastStepLogits(outTensor);
+  } finally {
+    input.dispose();
+  }
+
+  const probs = softmaxWithTemp(Float32Array.from(logits1d.dataSync()), temperature);
+  logits1d.dispose();
+
+  let best = 0;
+  for (let i = 1; i < probs.length; i++) if (probs[i] > probs[best]) best = i;
+  return idxToToken(best);
 }
 
-/**
- * Predicts the top K words using the improved model with temperature sampling.
- */
-export async function predictTopKWordsWithImprovedModel(model, tokenizer, sentence, temperature = 1.5, sequenceLength = 4, topK = 4) {
-  const tokens = sentence.toLowerCase().split(/\s+/);
-  let inputTokens = tokens.slice(-sequenceLength);
-  while (inputTokens.length < sequenceLength) inputTokens.unshift("0");
+export async function predictTopKWordsWithImprovedModel(
+  mdl,
+  tok,
+  sentence,
+  temperature = 1.5,
+  sequenceLength = CONTEXT_LEN,
+  topK = 4
+) {
+  mdl = mdl || model;
+  tok = tok || tokenizer;
 
-  const inputIndices = inputTokens.map(token => tokenizer.word_index?.[token] || tokenizer[token] || 0);
-  const inputTensor = tf.tensor2d([inputIndices], [1, sequenceLength], "int32");
+  if (!mdl || !tok) {
+    await ensureImprovedModelLoaded();
+    mdl = model; tok = tokenizer;
+  }
 
-  const logitsTensor = model.predict(inputTensor);
-  const logits = Array.from(logitsTensor.dataSync());
-  const scaledLogits = logits.map(logit => logit / temperature);
-  const expLogits = scaledLogits.map(Math.exp);
-  const sumExp = expLogits.reduce((a, b) => a + b, 0);
-  const probs = expLogits.map(expVal => expVal / sumExp);
+  const tokens = String(sentence || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const last = tokens.slice(-sequenceLength);
+  const idxs = leftPadZeros(last.map(w => (wordIndex?.[w] ?? tok.word_index?.[w] ?? tok[w] ?? 0)), sequenceLength);
 
-  const probIndices = probs.map((prob, index) => ({ index, prob }));
-  const sorted = probIndices.sort((a, b) => b.prob - a.prob);
-  const topKIndices = sorted.slice(0, topK).map(item => item.index);
+  const input = tf.tensor2d([idxs], [1, sequenceLength], 'int32');
 
-  const indexToWord = global.indexToWord || Object.fromEntries(Object.entries(tokenizer).map(([word, idx]) => [idx, word]));
-  return topKIndices.map(idx => indexToWord[idx] || "[UNKNOWN]");
+  let logits1d;
+  try {
+    const out = mdl.predict(input);
+    const outTensor = Array.isArray(out) ? out[0] : out;
+    logits1d = getLastStepLogits(outTensor);
+  } finally {
+    input.dispose();
+  }
+
+  const probs = softmaxWithTemp(Float32Array.from(logits1d.dataSync()), temperature);
+  logits1d.dispose();
+
+  const idxsSorted = Array.from(probs.keys()).sort((a, b) => probs[b] - probs[a]).slice(0, Math.max(1, topK));
+  return idxsSorted.map(i => idxToToken(i));
 }
