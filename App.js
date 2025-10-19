@@ -22,12 +22,14 @@ import LiveSceneModeScreen             from './src/screens/LiveSceneModeScreen';
 import ProfileScreen                   from './src/screens/ProfileScreen';
 import SettingsScreen                  from './src/screens/SettingsScreen';
 import OnboardingScreen                from './src/screens/OnboardingScreen';
-import { loadImprovedModel }           from './src/services/improvedModelLoader';
 import AsyncStorage                    from '@react-native-async-storage/async-storage';
 import {
   SafeAreaProvider,
   useSafeAreaInsets
 } from 'react-native-safe-area-context';
+
+// ✅ Correct import — inside src/services, so only one "../"
+import { ensureImprovedModelLoaded } from './src/services/localPredictor';
 
 const Tab       = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -37,7 +39,6 @@ function MainApp() {
   const insets   = useSafeAreaInsets();
   const { settings } = useSettings();
 
-  // Define palette per theme + contrast
   const palettes = {
     light: {
       background:    '#FFFFFF',
@@ -167,7 +168,8 @@ export default function App() {
   const [modelLoading, setModelLoading] = useState(true);
 
   useEffect(() => {
-    loadImprovedModel()
+    // ✅ Correct function call
+    ensureImprovedModelLoaded()
       .catch(err => console.warn('Model load failed', err))
       .finally(() => setModelLoading(false));
   }, []);

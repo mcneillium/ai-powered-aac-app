@@ -1,34 +1,30 @@
-import { predictTopKWordsWithImprovedModel } from './improvedModelLoader';
+// src/services/getAISuggestions.js
+// Remote fallback ONLY. Do not import from other local services here.
 
-export async function getAISuggestions(currentSentence) {
-  if (!currentSentence.trim()) return [];
-  console.log(`🚀 Fetching AI suggestions for: "${currentSentence}"`);
-
-  let attempts = 0;
-  const maxAttempts = 10;
-  while ((!global.betterWordPredictionModel || !global.tokenizer) && attempts < maxAttempts) {
-    console.warn("⏳ Model or tokenizer not loaded yet. Waiting 500ms...");
-    await new Promise(resolve => setTimeout(resolve, 500));
-    attempts++;
-  }
-  if (!global.betterWordPredictionModel || !global.tokenizer) {
-    console.error("❌ Model or tokenizer still not loaded after waiting.");
-    return [];
-  }
+export async function getAISuggestions(text) {
+  const url = 'https://<your-endpoint>/suggest'; // <-- replace
+  const body = { prompt: String(text || '').slice(0, 500) };
 
   try {
-    // Return the top 4 predictions
-    const suggestions = await predictTopKWordsWithImprovedModel(
-      global.betterWordPredictionModel,
-      global.tokenizer,
-      currentSentence,
-      1.0,  // temperature
-      4,    // sequenceLength
-      4     // topK
-    );
-    return suggestions;
-  } catch (error) {
-    console.error("❌ Error during improved model prediction:", error);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      console.log('[getAISuggestions] HTTP', res.status);
+      return [];
+    }
+
+    const data = await res.json();
+    if (Array.isArray(data)) return data.map(String);
+    if (Array.isArray(data?.suggestions)) return data.suggestions.map(String);
+    return [];
+  } catch (e) {
+    console.log('[getAISuggestions] remote error:', e?.message || e);
     return [];
   }
 }
+
+export default getAISuggestions;
