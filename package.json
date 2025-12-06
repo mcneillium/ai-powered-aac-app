@@ -1,7 +1,8 @@
 {
   "name": "ai-powered-aac-app",
-  "license": "0BSD",
   "version": "1.0.0",
+  "private": true,
+  "license": "0BSD",
   "main": "index.js",
   "scripts": {
     "start": "npx expo start",
@@ -9,10 +10,11 @@
     "android": "npx expo start --android",
     "ios": "npx expo start --ios",
     "web": "npx expo start --web",
-    "eas:build:android": "npx eas build --profile development --platform android",
-    "eas:build:ios": "npx eas build --profile development --platform ios",
+    "clean": "npx rimraf node_modules package-lock.json && npm install",
     "test": "jest",
-    "test:watch": "jest --watchAll"
+    "test:watch": "jest --watchAll",
+    "eas:build:android": "npx eas build --profile development --platform android",
+    "eas:build:ios": "npx eas build --profile development --platform ios"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^1.24.0",
@@ -23,11 +25,15 @@
     "@react-navigation/native-stack": "^7.2.0",
     "@react-navigation/stack": "^7.1.1",
     "@tensorflow-models/coco-ssd": "^2.2.3",
-    "@tensorflow/tfjs": "^4.22.0",
-    "@tensorflow/tfjs-backend-cpu": "^4.22.0",
-    "@tensorflow/tfjs-backend-webgl": "^4.22.0",
-    "@tensorflow/tfjs-core": "^4.22.0",
-    "@tensorflow/tfjs-react-native": "^1.0.0",
+    "@tensorflow/tfjs": "^4.16.0",
+    "@tensorflow/tfjs-backend-cpu": "4.16.0",
+    "@tensorflow/tfjs-backend-wasm": "4.16.0",
+    "@tensorflow/tfjs-backend-webgl": "4.16.0",
+    "@tensorflow/tfjs-converter": "4.16.0",
+    "@tensorflow/tfjs-core": "4.16.0",
+    "@tensorflow/tfjs-data": "4.16.0",
+    "@tensorflow/tfjs-layers": "4.16.0",
+    "@tensorflow/tfjs-react-native": "1.0.0",
     "an-array-of-english-words": "^2.0.0",
     "axios": "^1.7.9",
     "expo": "^54.0.13",
@@ -55,7 +61,17 @@
     "@types/react": "~18.3.12",
     "@types/react-native": "^0.72.8",
     "babel-plugin-module-resolver": "^5.0.2",
+    "http-server": "^14.1.1",
+    "rimraf": "^5.0.5",
     "typescript": "^5.3.3"
   },
-  "private": true
+  "overrides": {
+    "@tensorflow/tfjs-core": "4.16.0",
+    "@tensorflow/tfjs-layers": "4.16.0",
+    "@tensorflow/tfjs-data": "4.16.0",
+    "@tensorflow/tfjs-converter": "4.16.0",
+    "@tensorflow/tfjs-backend-cpu": "4.16.0",
+    "@tensorflow/tfjs-backend-webgl": "4.16.0",
+    "@tensorflow/tfjs-backend-wasm": "4.16.0"
+  }
 }

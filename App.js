@@ -29,7 +29,7 @@ import {
 } from 'react-native-safe-area-context';
 
 // ✅ Correct import — inside src/services, so only one "../"
-import { ensureImprovedModelLoaded } from './src/services/localPredictor';
+import { ensureImprovedModelLoaded } from './src/services/improvedModelLoader';
 
 const Tab       = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();

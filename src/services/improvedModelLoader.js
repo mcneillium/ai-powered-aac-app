@@ -1,5 +1,16 @@
 // src/services/improvedModelLoader.js
-// Legacy shim — forward everything to localPredictor so old imports keep working.
+import { ensureLocalModelLoaded, predictTopKLocal } from './localPredictor';
 
-export * from './localPredictor';
-export { ensureImprovedModelLoaded as loadImprovedModel } from './localPredictor';
+let _initialized = false;
+
+export async function ensureImprovedModelLoaded() {
+  if (_initialized) return;
+  await ensureLocalModelLoaded();
+  _initialized = true;
+}
+
+// tokens: string[], k: number
+export async function predictTopKWordsWithImprovedModel(tokens, k = 5) {
+  await ensureImprovedModelLoaded();
+  return predictTopKLocal(tokens, k);
+}

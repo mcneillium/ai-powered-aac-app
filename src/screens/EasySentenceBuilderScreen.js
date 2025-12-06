@@ -1,18 +1,16 @@
-// src/screens/EasySentenceBuilderScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  ScrollView, View, Text, TextInput, Button, Alert,
+  ScrollView, View, Text, TextInput, Button,
   StyleSheet, ActivityIndicator, FlatList, TouchableOpacity, Image
 } from 'react-native';
 import * as Speech from 'expo-speech';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { searchPictograms } from '../services/arasaacService';
-import { getAISuggestions } from '../services/getAISuggestions'; // remote fallback
+import { getAISuggestions } from '../services/getAISuggestions';
 import { updateLastActivity } from '../utils/syncStatus';
 import { useSettings } from '../contexts/SettingsContext';
 
-// Local predictor (no remote imports inside it)
 import {
   ensureImprovedModelLoaded,
   predictTopKWordsWithImprovedModel
@@ -20,6 +18,9 @@ import {
 
 export default function EasySentenceBuilderScreen() {
   const { settings, loading: settingsLoading } = useSettings();
+
+  const [modelReady, setModelReady] = useState(false);
+  const [aiError, setAiError] = useState(null);
 
   const [sentenceWords, setSentenceWords] = useState([]);
   const [typedWord, setTypedWord] = useState('');
@@ -42,60 +43,112 @@ export default function EasySentenceBuilderScreen() {
   const themeKey = ['light', 'dark', 'highContrast'].includes(settings?.theme) ? settings.theme : 'light';
   const palette = palettes[themeKey];
 
-  // Preload rep icons for categories
+  // 1) Initialize local model once
   useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        await ensureImprovedModelLoaded();
+        if (alive) setModelReady(true);
+      } catch (e) {
+        console.log('[EasySentence] Local model init failed:', e?.message || e);
+        if (alive) { setAiError(e?.message || String(e)); setModelReady(false); }
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // 2) Preload representative icons for categories
+  useEffect(() => {
+    let alive = true;
     (async () => {
       const reps = {};
-      for (let cat of categories) {
+      for (const cat of categories) {
         try {
           const data = await searchPictograms('en', cat);
+          if (!alive) return;
           if (data?.length) reps[cat] = data[0];
         } catch {}
       }
-      setCategoryImages(reps);
+      if (alive) setCategoryImages(reps);
     })();
+    return () => { alive = false; };
   }, []);
 
-// Local suggestions (predictor) with remote fallback
-useEffect(() => {
-  (async () => {
-    try {
-      await ensureImprovedModelLoaded();
-      const local = await predictTopKWordsWithImprovedModel(
-        null,                    // default model
-        null,                    // (unused)
-        sentenceWords.join(' '),
-        1.25,                    // temperature
-        4,                       // sequence length (auto-detected anyway)
-        5                        // topK
-      );
-
-      console.log('[EasySentence] Local predictions:', local);
-
-      if (Array.isArray(local) && local.length > 0) {
-        setSuggestions(local);
-        return; // ✅ only return if local worked
+  // 3) Fetch pictograms for current selection / search (debounced)
+  const debounceRef = useRef(null);
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setLoadingPictures(true);
+      try {
+        if (wordSearch.trim()) {
+          const res = await searchPictograms('en', wordSearch.trim());
+          setSearchResults(Array.isArray(res) ? res : []);
+          setCategoryPictures([]);
+        } else {
+          const res = await searchPictograms('en', selectedCategory);
+          setCategoryPictures(Array.isArray(res) ? res.slice(0, 50) : []);
+          setSearchResults([]);
+        }
+      } catch (e) {
+        console.log('[EasySentence] pictogram fetch error:', e?.message || e);
+        setSearchResults([]);
+        setCategoryPictures([]);
+      } finally {
+        setLoadingPictures(false);
       }
-    } catch (e) {
-      console.log('[EasySentence] Local AI predict fallback:', e?.message || e);
-    }
+    }, 250);
+    return () => clearTimeout(debounceRef.current);
+  }, [selectedCategory, wordSearch]);
 
-    // ✅ Remote or dummy fallback (if no local suggestions)
-    try {
-      const remote = await getAISuggestions(sentenceWords.join(' '));
-      console.log('[EasySentence] Remote/dummy suggestions:', remote);
-      setSuggestions(remote || []);
-    } catch {
-      setSuggestions([]);
-    }
-  })();
-}, [sentenceWords]);
+  // 4) Local suggestions with remote fallback
+  const sentenceStr = useMemo(() => sentenceWords.join(' '), [sentenceWords]);
 
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (modelReady) {
+        try {
+          const local = await predictTopKWordsWithImprovedModel(
+            null,          // model (use global cached model)
+            null,          // _unusedTokenizer
+            sentenceStr,   // sentence
+            1.15,          // temperature
+            undefined,     // seqLen → let it use detected _seqLen (16)
+            7              // topK
+          );
+          if (!alive) return;
+          if (Array.isArray(local) && local.length > 0) {
+            const dedup = Array.from(new Set(local))
+              .filter(w => w && !sentenceWords.includes(w))
+              .slice(0, 5);
+            setSuggestions(dedup);
+            return;
+          }
+        } catch (e) {
+          console.log('[EasySentence] Local predict error:', e?.message || e);
+        }
+      }
+      try {
+        const remote = await getAISuggestions(sentenceStr);
+        if (!alive) return;
+        const dedup = Array.from(new Set(remote || []))
+          .filter(w => w && !sentenceWords.includes(w))
+          .slice(0, 5);
+        setSuggestions(dedup);
+      } catch {
+        if (!alive) return;
+        setSuggestions([]);
+      }
+    })();
+    return () => { alive = false; };
+  }, [sentenceStr, modelReady]);
 
+  // 5) Word ops & logging
   const addWord = async (word) => {
     const next = [...sentenceWords, String(word)];
     setSentenceWords(next);
-
     try {
       const key = 'userInteractionLog';
       const existing = await AsyncStorage.getItem(key);
@@ -124,6 +177,7 @@ useEffect(() => {
   const clearSentence = () => setSentenceWords([]);
   const speakSentence = () => Speech.speak(sentenceWords.join(' ') || ' ');
 
+  // 6) Loading UI
   if (settingsLoading) {
     return (
       <View style={[styles.center, { backgroundColor: palette.background }]}>
@@ -132,7 +186,8 @@ useEffect(() => {
     );
   }
 
-  const renderPic = ({ item, index }) => {
+  // Renderers
+  const renderPic = ({ item }) => {
     const id = item?.id ?? item?._id;
     const uri = id
       ? `https://static.arasaac.org/pictograms/${id}/${id}_500.png`
@@ -143,7 +198,6 @@ useEffect(() => {
       item?.searchText ||
       wordSearch ||
       selectedCategory;
-
     return (
       <TouchableOpacity style={styles.picContainer} onPress={() => addWord(keyword)}>
         <Image source={{ uri }} style={styles.picImage} />
@@ -190,7 +244,7 @@ useEffect(() => {
         <Button title="Speak" onPress={speakSentence} color="#4CAF50" />
       </View>
 
-      {/* Type-to-insert row */}
+      {/* Type row */}
       <View style={styles.typeRow}>
         <TextInput
           style={[
@@ -243,16 +297,29 @@ useEffect(() => {
           contentContainerStyle={{ paddingVertical: 4 }}
           renderItem={renderPic}
           ListEmptyComponent={() => (
-            <Text style={[styles.emptyText, { color: palette.text }]}>No pictograms.</Text>
+            <Text style={[styles.emptyText, { color: palette.text }]}>
+              {wordSearch ? 'No results.' : 'No pictograms.'}
+            </Text>
           )}
         />
       )}
 
       <Text style={[styles.label, { color: palette.text }]}>AI Suggestions</Text>
+      {!modelReady && !aiError ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+          <ActivityIndicator size="small" color="#4CAF50" />
+          <Text style={{ marginLeft: 8, color: palette.text }}>Loading on-device model…</Text>
+        </View>
+      ) : aiError ? (
+        <Text style={{ marginBottom: 12, color: '#f44336' }}>
+          On-device model unavailable: {aiError} — using fallback.
+        </Text>
+      ) : null}
+
       <FlatList
         data={suggestions}
         horizontal
-        keyExtractor={(_, i) => i.toString()}
+        keyExtractor={(w, i) => `${w}-${i}`}
         showsHorizontalScrollIndicator={false}
         style={{ flexGrow: 0, marginBottom: 12 }}
         contentContainerStyle={{ paddingVertical: 4 }}
@@ -260,6 +327,11 @@ useEffect(() => {
           <View style={{ marginRight: 8 }}>
             <Button title={String(item)} onPress={() => addWord(String(item))} color="#4CAF50" />
           </View>
+        )}
+        ListEmptyComponent={() => (
+          <Text style={[styles.emptyText, { color: palette.text }]}>
+            {modelReady ? 'No suggestions yet.' : 'Loading…'}
+          </Text>
         )}
       />
 
@@ -274,12 +346,26 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   heading: { fontSize: 24, fontWeight: 'bold' },
   row: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12 },
-  wordChipContainer: { flexDirection: 'row', backgroundColor: '#e0e0e0', borderRadius: 16, margin: 4, paddingRight: 4, alignItems: 'center' },
+  wordChipContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#e0e0e0',
+    borderRadius: 16,
+    margin: 4,
+    paddingRight: 4,
+    alignItems: 'center'
+  },
   wordChip: { marginHorizontal: 8, fontSize: 16 },
   removeChip: { backgroundColor: '#f44336', borderRadius: 8, padding: 2 },
   speakButtonInline: { alignSelf: 'flex-end', marginBottom: 12 },
   typeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, marginBottom: 8 },
-  typeInput: { flex: 1, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, minHeight: 44 },
+  typeInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minHeight: 44
+  },
   label: { fontSize: 18, marginTop: 16, marginBottom: 8 },
   input: { marginVertical: 12, borderWidth: 1, borderRadius: 8, padding: 8 },
   categoryCard: { marginRight: 12, alignItems: 'center' },

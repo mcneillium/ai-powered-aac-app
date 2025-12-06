@@ -2,16 +2,20 @@
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-react-native';
 import { bundleResourceIO } from '@tensorflow/tfjs-react-native';
+import { Asset } from 'expo-asset';
+import * as FileSystem from 'expo-file-system';
 
 let _model = null;
 let _wordIndex = null;
 let _indexWord = null;
 let _padToken = 0;
 let _oovToken = 1;
-let _seqLen = 4;
+let _seqLen = 16;
 
+// Simple LRU-ish cache
 const _ctxCache = new Map();
 const _MAX_CACHE = 200;
+
 const _remember = (k, v) => {
   if (_ctxCache.has(k)) _ctxCache.delete(k);
   _ctxCache.set(k, v);
@@ -21,136 +25,12 @@ const _remember = (k, v) => {
   }
 };
 
-// -------------------------------------------------------------
-// 🧠 Initialize TF backend, load model & tokenizer once
-// -------------------------------------------------------------
-export async function ensureImprovedModelLoaded() {
-  if (_model && _wordIndex && _indexWord) return true;
-
-  console.log('[TFJS] Initializing backend...');
-  try {
-    await tf.ready();
-    try {
-      await tf.setBackend('rn-webgl');
-    } catch {
-      await tf.setBackend('cpu');
-    }
-    console.log('[TFJS] Backend ready:', tf.getBackend());
-  } catch (err) {
-    console.warn('[TFJS] Backend init failed:', err);
-  }
-
-  // ✅ Load model
-  const modelJson = require('../../assets/tf_model/word_prediction_tfjs/model.json');
-  const weights = [
-    require('../../assets/tf_model/word_prediction_tfjs/group1-shard1of1.bin'),
-  ];
-
-  try {
-    _model = await tf.loadLayersModel(bundleResourceIO(modelJson, weights));
-    console.log('[TFJS] Model loaded successfully.');
-  } catch (err) {
-    console.error('[TFJS] Model load failed:', err);
-    throw err;
-  }
-
-  // detect sequence length automatically
-  try {
-    const shape = _model?.inputs?.[0]?.shape;
-    if (Array.isArray(shape) && Number.isInteger(shape[1])) {
-      _seqLen = shape[1];
-      console.log('[TFJS] Model input sequence length:', _seqLen);
-    }
-  } catch {}
-
-  // ✅ Load tokenizer
-  const tkn = require('../../assets/childes_model/crowdsourced_aac_tokenizer.json');
-
-  _wordIndex =
-    tkn.word_index ||
-    tkn.wordIndex ||
-    tkn.config?.word_index ||
-    tkn.config?.wordIndex ||
-    {};
-  _indexWord =
-    tkn.index_word ||
-    tkn.indexWord ||
-    tkn.config?.index_word ||
-    tkn.config?.indexWord ||
-    {};
-
-  console.log('[Tokenizer] word_index size:', Object.keys(_wordIndex).length);
-  console.log('[Tokenizer] index_word size:', Object.keys(_indexWord).length);
-
-  if (typeof tkn.pad_token_id === 'number') _padToken = tkn.pad_token_id;
-  if (typeof tkn.oov_token_id === 'number') _oovToken = tkn.oov_token_id;
-
-  // Warm up
-  tf.tidy(() => {
-    const warm = tf.tensor2d([Array(_seqLen).fill(_padToken)], [1, _seqLen]);
-    _model.predict(warm);
-  });
-
-  console.log('[TFJS] Warm-up complete.');
-  return true;
+function invertMap(obj) {
+  const out = {};
+  for (const [w, i] of Object.entries(obj || {})) out[String(i)] = w;
+  return out;
 }
 
-// -------------------------------------------------------------
-// 🎯 Predict top-K next words
-// -------------------------------------------------------------
-export async function predictTopKWordsWithImprovedModel(
-  model,
-  _unusedTokenizer,
-  sentence,
-  temperature = 0.8,
-  seqLen = _seqLen,
-  topK = 5
-) {
-  await ensureImprovedModelLoaded();
-  const m = model || _model;
-  const L = seqLen || _seqLen;
-
-  const words = safeSplit(sentence);
-  const tokens = wordsToTokens(words);
-  const ctx = toContext(tokens, L);
-  const cacheKey = ctx.join('-');
-  if (_ctxCache.has(cacheKey)) return _ctxCache.get(cacheKey);
-
-  console.log('[TFJS] Predicting for context:', ctx);
-
-  let logits;
-  await tf.nextFrame();
-  logits = await tf.tidy(() => {
-    const x = tf.tensor2d([ctx], [1, L]);
-    const out = m.predict(x);
-
-    console.log('[TFJS] Prediction output shape:', out.shape);
-    if (out.shape?.length > 1) {
-      const firstTen = Array.from(out.dataSync()).slice(0, 10);
-      console.log('[TFJS] First 10 logits:', firstTen);
-    }
-
-    return out.dataSync();
-  });
-
-  const candidates = sampleTopK(logits, { temperature, topK })
-    .map(id => {
-      const w = tokenToWord(id);
-      console.log('[TFJS] Candidate ID → Word:', id, '→', w);
-      return w;
-    })
-    .filter(Boolean)
-    .slice(0, topK);
-
-  console.log('[TFJS] Final candidates:', candidates);
-
-  _remember(cacheKey, candidates);
-  return candidates;
-}
-
-// -------------------------------------------------------------
-// Utility helpers
-// -------------------------------------------------------------
 function safeSplit(s = '') {
   return String(s)
     .trim()
@@ -163,12 +43,15 @@ function safeSplit(s = '') {
 }
 
 function wordsToTokens(words = []) {
-  return words.map(w => _wordIndex[w] ?? _oovToken);
+  return words.map(w => {
+    const id = _wordIndex?.[w];
+    return Number.isInteger(id) ? id : _oovToken;
+  });
 }
 
 function tokenToWord(id) {
-  const w = _indexWord[String(id)];
-  if (!w || w === '<pad>' || w === '<unk>' || w === '<eos>') return null;
+  const w = _indexWord?.[String(id)];
+  if (!w || w === '<pad>' || w === '<unk>' || w === '<oov>' || w === '<eos>') return null;
   return w;
 }
 
@@ -187,26 +70,144 @@ function softmaxStable(arr) {
 }
 
 function sampleTopK(logits, { temperature = 0.8, topK = 8 }) {
-  const scaled = Array.from(logits, v => v / Math.max(1e-6, temperature));
+  const scaled = logits.map(v => v / Math.max(1e-6, temperature));
   const probs = softmaxStable(scaled);
-  const idxs = probs.map((p, i) => [i, p]).sort((a, b) => b[1] - a[1]).slice(0, topK);
+  const sorted = probs
+    .map((p, i) => [i, p])
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topK);
+  return sorted.map(([i]) => i);
+}
 
-  const chosen = [];
-  const pool = idxs.map(([i, p]) => ({ i, p }));
-  const sum = pool.reduce((a, b) => a + b.p, 0) || 1;
+// -------------------------------------------------------------
+// TFJS model + tokenizer loader
+// -------------------------------------------------------------
+export async function ensureImprovedModelLoaded() {
+  if (_model && _wordIndex && _indexWord) return true;
 
-  while (chosen.length < Math.min(topK, pool.length)) {
-    let r = Math.random();
-    for (const { i, p } of pool) {
-      r -= p / sum;
-      if (r <= 0) {
-        chosen.push(i);
-        const k = pool.findIndex(o => o.i === i);
-        if (k >= 0) pool.splice(k, 1);
-        break;
-      }
-    }
-    if (!pool.length) break;
+  console.log('[TFJS] Initializing backend…');
+  await tf.ready();
+  try { await tf.setBackend('rn-webgl'); } catch { await tf.setBackend('cpu'); }
+  console.log('[TFJS] Backend:', tf.getBackend());
+
+  // ---------------------------
+  // TFJS model.json & weights
+  // ---------------------------
+  const modelJson = require('../../assets/childes_model/model.json');
+
+  // --- YOUR 21 SHARDS (verified) ---
+  const weights = [
+    require('../../assets/childes_model/group1-shard1of21.bin'),
+    require('../../assets/childes_model/group1-shard2of21.bin'),
+    require('../../assets/childes_model/group1-shard3of21.bin'),
+    require('../../assets/childes_model/group1-shard4of21.bin'),
+    require('../../assets/childes_model/group1-shard5of21.bin'),
+    require('../../assets/childes_model/group1-shard6of21.bin'),
+    require('../../assets/childes_model/group1-shard7of21.bin'),
+    require('../../assets/childes_model/group1-shard8of21.bin'),
+    require('../../assets/childes_model/group1-shard9of21.bin'),
+    require('../../assets/childes_model/group1-shard10of21.bin'),
+    require('../../assets/childes_model/group1-shard11of21.bin'),
+    require('../../assets/childes_model/group1-shard12of21.bin'),
+    require('../../assets/childes_model/group1-shard13of21.bin'),
+    require('../../assets/childes_model/group1-shard14of21.bin'),
+    require('../../assets/childes_model/group1-shard15of21.bin'),
+    require('../../assets/childes_model/group1-shard16of21.bin'),
+    require('../../assets/childes_model/group1-shard17of21.bin'),
+    require('../../assets/childes_model/group1-shard18of21.bin'),
+    require('../../assets/childes_model/group1-shard19of21.bin'),
+    require('../../assets/childes_model/group1-shard20of21.bin'),
+    require('../../assets/childes_model/group1-shard21of21.bin'),
+  ];
+
+  // ---------------------------
+  // Load TFJS model
+  // ---------------------------
+  try {
+    _model = await tf.loadLayersModel(bundleResourceIO(modelJson, weights));
+    console.log('[TFJS] Model loaded.');
+  } catch (err) {
+    console.error('[TFJS] Model load failed:', err);
+    throw err;
   }
-  return chosen;
+
+  // Detect sequence length
+  try {
+    const shape = _model?.inputs?.[0]?.shape;
+    if (Array.isArray(shape) && Number.isInteger(shape[1])) {
+      _seqLen = shape[1];
+      console.log('[TFJS] Detected SEQ_LEN =', _seqLen);
+    }
+  } catch {}
+
+  // ---------------------------
+  // Tokenizer JSON
+  // ---------------------------
+  try {
+    const tokAsset = Asset.fromModule(require('../../assets/childes_model/tokenizer.json'));
+    await tokAsset.downloadAsync();
+    const tokJsonStr = await FileSystem.readAsStringAsync(tokAsset.localUri);
+    let tkn = {};
+    try { tkn = JSON.parse(tokJsonStr); } catch {}
+    const cfg = tkn?.config || tkn || {};
+    _wordIndex = cfg.word_index || cfg.wordIndex || {};
+    _indexWord = cfg.index_word || cfg.indexWord || invertMap(_wordIndex);
+
+    if (typeof cfg.pad_token_id === 'number') _padToken = cfg.pad_token_id;
+    if (typeof cfg.oov_token_id === 'number') _oovToken = cfg.oov_token_id;
+
+    console.log('[Tokenizer] word_index size:', Object.keys(_wordIndex).length);
+    console.log('[Tokenizer] index_word size:', Object.keys(_indexWord).length);
+  } catch (e) {
+    console.warn('[Tokenizer] Failed to load tokenizer.json:', e?.message || e);
+    _wordIndex = {};
+    _indexWord = {};
+  }
+
+  // Warm up model
+  tf.tidy(() => {
+    const warm = tf.tensor2d([Array(_seqLen).fill(_padToken)], [1, _seqLen], 'int32');
+    _model.predict(warm);
+  });
+
+  console.log('[TFJS] Warm-up complete.');
+  return true;
+}
+
+// -------------------------------------------------------------
+// Prediction API
+// -------------------------------------------------------------
+export async function predictTopKWordsWithImprovedModel(
+  model,
+  _unusedTokenizer,
+  sentence,
+  temperature = 0.8,
+  seqLen = _seqLen,
+  topK = 5
+) {
+  await ensureImprovedModelLoaded();
+  const m = model || _model;
+  const L = seqLen || _seqLen;
+
+  const words = safeSplit(sentence);
+  const tokens = wordsToTokens(words);
+  const ctx = toContext(tokens, L);
+
+  const key = ctx.join('-');
+  if (_ctxCache.has(key)) return _ctxCache.get(key);
+
+  const logits = await tf.tidy(() => {
+    const x = tf.tensor2d([ctx], [1, L], 'int32');
+    const out = m.predict(x);
+    return Array.from(out.dataSync());
+  });
+
+  const ids = sampleTopK(logits, { temperature, topK });
+  const candidates = ids
+    .map(id => tokenToWord(id))
+    .filter(Boolean)
+    .slice(0, topK);
+
+  _remember(key, candidates);
+  return candidates;
 }
