@@ -75,8 +75,9 @@ async function loadModel() {
     
     // Warm up the model with a test prediction
     const dummyInput = tf.tensor2d([[1, 2, 3, 4]], [1, 4]);
-    global.wordPredictionModel.predict(dummyInput);
+    const warmupOutput = global.wordPredictionModel.predict(dummyInput);
     dummyInput.dispose();
+    warmupOutput.dispose();
     
     console.log("✅ Model is ready for predictions");
     return true;

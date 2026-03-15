@@ -89,7 +89,7 @@ export default function CombinedImageScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setOpenCam(false)}
-            style={[styles.fab, { top: 30, right: 20, bottom: 'auto' }]}
+            style={[styles.fab, { top: 30, right: 20, bottom: undefined }]}
           >
             <MaterialIcons name="close" size={28} color="#fff" />
           </TouchableOpacity>

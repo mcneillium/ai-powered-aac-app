@@ -94,7 +94,7 @@ async function processLogQueue() {
   } catch (error) {
     console.error('Error processing log queue:', error);
     // Put the logs back in the queue if operation failed
-    logQueue = [...logQueue, ...logQueue];
+    logQueue = [...logsToAdd, ...logQueue];
   } finally {
     isProcessingQueue = false;
   }

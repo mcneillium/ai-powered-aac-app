@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -40,7 +40,7 @@ export default function EmotionScreen() {
   };
   const palette = palettes[settings.theme];
 
-  const scaleAnim = useState(new Animated.Value(1))[0];
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const onPressIn = () => {
     Animated.timing(scaleAnim, {

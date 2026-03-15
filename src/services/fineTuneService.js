@@ -95,4 +95,16 @@ export async function updateModelPeriodically() {
 }
 
 // Trigger fine-tuning every 10 minutes (adjust the interval as needed)
-setInterval(updateModelPeriodically, 10 * 60 * 1000);
+let fineTuneInterval = null;
+
+export function startPeriodicFineTuning() {
+  if (fineTuneInterval) return;
+  fineTuneInterval = setInterval(updateModelPeriodically, 10 * 60 * 1000);
+}
+
+export function stopPeriodicFineTuning() {
+  if (fineTuneInterval) {
+    clearInterval(fineTuneInterval);
+    fineTuneInterval = null;
+  }
+}

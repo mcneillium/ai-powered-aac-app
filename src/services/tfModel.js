@@ -56,7 +56,13 @@ export async function predictNextWord(sentence) {
   const prediction = global.wordPredictionModel.predict(inputTensor);
 
   // Get the predicted index
-  const predictedIndex = prediction.argMax(-1).dataSync()[0];
+  const argMax = prediction.argMax(-1);
+  const predictedIndex = argMax.dataSync()[0];
+
+  // Dispose tensors to prevent memory leaks
+  inputTensor.dispose();
+  prediction.dispose();
+  argMax.dispose();
 
   // Convert predicted index back to a word
   const predictedWord = decodePrediction(predictedIndex, global.tokenizer);

@@ -5,7 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Image
+  Alert
 } from 'react-native';
 import { getAuth, signOut } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
@@ -31,7 +31,7 @@ export default function ProfileScreen() {
       await signOut(auth);
       navigation.replace('Login');
     } catch (e) {
-      alert('Could not log out.');
+      Alert.alert('Error', 'Could not log out.');
     }
   };
 

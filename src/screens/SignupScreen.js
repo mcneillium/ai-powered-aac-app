@@ -1,6 +1,6 @@
 // src/screens/SignupScreen.js
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getDatabase, ref, set } from 'firebase/database';
 
@@ -24,7 +24,7 @@ export default function SignupScreen({ navigation }) {
       });
       navigation.navigate('MainApp');
     } catch (error) {
-      alert('Sign up error: ' + error.message);
+      Alert.alert('Sign Up Error', error.message);
     } finally {
       setLoading(false);
     }

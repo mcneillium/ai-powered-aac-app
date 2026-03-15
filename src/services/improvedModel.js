@@ -91,8 +91,16 @@ function samplePrediction(predictions, temperature = 1.0) {
   // Scale logits by temperature and sample from the probability distribution.
   const logits = tf.div(tf.log(tf.tensor1d(predictions)), tf.scalar(temperature));
   const expLogits = tf.exp(logits);
-  const probabilities = expLogits.div(expLogits.sum());
-  const sampledIndex = tf.multinomial(probabilities, 1).dataSync()[0];
+  const sumExp = expLogits.sum();
+  const probabilities = expLogits.div(sumExp);
+  const sampled = tf.multinomial(probabilities, 1);
+  const sampledIndex = sampled.dataSync()[0];
+  // Dispose all intermediate tensors
+  logits.dispose();
+  expLogits.dispose();
+  sumExp.dispose();
+  probabilities.dispose();
+  sampled.dispose();
   return sampledIndex;
 }
 
@@ -115,11 +123,15 @@ export async function predictNextWordWithImprovedModel(model, tokenizer, sentenc
   const inputTensor = tf.tensor2d([inputTokens], [1, sequenceLength]);
   const prediction = model.predict(inputTensor);
   const predictionData = prediction.dataSync();
-  
+
   // Use sampling to generate a more diverse prediction.
   const predictedIndex = samplePrediction(predictionData, temperature);
   const predictedWord = decodePrediction(predictedIndex, tokenizer);
-  
+
+  // Dispose tensors to prevent memory leaks
+  inputTensor.dispose();
+  prediction.dispose();
+
   console.log("✅ Predicted next word:", predictedWord);
   return predictedWord;
 }

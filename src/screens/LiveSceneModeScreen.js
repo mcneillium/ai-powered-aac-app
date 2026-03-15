@@ -41,12 +41,20 @@ export default function LiveSceneModeScreen() {
     })();
   }, []);
 
+  const timeoutRef = useRef(null);
+
   // Trigger frame processing when detection toggled on
   useEffect(() => {
     if (isDetecting) {
       processFrame();
     }
-  }, [isDetecting]);
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, [isDetecting, processFrame]);
 
   const processFrame = useCallback(async () => {
     if (!model || !cameraRef.current || !isDetecting || isProcessing) return;
@@ -68,7 +76,9 @@ export default function LiveSceneModeScreen() {
       console.error(e);
     } finally {
       setIsProcessing(false);
-      if (isDetecting) setTimeout(processFrame, 500);
+      if (isDetecting) {
+        timeoutRef.current = setTimeout(processFrame, 500);
+      }
     }
   }, [model, isDetecting, isProcessing, currentDetection]);
 

@@ -2,7 +2,7 @@
 import { getAuth } from 'firebase/auth';
 import { ref, push } from 'firebase/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { db } from 'firebaseConfig.js';
+import { db } from '../firebaseConfig';
 
 export async function logEvent(action, metadata = {}) {
   const auth = getAuth();

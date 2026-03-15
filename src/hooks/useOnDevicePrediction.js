@@ -79,6 +79,8 @@ export function useOnDevicePrediction() {
       const xsBatch = tf.concat(bufferRef.current.xs);
       const ysBatch = tf.concat(bufferRef.current.ys);
       await modelRef.current.fit(xsBatch, ysBatch, { epochs: 1, batchSize: BATCH_SIZE });
+      xsBatch.dispose();
+      ysBatch.dispose();
       try {
         await modelRef.current.save('localstorage://personalized-model');
       } catch (saveError) {
