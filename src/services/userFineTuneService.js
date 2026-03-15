@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as tf from '@tensorflow/tfjs';
 import { ref, push } from 'firebase/database';
-import { db } from 'firebaseConfig';
+import { db } from '../firebaseConfig';
 
 /**
  * Retrieves user training logs stored locally in AsyncStorage.
