@@ -7,15 +7,16 @@ import {
   getReactNativePersistence
 } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ENV } from './src/config/env';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyBZS_Bfl7Bj4axlFt8Pg3HebYzAbrqBDQs',
-  authDomain: 'commai-b98fe.firebaseapp.com',
-  databaseURL: 'https://commai-b98fe-default-rtdb.europe-west1.firebasedatabase.app',
-  projectId: 'commai-b98fe',
-  storageBucket: 'commai-b98fe.appspot.com',
-  messagingSenderId: '...',
-  appId: '...'
+  apiKey: ENV.FIREBASE_API_KEY,
+  authDomain: ENV.FIREBASE_AUTH_DOMAIN,
+  databaseURL: ENV.FIREBASE_DATABASE_URL,
+  projectId: ENV.FIREBASE_PROJECT_ID,
+  storageBucket: ENV.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: ENV.FIREBASE_MESSAGING_SENDER_ID,
+  appId: ENV.FIREBASE_APP_ID,
 };
 
 // 1) Initialize (or reuse) the Firebase App

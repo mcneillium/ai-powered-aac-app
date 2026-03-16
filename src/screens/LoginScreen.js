@@ -22,11 +22,11 @@ export default function LoginScreen() {
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       console.log('✅ Logged in as', cred.user.uid);
-      logEvent('User logged in', { email });
+      logEvent('User logged in', { userId: cred.user.uid });
       // navigation is driven by AuthContext in App.js
     } catch (error) {
       console.error('❌ Login error', error);
-      logEvent('Login error', { email, error: error.message });
+      logEvent('Login error', { error: error.message });
       Alert.alert('Login Error', error.message);
     } finally {
       setLoading(false);

@@ -32,9 +32,17 @@ export default function FeedbackScreen() {
     );
   }
 
+  const MAX_FEEDBACK_LENGTH = 2000;
+
   const submitFeedback = async () => {
     if (!feedback.trim()) {
       return Alert.alert('Validation', 'Feedback cannot be empty');
+    }
+    if (feedback.length > MAX_FEEDBACK_LENGTH) {
+      return Alert.alert('Validation', `Feedback must be under ${MAX_FEEDBACK_LENGTH} characters`);
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return Alert.alert('Validation', 'Please enter a valid email address');
     }
     setSubmitting(true);
     try {

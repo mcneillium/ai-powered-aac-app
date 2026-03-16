@@ -1,5 +1,8 @@
 // services/hfImageCaption.js
 import * as FileSystem from 'expo-file-system';
+import { ENV } from '../config/env';
+
+const HF_CAPTION_API_URL = "https://api-inference.huggingface.co/models/nlpconnect/vit-gpt2-image-captioning";
 
 export const getImageCaption = async (imageUri) => {
   try {
@@ -8,17 +11,14 @@ export const getImageCaption = async (imageUri) => {
       encoding: FileSystem.EncodingType.Base64,
     });
 
-    const apiUrl = "https://api-inference.huggingface.co/models/nlpconnect/vit-gpt2-image-captioning";
-    const hfToken = "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";
-
     const requestBody = {
       inputs: base64
     };
 
-    const response = await fetch(apiUrl, {
+    const response = await fetch(HF_CAPTION_API_URL, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${hfToken}`,
+        "Authorization": `Bearer ${ENV.HUGGING_FACE_TOKEN}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify(requestBody)
