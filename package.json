@@ -55,5 +55,11 @@
     "babel-plugin-module-resolver": "^5.0.2",
     "typescript": "^5.3.3"
   },
+  "jest": {
+    "preset": "jest-expo",
+    "transformIgnorePatterns": [
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|@tensorflow/.*|@tensorflow-models/.*)"
+    ]
+  },
   "private": true
 }
