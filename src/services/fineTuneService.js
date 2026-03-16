@@ -30,15 +30,17 @@ export async function getUserTrainingData() {
  * @returns {Promise<tf.LayersModel>} - The fine-tuned model.
  */
 export async function fineTuneModel(model, trainingData) {
-  if (trainingData.length === 0) {
-    console.log("No training data available for fine-tuning.");
+  if (trainingData.length === 0 || !trainingData[0]?.inputSequence) {
+    console.log("No valid training data available for fine-tuning.");
     return model;
   }
-  
+
+  const sequenceLength = trainingData[0].inputSequence.length;
+
   // Convert training data into tensors
   const xs = tf.tensor2d(
     trainingData.map(example => example.inputSequence),
-    [trainingData.length, trainingData[0].inputSequence.length],
+    [trainingData.length, sequenceLength],
     'int32'
   );
   const ys = tf.tensor1d(
@@ -94,5 +96,18 @@ export async function updateModelPeriodically() {
   }
 }
 
-// Trigger fine-tuning every 10 minutes (adjust the interval as needed)
-setInterval(updateModelPeriodically, 10 * 60 * 1000);
+// Start periodic fine-tuning. Returns a function to stop it.
+let fineTuneIntervalId = null;
+
+export function startPeriodicFineTuning(intervalMs = 10 * 60 * 1000) {
+  stopPeriodicFineTuning();
+  fineTuneIntervalId = setInterval(updateModelPeriodically, intervalMs);
+  return fineTuneIntervalId;
+}
+
+export function stopPeriodicFineTuning() {
+  if (fineTuneIntervalId !== null) {
+    clearInterval(fineTuneIntervalId);
+    fineTuneIntervalId = null;
+  }
+}

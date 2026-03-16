@@ -2,7 +2,7 @@
 import { getAuth } from 'firebase/auth';
 import { ref, push } from 'firebase/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { db } from 'firebaseConfig.js';
+import { db } from '../../firebaseConfig';
 
 export async function logEvent(action, metadata = {}) {
   const auth = getAuth();
@@ -20,7 +20,11 @@ export async function logEvent(action, metadata = {}) {
 
   // Push to Firebase
   const logsRef = ref(db, 'userLogs');
-  push(logsRef, logEntry);
+  try {
+    await push(logsRef, logEntry);
+  } catch (firebaseError) {
+    console.warn('Failed to push log to Firebase:', firebaseError.message);
+  }
 
   // Also save to AsyncStorage
   try {

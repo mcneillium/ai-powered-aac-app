@@ -1,15 +1,14 @@
 // src/screens/OnboardingScreen.js
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, Button, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from '@react-navigation/native';
 
-export default function OnboardingScreen() {
-  const navigation = useNavigation();
-
+export default function OnboardingScreen({ onComplete }) {
   const completeOnboarding = async () => {
     await AsyncStorage.setItem('hasLaunched', 'true');
-    navigation.replace('MainApp');
+    if (onComplete) {
+      onComplete();
+    }
   };
 
   return (

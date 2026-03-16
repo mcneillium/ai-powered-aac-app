@@ -47,16 +47,34 @@ export async function predictNextWordWithImprovedModel(model, tokenizer, sentenc
 
   const logitsTensor = model.predict(inputTensor);
   const logits = Array.from(logitsTensor.dataSync());
+
+  // Dispose tensors to free memory
+  inputTensor.dispose();
+  logitsTensor.dispose();
+
   const scaledLogits = logits.map(logit => logit / temperature);
   const expLogits = scaledLogits.map(Math.exp);
   const sumExp = expLogits.reduce((a, b) => a + b, 0);
   const probs = expLogits.map(expVal => expVal / sumExp);
   const predictedIndex = probs.indexOf(Math.max(...probs));
 
-  const indexToWord = Object.fromEntries(
+  const indexToWord = buildIndexToWordMap(tokenizer);
+  return indexToWord[predictedIndex] || "[UNKNOWN]";
+}
+
+// Cache the reverse tokenizer mapping to avoid rebuilding it on every call
+let _cachedTokenizer = null;
+let _cachedIndexToWord = null;
+
+function buildIndexToWordMap(tokenizer) {
+  if (_cachedTokenizer === tokenizer && _cachedIndexToWord) {
+    return _cachedIndexToWord;
+  }
+  _cachedIndexToWord = Object.fromEntries(
     Object.entries(tokenizer).map(([word, idx]) => [idx, word])
   );
-  return indexToWord[predictedIndex] || "[UNKNOWN]";
+  _cachedTokenizer = tokenizer;
+  return _cachedIndexToWord;
 }
 
 /**
@@ -74,7 +92,7 @@ export async function predictTopKWordsWithImprovedModel(
   model,
   tokenizer,
   sentence,
-  temperature = 1.5, // Increased temperature for more randomness
+  temperature = 1.5,
   sequenceLength = 4,
   topK = 4
 ) {
@@ -88,6 +106,11 @@ export async function predictTopKWordsWithImprovedModel(
 
   const logitsTensor = model.predict(inputTensor);
   const logits = Array.from(logitsTensor.dataSync());
+
+  // Dispose tensors to free memory
+  inputTensor.dispose();
+  logitsTensor.dispose();
+
   const scaledLogits = logits.map(logit => logit / temperature);
   const expLogits = scaledLogits.map(Math.exp);
   const sumExp = expLogits.reduce((a, b) => a + b, 0);
@@ -98,9 +121,7 @@ export async function predictTopKWordsWithImprovedModel(
   const sorted = probIndices.sort((a, b) => b.prob - a.prob);
   const topKIndices = sorted.slice(0, topK).map(item => item.index);
 
-  const indexToWord = Object.fromEntries(
-    Object.entries(tokenizer).map(([word, idx]) => [idx, word])
-  );
+  const indexToWord = buildIndexToWordMap(tokenizer);
   return topKIndices.map(idx => indexToWord[idx] || "[UNKNOWN]");
 }
 

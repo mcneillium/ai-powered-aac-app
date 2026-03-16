@@ -37,7 +37,9 @@ export default function CommunicationScreen() {
         try {
           const data = await searchPictograms('en', cat);
           if (data?.length) reps[cat] = data[0];
-        } catch {}
+        } catch (e) {
+          console.warn(`Failed to load pictogram for category "${cat}":`, e.message);
+        }
       }
       setCategoryImages(reps);
     })();

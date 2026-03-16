@@ -32,7 +32,9 @@ export default function EasySentenceBuilderScreen() {
         try {
           const data = await searchPictograms('en', cat);
           if (data?.length) reps[cat] = data[0];
-        } catch {}
+        } catch (e) {
+          console.warn(`Failed to load pictogram for category "${cat}":`, e.message);
+        }
       }
       setCategoryImages(reps);
     })();
@@ -62,7 +64,9 @@ export default function EasySentenceBuilderScreen() {
       let local = [];
       try {
         local = await predictNext(sentenceWords, 5);
-      } catch {}
+      } catch (e) {
+        console.warn('On-device prediction failed:', e.message);
+      }
       if (local.length === 0) {
         const remote = await getAISuggestions(sentenceWords.join(' '));
         setSuggestions(remote || []);

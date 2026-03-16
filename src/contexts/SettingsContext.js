@@ -51,7 +51,7 @@ export function SettingsProvider({ children }) {
     );
 
     return () => unsubscribe();
-  }, [auth.currentUser]);
+  }, [auth.currentUser?.uid]);
 
   return (
     <SettingsContext.Provider value={{ settings, loading }}>
