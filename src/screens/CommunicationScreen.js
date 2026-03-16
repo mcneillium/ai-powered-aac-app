@@ -15,31 +15,16 @@ import { searchPictograms } from '../services/arasaacService';
 import { logEvent } from '../utils/logger';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette } from '../styles/theme';
+import { useCategoryImages } from '../hooks/useCategoryImages';
 
 export default function CommunicationScreen() {
   const { settings, loading: settingsLoading } = useSettings();
   const [pictograms, setPictograms] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(null);
-  const [categoryImages, setCategoryImages] = useState({});
-  const categories = ['Everyday', 'Food', 'Drinks', 'People', 'Places'];
+  const { categories, categoryImages } = useCategoryImages();
 
   const palette = getPalette(settings.theme);
-
-  useEffect(() => {
-    (async () => {
-      const reps = {};
-      for (let cat of categories) {
-        try {
-          const data = await searchPictograms('en', cat);
-          if (data?.length) reps[cat] = data[0];
-        } catch (e) {
-          console.warn(`Failed to load pictogram for category "${cat}":`, e.message);
-        }
-      }
-      setCategoryImages(reps);
-    })();
-  }, []);
 
   useEffect(() => {
     loadCategory('Everyday');

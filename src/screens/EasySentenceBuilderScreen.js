@@ -9,6 +9,7 @@ import { updateLastActivity } from '../utils/syncStatus';
 import { useSettings } from '../contexts/SettingsContext';
 import { useOnDevicePrediction } from '../hooks/useOnDevicePrediction';
 import { getPalette } from '../styles/theme';
+import { useCategoryImages } from '../hooks/useCategoryImages';
 
 export default function EasySentenceBuilderScreen() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -19,26 +20,10 @@ export default function EasySentenceBuilderScreen() {
   const [selectedCategory, setSelectedCategory] = useState('Everyday');
   const [wordSearch, setWordSearch] = useState('');
   const [suggestions, setSuggestions] = useState([]);
-  const [categoryImages, setCategoryImages] = useState({});
   const { predictNext, recordTap } = useOnDevicePrediction();
+  const { categories, categoryImages } = useCategoryImages();
 
-  const categories = ['Everyday', 'Food', 'Drinks', 'People', 'Places'];
   const palette = getPalette(settings.theme);
-
-  useEffect(() => {
-    (async () => {
-      const reps = {};
-      for (let cat of categories) {
-        try {
-          const data = await searchPictograms('en', cat);
-          if (data?.length) reps[cat] = data[0];
-        } catch (e) {
-          console.warn(`Failed to load pictogram for category "${cat}":`, e.message);
-        }
-      }
-      setCategoryImages(reps);
-    })();
-  }, []);
 
   useEffect(() => {
     (async () => {
