@@ -12,6 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
+import { getPalette } from '../styles/theme';
 
 export default function ProfileScreen() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -19,12 +20,7 @@ export default function ProfileScreen() {
   const auth = getAuth();
   const user = auth.currentUser;
 
-  const palettes = {
-    light: { background: '#fff', text: '#000' },
-    dark: { background: '#000', text: '#fff' },
-    highContrast: { background: '#000', text: '#FFD600' }
-  };
-  const palette = palettes[settings.theme];
+  const palette = getPalette(settings.theme);
 
   const handleLogout = async () => {
     try {

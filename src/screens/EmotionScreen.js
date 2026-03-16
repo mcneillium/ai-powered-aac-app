@@ -16,6 +16,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { logEvent } from '../utils/logger';
 import { StatusBar } from 'expo-status-bar';
+import { getPalette } from '../styles/theme';
 
 const emotions = [
   { label: 'Happy', emoji: '😊' },
@@ -33,12 +34,7 @@ export default function EmotionScreen() {
   const [selectedEmotion, setSelectedEmotion] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  const palettes = {
-    light:       { background: '#eef2f3', text: '#000' },
-    dark:        { background: '#000', text: '#fff' },
-    highContrast:{ background: '#000', text: '#FFD600' }
-  };
-  const palette = palettes[settings.theme];
+  const palette = getPalette(settings.theme);
 
   const scaleAnim = useState(new Animated.Value(1))[0];
 

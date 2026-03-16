@@ -15,6 +15,7 @@ import { getImageCaption } from '../services/hfImageCaption';
 import { useSettings } from '../contexts/SettingsContext';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
+import { getPalette } from '../styles/theme';
 
 export default function CombinedImageScreen() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -24,12 +25,7 @@ export default function CombinedImageScreen() {
   const [processing, setProcessing] = useState(false);
   const cameraRef = useRef(null);
 
-  const palettes = {
-    light: { background: '#fff', text: '#000' },
-    dark:  { background: '#000', text: '#fff' },
-    highContrast: { background: '#000', text: '#FFD600' },
-  };
-  const palette = palettes[settings.theme];
+  const palette = getPalette(settings.theme);
 
   useEffect(() => {
     (async () => {

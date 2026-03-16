@@ -124,5 +124,3 @@ const styles = StyleSheet.create({
     fontSize: 16
   }
 });
-// This code defines a SignupScreen component for a React Native application that allows users to sign up with an email and password.
-// It uses Firebase Authentication to create a new user and stores user details in Firebase Realtime Database

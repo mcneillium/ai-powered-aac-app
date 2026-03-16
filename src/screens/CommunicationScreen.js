@@ -14,6 +14,7 @@ import { StatusBar } from 'expo-status-bar';
 import { searchPictograms } from '../services/arasaacService';
 import { logEvent } from '../utils/logger';
 import { useSettings } from '../contexts/SettingsContext';
+import { getPalette } from '../styles/theme';
 
 export default function CommunicationScreen() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -23,12 +24,7 @@ export default function CommunicationScreen() {
   const [categoryImages, setCategoryImages] = useState({});
   const categories = ['Everyday', 'Food', 'Drinks', 'People', 'Places'];
 
-  const palettes = {
-    light:       { background: '#fff', text: '#000' },
-    dark:        { background: '#000', text: '#fff' },
-    highContrast:{ background: '#000', text: '#FFD600' },
-  };
-  const palette = palettes[settings.theme];
+  const palette = getPalette(settings.theme);
 
   useEffect(() => {
     (async () => {

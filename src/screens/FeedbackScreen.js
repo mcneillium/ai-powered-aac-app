@@ -12,6 +12,7 @@ import {
 import { getDatabase, ref, push } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
 import { useSettings } from '../contexts/SettingsContext';
+import { getPalette } from '../styles/theme';
 
 export default function FeedbackScreen() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -21,12 +22,7 @@ export default function FeedbackScreen() {
   const [role, setRole]     = useState('user');
   const [submitting, setSubmitting] = useState(false);
 
-  const palettes = {
-    light: { background: '#fff', text: '#000' },
-    dark:  { background: '#000', text: '#fff' },
-    highContrast: { background: '#000', text: '#FFD600' },
-  };
-  const palette = palettes[settings.theme];
+  const palette = getPalette(settings.theme);
 
   if (settingsLoading) {
     return (

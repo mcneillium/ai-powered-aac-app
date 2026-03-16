@@ -28,6 +28,7 @@ import {
   SafeAreaProvider,
   useSafeAreaInsets
 } from 'react-native-safe-area-context';
+import { getPalette } from './src/styles/theme';
 
 const Tab       = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -36,32 +37,7 @@ const RootStack = createNativeStackNavigator();
 function MainApp() {
   const insets   = useSafeAreaInsets();
   const { settings } = useSettings();
-
-  // Define palette per theme + contrast
-  const palettes = {
-    light: {
-      background:    '#FFFFFF',
-      text:          '#000000',
-      tabBarBg:      '#FFF',
-      tabBarActive:  '#4CAF50',
-      tabBarInactive:'gray',
-    },
-    dark: {
-      background:    '#000000',
-      text:          '#FFFFFF',
-      tabBarBg:      '#121212',
-      tabBarActive:  '#4CAF50',
-      tabBarInactive:'gray',
-    },
-    highContrast: {
-      background:    '#000000',
-      text:          '#FFD600',
-      tabBarBg:      '#000000',
-      tabBarActive:  '#FFD600',
-      tabBarInactive:'white',
-    },
-  };
-  const palette = palettes[settings.theme];
+  const palette = getPalette(settings.theme);
 
   return (
     <Tab.Navigator

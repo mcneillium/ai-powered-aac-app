@@ -48,22 +48,3 @@ export const getPictogramUrl = (id, resolution = 300) => {
   return `https://static.arasaac.org/pictograms/${id}/${id}_${resolution}.png`;
 };
 
-/* 
-// Optionally, if you need to retrieve detailed data for a pictogram, you could add a function like this:
-
-export const getPictogramDetails = async (language, id) => {
-  try {
-    const endpoint = `${BASE_URL}/pictograms/${language}/${id}`;
-    const response = await axios.get(endpoint);
-    if (response.status === 200) {
-      return response.data;
-    } else {
-      console.error(`Unexpected response status: ${response.status}`);
-      return null;
-    }
-  } catch (error) {
-    console.error('Error fetching pictogram details:', error);
-    return null;
-  }
-};
-*/
