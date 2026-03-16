@@ -246,24 +246,32 @@ The system employs two complementary prediction approaches:
 ### Mobile App Setup
 
 1. Clone the repository
-2. Install Node.js 16 LTS or set NODE_OPTIONS=--openssl-legacy-provider for newer versions
-3. Run `npm install` to install dependencies
-4. Create a Firebase project and add configuration to `firebaseConfig.js`
-5. Run `expo start` to launch the development server
+2. Install Node.js (18+ recommended)
+3. Run `npm install --legacy-peer-deps` to install dependencies
+4. Copy `.env.example` to `.env` and fill in your API keys:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your Firebase, Google Vision, and Hugging Face credentials
+   ```
+5. Run `npx expo start` to launch the development server
 
-### Dashboard Setup
+### Environment Variables
 
-1. Navigate to the dashboard directory
-2. Run `npm install` to install dependencies
-3. Ensure Firebase configuration is properly set
-4. Run `npm start` to launch the development server
+All API keys and secrets are loaded from environment variables. See `.env.example` for the full list. **Never commit your `.env` file.**
 
 ### Firebase Configuration
 
-1. Create a new Firebase project
-2. Enable Authentication, Realtime Database, and Cloud Functions
-3. Set up security rules for the Realtime Database
-4. Deploy Cloud Functions for extended functionality
+1. Create a new Firebase project at https://console.firebase.google.com
+2. Enable Authentication (Email/Password) and Realtime Database
+3. Copy your Firebase config values into `.env`
+4. Set up security rules for the Realtime Database
+
+### Running Tests
+
+```bash
+npm test           # Run all tests once
+npm run test:watch # Run tests in watch mode
+```
 
 ## Development Guidelines
 
@@ -271,11 +279,15 @@ The system employs two complementary prediction approaches:
 
 The project follows a structured organization:
 
+- **src/screens**: Main application views (Communication, Camera, Emotion, etc.)
+- **src/services**: API integrations (ARASAAC, AI prediction, Firebase sync)
+- **src/contexts**: React Context providers (Auth, Settings)
+- **src/hooks**: Custom React hooks (useCategoryImages, useOnDevicePrediction)
+- **src/utils**: Helper functions (logger, vocab, syncStatus)
 - **src/components**: Reusable UI components
-- **src/screens** (mobile) / **src/pages** (web): Main application views
-- **src/services**: API and service integrations
-- **src/contexts**: React Context providers
-- **src/utils**: Helper functions and utilities
+- **src/styles**: Shared theme and style constants
+- **src/config**: Environment and app configuration
+- **src/__tests__**: Unit tests
 
 ### Coding Standards
 
@@ -324,4 +336,4 @@ For technical support, feature requests, or general inquiries, please contact:
 
 ---
 
-This documentation is regularly updated as the project evolves. Last updated: April 2025.
+This documentation is regularly updated as the project evolves. Last updated: March 2026.
