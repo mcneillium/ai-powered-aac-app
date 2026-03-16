@@ -44,13 +44,13 @@ function buildTrainingExamplesFromSentence(sentence, tokenizer, sequenceLength =
  */
 export async function buildTrainingExamples(tokenizer, sequenceLength = 4) {
   const logs = await getUserTrainingLogs();
-  let trainingExamples = [];
-  logs.forEach(log => {
+  const trainingExamples = [];
+  for (const log of logs) {
     if (log.sentence) {
       const examples = buildTrainingExamplesFromSentence(log.sentence, tokenizer, sequenceLength);
-      trainingExamples = trainingExamples.concat(examples);
+      trainingExamples.push(...examples);
     }
-  });
+  }
   return trainingExamples;
 }
 

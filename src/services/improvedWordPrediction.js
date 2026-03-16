@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logEvent } from '../utils/logger';
 
 // Cache for storing frequently predicted sequences
+const MAX_CACHE_SIZE = 100;
 let predictionCache = {};
 
 // Local frequency-based model for fallback when TensorFlow model isn't working
@@ -288,29 +289,31 @@ function tokenizeSentence(sentence, sequenceLength = 4) {
   }
 }
 
+// Cached reverse tokenizer mapping (token ID -> word)
+let _reverseTokenizer = null;
+let _reverseTokenizerSource = null;
+
+function getReverseTokenizer() {
+  if (_reverseTokenizerSource === global.tokenizer && _reverseTokenizer) {
+    return _reverseTokenizer;
+  }
+  if (!global.tokenizer) return {};
+  _reverseTokenizer = Object.fromEntries(
+    Object.entries(global.tokenizer).map(([word, id]) => [id, word])
+  );
+  _reverseTokenizerSource = global.tokenizer;
+  return _reverseTokenizer;
+}
+
 /**
- * Convert token ID back to a word
+ * Convert token ID back to a word using cached reverse mapping (O(1) lookup).
  * @param {number} tokenId - The token ID to decode
  * @returns {string} The corresponding word
  */
 function decodeToken(tokenId) {
-  try {
-    if (!global.tokenizer) {
-      throw new Error("Tokenizer not loaded");
-    }
-    
-    // Find the word corresponding to this token ID
-    for (const [word, id] of Object.entries(global.tokenizer)) {
-      if (id === tokenId) {
-        return word;
-      }
-    }
-    
-    return "[UNK]"; // Unknown token
-  } catch (error) {
-    console.error("Error decoding token:", error);
-    return "[ERROR]";
-  }
+  if (!global.tokenizer) return "[UNK]";
+  const reverse = getReverseTokenizer();
+  return reverse[tokenId] || "[UNK]";
 }
 
 /**
@@ -374,13 +377,16 @@ async function getTensorFlowPredictions(inputText, numPredictions = 5, temperatu
     inputTensor.dispose();
     predictions.dispose();
     
-    // Cache the results
+    // Cache the results with bounded size
     predictionCache[cacheKey] = predictedWords;
-    
-    // Limit cache size
+
     const cacheKeys = Object.keys(predictionCache);
-    if (cacheKeys.length > 100) {
-      delete predictionCache[cacheKeys[0]];
+    if (cacheKeys.length > MAX_CACHE_SIZE) {
+      // Remove oldest half of entries to avoid evicting on every insertion
+      const toRemove = cacheKeys.slice(0, Math.floor(MAX_CACHE_SIZE / 2));
+      for (const key of toRemove) {
+        delete predictionCache[key];
+      }
     }
     
     return predictedWords;
