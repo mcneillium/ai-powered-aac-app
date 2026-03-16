@@ -4,6 +4,13 @@ import { ref, push } from 'firebase/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../../firebaseConfig';
 
+/**
+ * Logs an event to Firebase and AsyncStorage.
+ * @param {string} action - Description of the action being logged.
+ * @param {Object} [metadata] - Additional metadata for the log entry.
+ * @param {string} [metadata.targetUserId] - Override for the target user ID.
+ * @returns {Promise<void>}
+ */
 export async function logEvent(action, metadata = {}) {
   const auth = getAuth();
   const currentUser = auth.currentUser;

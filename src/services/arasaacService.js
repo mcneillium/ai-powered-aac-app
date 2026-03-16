@@ -12,6 +12,10 @@ const BASE_URL = 'https://api.arasaac.org/v1';
  * @returns {Promise<Object|null>} - Returns the data (an array of pictogram objects) or null if an error occurs.
  */
 export const searchPictograms = async (language, searchText) => {
+  if (!language || !searchText) {
+    console.warn('searchPictograms called with missing language or searchText');
+    return null;
+  }
   try {
     // Construct the endpoint URL using the provided language and search text.
     const endpoint = `${BASE_URL}/pictograms/${language}/search/${encodeURIComponent(searchText)}`;

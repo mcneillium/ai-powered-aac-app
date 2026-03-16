@@ -94,7 +94,10 @@ export default function EasySentenceBuilderScreen() {
 
   const removeWord = (i) => setSentenceWords(ws => ws.filter((_, idx) => idx !== i));
   const clearSentence = () => setSentenceWords([]);
-  const speakSentence = () => Speech.speak(sentenceWords.join(' ') || ' ');
+  const speakSentence = () => {
+    const text = sentenceWords.join(' ');
+    if (text.trim()) Speech.speak(text);
+  };
 
   if (settingsLoading) {
     return <View style={[styles.center, { backgroundColor: palette.background }]}><ActivityIndicator size="large" color="#4CAF50"/></View>;

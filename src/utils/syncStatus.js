@@ -5,6 +5,7 @@ import { getAuth } from 'firebase/auth';
 
 /**
  * Updates the lastActivity timestamp locally and in Firebase.
+ * @returns {Promise<void>}
  */
 export const updateLastActivity = async () => {
   const auth = getAuth();
@@ -26,6 +27,7 @@ export const updateLastActivity = async () => {
 
 /**
  * Gets the last sync time from AsyncStorage.
+ * @returns {Promise<string|null>} ISO timestamp string, or null if not found.
  */
 export const getLastActivity = async () => {
   try {
