@@ -1,0 +1,3333 @@
+From b33b29eda9a0be9fbcf8ecb4b4892cf4c053c209 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 19 Mar 2026 22:19:52 +0000
+Subject: [PATCH] Align dashboard with app Firebase schema, fix broken data
+ flows, add missing features
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Schema alignment:
+- Eliminate phantom 'caregivers' collection — derive caregivers from users with role
+- Fix AuthContext to use DB role as single source of truth (not custom claims)
+- Fix Login to route by DB role instead of custom claims
+- Fix Signup to write role field to users/{uid}
+- Fix all log views to read targetUserId/carerId (matching app) instead of userId
+- Add name field handling with getUserDisplayName() fallback
+- Add shared schema constants (src/shared/schema.js) documenting all data contracts
+
+Broken flow fixes:
+- UserManagement: remove push() user creation (was creating phantom records)
+- UserManagement: use unified users collection for caregiver assignment
+- Caregivers page: redirect to UserManagement
+- ConnectUser: filter out caregivers/admins from unassigned users list
+- Dashboard logger: remove AsyncStorage import, use Firebase directly
+- Logs: add CSV export, level/action filters, session ID display
+
+New features:
+- Feedback page: view user feedback from the app
+- UserSettings page: view per-user AAC app preferences
+- Caregiver dashboard: show recent activity logs for assigned users
+- Admin dashboard: 4-card summary stats, user name resolution in charts/tables
+- Role management: inline role change in UserManagement
+
+https://claude.ai/code/session_011qhjAKG6K9JcuLXy92Rx7b
+---
+ src/App.js                      |  85 ++----
+ src/contexts/AuthContext.js     |  30 +-
+ src/pages/AdminDashboard.js     | 389 ++++++++++++--------------
+ src/pages/CaregiverDashboard.js | 164 +++++++++--
+ src/pages/Caregivers.js         | 466 +-------------------------------
+ src/pages/ConnectUser.js        |  63 ++---
+ src/pages/Feedback.js           | 102 +++++++
+ src/pages/FineTuneMetrics.js    |  22 +-
+ src/pages/Home.js               |  20 +-
+ src/pages/Login.js              |  58 ++--
+ src/pages/Logs.js               | 223 ++++++++++-----
+ src/pages/Signup.js             |  49 +++-
+ src/pages/UserActions.js        | 165 ++++++++---
+ src/pages/UserManagement.js     | 379 +++++++++-----------------
+ src/pages/UserSettings.js       |  85 ++++++
+ src/shared/schema.js            | 160 +++++++++++
+ src/utils/logger.js             |  36 +--
+ 17 files changed, 1244 insertions(+), 1252 deletions(-)
+ create mode 100644 src/pages/Feedback.js
+ create mode 100644 src/pages/UserSettings.js
+ create mode 100644 src/shared/schema.js
+
+diff --git a/src/App.js b/src/App.js
+index 25d275f..1a0572f 100644
+--- a/src/App.js
++++ b/src/App.js
+@@ -6,13 +6,14 @@ import Login from './pages/Login';
+ import Signup from './pages/Signup';
+ import Home from './pages/Home';
+ import CaregiverDashboard from './pages/CaregiverDashboard';
+-import Caregivers from './pages/Caregivers';
+ import ConnectUser from './pages/ConnectUser';
+ import FineTuneMetrics from './pages/FineTuneMetrics';
+ import Logs from './pages/Logs';
+ import AdminDashboard from './pages/AdminDashboard';
+ import UserManagement from './pages/UserManagement';
+ import UserActions from './pages/UserActions';
++import UserSettings from './pages/UserSettings';
++import Feedback from './pages/Feedback';
+ import { AuthProvider } from './contexts/AuthContext';
+ 
+ function App() {
+@@ -22,78 +23,24 @@ function App() {
+         <Routes>
+           {/* Public */}
+           <Route path="/" element={<Login />} />
+-          <Route path="/login"  element={<Login />} />
++          <Route path="/login" element={<Login />} />
+           <Route path="/signup" element={<Signup />} />
+-          <Route path="/home"   element={<Home />} />
++          <Route path="/home" element={<Home />} />
+ 
+-          {/* Protected */}
+-          <Route
+-            path="/admin"
+-            element={
+-              <PrivateRoute>
+-                <AdminDashboard />
+-              </PrivateRoute>
+-            }
+-          />
++          {/* Admin */}
++          <Route path="/admin" element={<PrivateRoute><AdminDashboard /></PrivateRoute>} />
++          <Route path="/user-management" element={<PrivateRoute><UserManagement /></PrivateRoute>} />
++          <Route path="/user-actions/:userId" element={<PrivateRoute><UserActions /></PrivateRoute>} />
++          <Route path="/user-settings/:userId" element={<PrivateRoute><UserSettings /></PrivateRoute>} />
++          <Route path="/feedback" element={<PrivateRoute><Feedback /></PrivateRoute>} />
+ 
+-          {/* Caregiver dashboard route */}
+-          <Route
+-            path="/caregiver"
+-            element={
+-              <PrivateRoute>
+-                <CaregiverDashboard />
+-              </PrivateRoute>
+-            }
+-          />
++          {/* Caregiver */}
++          <Route path="/caregiver" element={<PrivateRoute><CaregiverDashboard /></PrivateRoute>} />
++          <Route path="/connect-user" element={<PrivateRoute><ConnectUser /></PrivateRoute>} />
+ 
+-          <Route
+-            path="/caregivers"
+-            element={
+-              <PrivateRoute>
+-                <Caregivers />
+-              </PrivateRoute>
+-            }
+-          />
+-          <Route
+-            path="/connect-user"
+-            element={
+-              <PrivateRoute>
+-                <ConnectUser />
+-              </PrivateRoute>
+-            }
+-          />
+-          <Route
+-            path="/finetune-metrics"
+-            element={
+-              <PrivateRoute>
+-                <FineTuneMetrics />
+-              </PrivateRoute>
+-            }
+-          />
+-          <Route
+-            path="/logs"
+-            element={
+-              <PrivateRoute>
+-                <Logs />
+-              </PrivateRoute>
+-            }
+-          />
+-          <Route
+-            path="/user-management"
+-            element={
+-              <PrivateRoute>
+-                <UserManagement />
+-              </PrivateRoute>
+-            }
+-          />
+-          <Route
+-            path="/user-actions/:userId"
+-            element={
+-              <PrivateRoute>
+-                <UserActions />
+-              </PrivateRoute>
+-            }
+-          />
++          {/* Shared */}
++          <Route path="/logs" element={<PrivateRoute><Logs /></PrivateRoute>} />
++          <Route path="/finetune-metrics" element={<PrivateRoute><FineTuneMetrics /></PrivateRoute>} />
+ 
+           {/* Fallback */}
+           <Route path="*" element={<Navigate to="/" replace />} />
+diff --git a/src/contexts/AuthContext.js b/src/contexts/AuthContext.js
+index 2d3cbb8..bcbdee1 100644
+--- a/src/contexts/AuthContext.js
++++ b/src/contexts/AuthContext.js
+@@ -3,35 +3,42 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
+ import { onAuthStateChanged, signInWithEmailAndPassword, signOut as fbSignOut } from 'firebase/auth';
+ import { auth, db } from '../firebaseConfig';
+ import { ref, get } from 'firebase/database';
++import { ROLES } from '../shared/schema';
+ 
+ const AuthContext = createContext();
+ 
+ export function AuthProvider({ children }) {
+   const [currentUser, setCurrentUser] = useState(null);
+-  const [isAdmin, setIsAdmin]         = useState(false);
+-  const [loading, setLoading]         = useState(true);
++  const [userRole, setUserRole] = useState(null);
++  const [isAdmin, setIsAdmin] = useState(false);
++  const [isCaregiver, setIsCaregiver] = useState(false);
++  const [loading, setLoading] = useState(true);
+ 
+   useEffect(() => {
+     const unsubscribe = onAuthStateChanged(auth, async user => {
+       if (user) {
+-        // ALWAYS set the Firebase user object
+         setCurrentUser(user);
+ 
+-        // THEN fetch their role from your database:
++        // Read role from database (single source of truth)
+         try {
+           const snap = await get(ref(db, `users/${user.uid}/role`));
+           const role = snap.val();
+-          setIsAdmin(role === 'admin');
++          setUserRole(role);
++          setIsAdmin(role === ROLES.ADMIN);
++          setIsCaregiver(role === ROLES.CAREGIVER || role === ROLES.ADMIN);
+         } catch (err) {
+           console.error('Failed to fetch role:', err);
++          setUserRole(null);
+           setIsAdmin(false);
++          setIsCaregiver(false);
+         }
+       } else {
+         setCurrentUser(null);
++        setUserRole(null);
+         setIsAdmin(false);
++        setIsCaregiver(false);
+       }
+ 
+-      // Now that we've done both steps, loading is done
+       setLoading(false);
+     });
+ 
+@@ -45,7 +52,16 @@ export function AuthProvider({ children }) {
+     fbSignOut(auth);
+ 
+   return (
+-    <AuthContext.Provider value={{ currentUser, isAdmin, loading, signIn, signOut }}>
++    <AuthContext.Provider value={{
++      currentUser,
++      user: currentUser,   // alias for compatibility with Logs.js
++      userRole,
++      isAdmin,
++      isCaregiver,
++      loading,
++      signIn,
++      signOut
++    }}>
+       {children}
+     </AuthContext.Provider>
+   );
+diff --git a/src/pages/AdminDashboard.js b/src/pages/AdminDashboard.js
+index f6d5ad9..a6f8a52 100644
+--- a/src/pages/AdminDashboard.js
++++ b/src/pages/AdminDashboard.js
+@@ -4,58 +4,24 @@ import { ref, get, query, orderByChild, limitToLast } from 'firebase/database';
+ import { db } from '../firebaseConfig';
+ import { Link } from 'react-router-dom';
+ import {
+-  Container,
+-  Typography,
+-  Box,
+-  Button,
+-  ButtonGroup,
+-  TextField,
+-  FormControl,
+-  InputLabel,
+-  Select,
+-  MenuItem,
+-  Paper,
+-  Table,
+-  TableBody,
+-  TableCell,
+-  TableContainer,
+-  TableHead,
+-  TableRow,
+-  Card,
+-  CardContent,
+-  Snackbar,
+-  CircularProgress,
+-  Grid,
+-  Chip
++  Container, Typography, Box, Button, ButtonGroup, TextField,
++  FormControl, InputLabel, Select, MenuItem, Paper, Table,
++  TableBody, TableCell, TableContainer, TableHead, TableRow,
++  Card, CardContent, Snackbar, CircularProgress, Grid, Chip
+ } from '@mui/material';
+ import { Line, Pie, Bar } from 'react-chartjs-2';
+ import {
+-  Chart as ChartJS,
+-  CategoryScale,
+-  LinearScale,
+-  PointElement,
+-  LineElement,
+-  BarElement,
+-  ArcElement,
+-  Title,
+-  Tooltip as ChartTooltip,
+-  Legend,
+-  Filler
++  Chart as ChartJS, CategoryScale, LinearScale, PointElement,
++  LineElement, BarElement, ArcElement, Title,
++  Tooltip as ChartTooltip, Legend, Filler
+ } from 'chart.js';
+ import RefreshIcon from '@mui/icons-material/Refresh';
+ import FilterListIcon from '@mui/icons-material/FilterList';
++import { ROLES, DB_PATHS, getUserDisplayName, getLogUserId } from '../shared/schema';
+ 
+ ChartJS.register(
+-  CategoryScale,
+-  LinearScale,
+-  PointElement,
+-  LineElement,
+-  BarElement,
+-  ArcElement,
+-  Title,
+-  ChartTooltip,
+-  Legend,
+-  Filler
++  CategoryScale, LinearScale, PointElement, LineElement,
++  BarElement, ArcElement, Title, ChartTooltip, Legend, Filler
+ );
+ 
+ const chartBaseOptions = {
+@@ -74,8 +40,7 @@ const chartBaseOptions = {
+ 
+ export default function AdminDashboard() {
+   const [viewType, setViewType] = useState('users');
+-  const [users, setUsers] = useState([]);
+-  const [caregivers, setCaregivers] = useState([]);
++  const [allUsers, setAllUsers] = useState([]);
+   const [logs, setLogs] = useState([]);
+ 
+   const [loading, setLoading] = useState(true);
+@@ -89,32 +54,31 @@ export default function AdminDashboard() {
+   const [userFilter, setUserFilter] = useState('all');
+   const [timeFrame, setTimeFrame] = useState('week');
+ 
++  // Derive users and caregivers from the unified users collection
++  const users = useMemo(
++    () => allUsers.filter(u => u.role === ROLES.USER || !u.role),
++    [allUsers]
++  );
++  const caregivers = useMemo(
++    () => allUsers.filter(u => u.role === ROLES.CAREGIVER || u.role === ROLES.ADMIN),
++    [allUsers]
++  );
++
+   const fetchUsers = useCallback(async () => {
+     try {
+-      const snap = await get(ref(db, 'users'));
++      const snap = await get(ref(db, DB_PATHS.USERS));
+       const data = snap.val() || {};
+-      setUsers(Object.entries(data).map(([id, v]) => ({ id, ...v })));
++      setAllUsers(Object.entries(data).map(([id, v]) => ({ id, ...v })));
+     } catch {
+       setSnackbarMessage('Error loading users');
+       setOpenSnackbar(true);
+     }
+   }, []);
+ 
+-  const fetchCaregivers = useCallback(async () => {
+-    try {
+-      const snap = await get(ref(db, 'caregivers'));
+-      const data = snap.val() || {};
+-      setCaregivers(Object.entries(data).map(([id, v]) => ({ id, ...v })));
+-    } catch {
+-      setSnackbarMessage('Error loading caregivers');
+-      setOpenSnackbar(true);
+-    }
+-  }, []);
+-
+   const fetchLogs = useCallback(async () => {
+     try {
+       const snap = await get(
+-        query(ref(db, 'userLogs'), orderByChild('timestamp'), limitToLast(100))
++        query(ref(db, DB_PATHS.USER_LOGS), orderByChild('timestamp'), limitToLast(200))
+       );
+       const arr = Object.entries(snap.val() || {})
+         .map(([id, v]) => ({ id, ...v }))
+@@ -129,15 +93,22 @@ export default function AdminDashboard() {
+   const refreshAll = useCallback(async () => {
+     setRefreshing(true);
+     setLoading(true);
+-    await Promise.all([fetchUsers(), fetchCaregivers(), fetchLogs()]);
++    await Promise.all([fetchUsers(), fetchLogs()]);
+     setLoading(false);
+     setRefreshing(false);
+-  }, [fetchUsers, fetchCaregivers, fetchLogs]);
++  }, [fetchUsers, fetchLogs]);
+ 
+   useEffect(() => {
+     refreshAll();
+   }, [refreshAll]);
+ 
++  // Build a UID->display name map for readable log display
++  const userNameMap = useMemo(() => {
++    const map = {};
++    allUsers.forEach(u => { map[u.id] = getUserDisplayName(u); });
++    return map;
++  }, [allUsers]);
++
+   const filteredLogs = useMemo(
+     () =>
+       logs.filter(l => {
+@@ -150,7 +121,8 @@ export default function AdminDashboard() {
+           !l.action?.toLowerCase().includes(actionFilter.toLowerCase())
+         )
+           return false;
+-        if (userFilter !== 'all' && l.userId !== userFilter) return false;
++        const logUid = getLogUserId(l);
++        if (userFilter !== 'all' && logUid !== userFilter) return false;
+         return true;
+       }),
+     [logs, startDate, endDate, actionFilter, userFilter]
+@@ -171,139 +143,158 @@ export default function AdminDashboard() {
+     const labels = Object.keys(counts).sort();
+     return {
+       labels,
+-      datasets: [
+-        {
+-          label: 'Activities',
+-          data: labels.map(l => counts[l]),
+-          backgroundColor: 'rgba(75,192,192,0.4)',
+-          borderColor: 'rgba(75,192,192,1)',
+-          fill: true,
+-          tension: 0.1
+-        }
+-      ]
++      datasets: [{
++        label: 'Activities',
++        data: labels.map(l => counts[l]),
++        backgroundColor: 'rgba(75,192,192,0.4)',
++        borderColor: 'rgba(75,192,192,1)',
++        fill: true,
++        tension: 0.1
++      }]
+     };
+   }, [filteredLogs, timeFrame]);
+ 
+   const pieData = useMemo(() => {
+     const counts = {};
+     filteredLogs.forEach(l => {
+-      const t = l.action?.split(' ')[0] || 'Unknown';
++      const t = l.action || 'Unknown';
+       counts[t] = (counts[t] || 0) + 1;
+     });
+     const labels = Object.keys(counts);
+     return {
+       labels,
+-      datasets: [
+-        {
+-          data: labels.map(l => counts[l]),
+-          backgroundColor: ['#42a5f5', '#66bb6a', '#ffa726', '#ab47bc'],
+-          borderWidth: 1
+-        }
+-      ]
++      datasets: [{
++        data: labels.map(l => counts[l]),
++        backgroundColor: ['#42a5f5', '#66bb6a', '#ffa726', '#ab47bc', '#ef5350', '#26c6da', '#8d6e63', '#78909c'],
++        borderWidth: 1
++      }]
+     };
+   }, [filteredLogs]);
+ 
+   const barData = useMemo(() => {
+     const counts = {};
+     filteredLogs.forEach(l => {
+-      counts[l.userId] = (counts[l.userId] || 0) + 1;
++      const uid = getLogUserId(l);
++      if (uid) counts[uid] = (counts[uid] || 0) + 1;
+     });
+-    const labels = Object.keys(counts);
++    const uids = Object.keys(counts);
+     return {
+-      labels,
+-      datasets: [
+-        {
+-          label: 'User Activity',
+-          data: labels.map(u => counts[u]),
+-          backgroundColor: '#42a5f5'
+-        }
+-      ]
++      labels: uids.map(uid => userNameMap[uid] || uid.slice(0, 8)),
++      datasets: [{
++        label: 'User Activity',
++        data: uids.map(u => counts[u]),
++        backgroundColor: '#42a5f5'
++      }]
+     };
+-  }, [filteredLogs]);
++  }, [filteredLogs, userNameMap]);
+ 
+   const stats = useMemo(() => {
+     const today = new Date().toDateString();
+     const todayLogs = logs.filter(
+       l => new Date(l.timestamp).toDateString() === today
+     );
+-    const usersSet = new Set(todayLogs.map(l => l.userId));
++    const usersSet = new Set(todayLogs.map(l => getLogUserId(l)).filter(Boolean));
+     return { todayCount: todayLogs.length, activeUsersCount: usersSet.size };
+   }, [logs]);
+ 
++  const displayList = viewType === 'users' ? users : caregivers;
++
+   return (
+     <Container maxWidth="xl" sx={{ py: 4 }}>
+-      {/* Top nav buttons now use Link */}
+       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+         <Typography variant="h4">Admin Dashboard</Typography>
+         <ButtonGroup variant="outlined">
+-          <Button component={Link} to="/user-management">
+-            User Management
+-          </Button>
+-          <Button component={Link} to="/caregivers">
+-            Caregiver Management
+-          </Button>
++          <Button component={Link} to="/user-management">User Management</Button>
+           <Button component={Link} to="/logs">Logs</Button>
++          <Button component={Link} to="/finetune-metrics">AI Metrics</Button>
++          <Button component={Link} to="/feedback">Feedback</Button>
+           <Button
+             onClick={refreshAll}
+-            startIcon={
+-              refreshing ? <CircularProgress size={20} /> : <RefreshIcon />
+-            }
++            startIcon={refreshing ? <CircularProgress size={20} /> : <RefreshIcon />}
+           >
+             Refresh
+           </Button>
+         </ButtonGroup>
+       </Box>
+ 
+-      {/* Dropdown to collapse users/caregivers */}
++      {/* Summary stats */}
++      <Grid container spacing={3} sx={{ mb: 3 }}>
++        <Grid item md={3} xs={6}>
++          <Card>
++            <CardContent>
++              <Typography color="text.secondary">Total Users</Typography>
++              <Typography variant="h4">{users.length}</Typography>
++            </CardContent>
++          </Card>
++        </Grid>
++        <Grid item md={3} xs={6}>
++          <Card>
++            <CardContent>
++              <Typography color="text.secondary">Caregivers</Typography>
++              <Typography variant="h4">{caregivers.length}</Typography>
++            </CardContent>
++          </Card>
++        </Grid>
++        <Grid item md={3} xs={6}>
++          <Card>
++            <CardContent>
++              <Typography color="text.secondary">Today's Activities</Typography>
++              <Typography variant="h4">{stats.todayCount}</Typography>
++            </CardContent>
++          </Card>
++        </Grid>
++        <Grid item md={3} xs={6}>
++          <Card>
++            <CardContent>
++              <Typography color="text.secondary">Active Users Today</Typography>
++              <Typography variant="h4">{stats.activeUsersCount}</Typography>
++            </CardContent>
++          </Card>
++        </Grid>
++      </Grid>
++
++      {/* View toggle: users vs caregivers */}
+       <Box sx={{ mb: 4, display: 'flex', alignItems: 'center' }}>
+         <FormControl sx={{ width: 200 }}>
+           <InputLabel>View</InputLabel>
+-          <Select
+-            value={viewType}
+-            label="View"
+-            onChange={e => setViewType(e.target.value)}
+-          >
+-            <MenuItem value="users">Users</MenuItem>
+-            <MenuItem value="caregivers">Caregivers</MenuItem>
++          <Select value={viewType} label="View" onChange={e => setViewType(e.target.value)}>
++            <MenuItem value="users">AAC Users</MenuItem>
++            <MenuItem value="caregivers">Caregivers / Admins</MenuItem>
+           </Select>
+         </FormControl>
+       </Box>
+ 
+       {loading ? (
+         <CircularProgress />
+-      ) : viewType === 'users' ? (
++      ) : (
+         <TableContainer component={Paper} sx={{ mb: 4 }}>
+           <Table>
+             <TableHead>
+               <TableRow>
+                 <TableCell>Name</TableCell>
+                 <TableCell>Email</TableCell>
++                <TableCell>Role</TableCell>
++                {viewType === 'users' && <TableCell>Assigned Caregiver</TableCell>}
+               </TableRow>
+             </TableHead>
+             <TableBody>
+-              {users.map(u => (
++              {displayList.map(u => (
+                 <TableRow key={u.id}>
+-                  <TableCell>{u.name}</TableCell>
++                  <TableCell>{getUserDisplayName(u)}</TableCell>
+                   <TableCell>{u.email}</TableCell>
+-                </TableRow>
+-              ))}
+-            </TableBody>
+-          </Table>
+-        </TableContainer>
+-      ) : (
+-        <TableContainer component={Paper} sx={{ mb: 4 }}>
+-          <Table>
+-            <TableHead>
+-              <TableRow>
+-                <TableCell>Name</TableCell>
+-                <TableCell>Email</TableCell>
+-              </TableRow>
+-            </TableHead>
+-            <TableBody>
+-              {caregivers.map(c => (
+-                <TableRow key={c.id}>
+-                  <TableCell>{c.name}</TableCell>
+-                  <TableCell>{c.email}</TableCell>
++                  <TableCell>
++                    <Chip label={u.role || 'user'} size="small" color={
++                      u.role === ROLES.ADMIN ? 'error' :
++                      u.role === ROLES.CAREGIVER ? 'primary' : 'default'
++                    } />
++                  </TableCell>
++                  {viewType === 'users' && (
++                    <TableCell>
++                      {u.caregiverId
++                        ? userNameMap[u.caregiverId] || u.caregiverId.slice(0, 8)
++                        : 'Unassigned'}
++                    </TableCell>
++                  )}
+                 </TableRow>
+               ))}
+             </TableBody>
+@@ -315,81 +306,56 @@ export default function AdminDashboard() {
+       <Paper sx={{ p: 3, mb: 3 }}>
+         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+           <FilterListIcon sx={{ mr: 1 }} />
+-          <Typography variant="h6">Filters</Typography>
++          <Typography variant="h6">Log Filters</Typography>
+         </Box>
+         <Grid container spacing={2}>
+-          <Grid item md={3} xs={12}>
++          <Grid item md={2} xs={6}>
+             <TextField
+-              label="Start Date"
+-              type="date"
+-              fullWidth
++              label="Start Date" type="date" fullWidth
+               InputLabelProps={{ shrink: true }}
+-              value={startDate}
+-              onChange={e => setStartDate(e.target.value)}
++              value={startDate} onChange={e => setStartDate(e.target.value)}
+             />
+           </Grid>
+-          <Grid item md={3} xs={12}>
++          <Grid item md={2} xs={6}>
+             <TextField
+-              label="End Date"
+-              type="date"
+-              fullWidth
++              label="End Date" type="date" fullWidth
+               InputLabelProps={{ shrink: true }}
+-              value={endDate}
+-              onChange={e => setEndDate(e.target.value)}
++              value={endDate} onChange={e => setEndDate(e.target.value)}
+             />
+           </Grid>
+-          <Grid item md={3} xs={12}>
++          <Grid item md={3} xs={6}>
+             <TextField
+-              label="Action"
+-              fullWidth
+-              value={actionFilter}
+-              onChange={e => setActionFilter(e.target.value)}
++              label="Action" fullWidth
++              value={actionFilter} onChange={e => setActionFilter(e.target.value)}
+             />
+           </Grid>
+-          <Grid item md={3} xs={12}>
++          <Grid item md={3} xs={6}>
+             <FormControl fullWidth>
+               <InputLabel>User</InputLabel>
+-              <Select
+-                value={userFilter}
+-                label="User"
+-                onChange={e => setUserFilter(e.target.value)}
+-              >
++              <Select value={userFilter} label="User" onChange={e => setUserFilter(e.target.value)}>
+                 <MenuItem value="all">All</MenuItem>
+-                {users.map(u => (
++                {allUsers.map(u => (
+                   <MenuItem key={u.id} value={u.id}>
+-                    {u.name || u.email}
++                    {getUserDisplayName(u)}
+                   </MenuItem>
+                 ))}
+               </Select>
+             </FormControl>
+           </Grid>
++          <Grid item md={2} xs={6}>
++            <FormControl fullWidth>
++              <InputLabel>Time Frame</InputLabel>
++              <Select value={timeFrame} label="Time Frame" onChange={e => setTimeFrame(e.target.value)}>
++                <MenuItem value="day">Day</MenuItem>
++                <MenuItem value="week">Week</MenuItem>
++                <MenuItem value="month">Month</MenuItem>
++                <MenuItem value="year">Year</MenuItem>
++              </Select>
++            </FormControl>
++          </Grid>
+         </Grid>
+       </Paper>
+ 
+-      {/* Stats */}
+-      <Grid container spacing={3} sx={{ mb: 3 }}>
+-        <Grid item md={4} xs={12}>
+-          <Card>
+-            <CardContent>
+-              <Typography color="text.secondary">
+-                Today's Activities
+-              </Typography>
+-              <Typography variant="h4">{stats.todayCount}</Typography>
+-            </CardContent>
+-          </Card>
+-        </Grid>
+-        <Grid item md={4} xs={12}>
+-          <Card>
+-            <CardContent>
+-              <Typography color="text.secondary">Active Users</Typography>
+-              <Typography variant="h4">
+-                {stats.activeUsersCount}
+-              </Typography>
+-            </CardContent>
+-          </Card>
+-        </Grid>
+-      </Grid>
+-
+       {/* Charts */}
+       <Grid container spacing={3} sx={{ mb: 4 }}>
+         <Grid item md={6} xs={12}>
+@@ -401,33 +367,19 @@ export default function AdminDashboard() {
+         <Grid item md={3} xs={12}>
+           <Paper sx={{ p: 2, height: 300 }}>
+             <Typography variant="h6">Action Distribution</Typography>
+-            <Pie
+-              data={pieData}
+-              options={{
+-                ...chartBaseOptions,
+-                plugins: { legend: { position: 'right' } }
+-              }}
+-            />
++            <Pie data={pieData} options={{ ...chartBaseOptions, plugins: { legend: { position: 'right' } } }} />
+           </Paper>
+         </Grid>
+         <Grid item md={3} xs={12}>
+           <Paper sx={{ p: 2, height: 300 }}>
+             <Typography variant="h6">User Activity</Typography>
+-            <Bar
+-              data={barData}
+-              options={{
+-                ...chartBaseOptions,
+-                plugins: { legend: { display: false } }
+-              }}
+-            />
++            <Bar data={barData} options={{ ...chartBaseOptions, plugins: { legend: { display: false } } }} />
+           </Paper>
+         </Grid>
+       </Grid>
+ 
+-      {/* Logs Table */}
+-      <Typography variant="h5" gutterBottom>
+-        Recent Logs
+-      </Typography>
++      {/* Recent Logs */}
++      <Typography variant="h5" gutterBottom>Recent Logs</Typography>
+       {loading ? (
+         <CircularProgress />
+       ) : (
+@@ -436,36 +388,31 @@ export default function AdminDashboard() {
+             <TableHead>
+               <TableRow>
+                 <TableCell>User</TableCell>
++                <TableCell>Caregiver</TableCell>
+                 <TableCell>Action</TableCell>
++                <TableCell>Level</TableCell>
+                 <TableCell>When</TableCell>
+               </TableRow>
+             </TableHead>
+             <TableBody>
+-              {filteredLogs.map(l => (
+-                <TableRow key={l.id}>
+-                  <TableCell>{l.userId}</TableCell>
+-                  <TableCell>
+-                    <Chip label={l.action} size="small" />
+-                  </TableCell>
+-                  <TableCell>
+-                    {l.timestamp
+-                      ? new Date(l.timestamp).toLocaleString()
+-                      : 'N/A'}
+-                  </TableCell>
+-                </TableRow>
+-              ))}
++              {filteredLogs.slice(0, 50).map(l => {
++                const logUid = getLogUserId(l);
++                return (
++                  <TableRow key={l.id}>
++                    <TableCell>{logUid ? (userNameMap[logUid] || logUid.slice(0, 8)) : 'N/A'}</TableCell>
++                    <TableCell>{l.carerId ? (userNameMap[l.carerId] || l.carerId.slice(0, 8)) : '-'}</TableCell>
++                    <TableCell><Chip label={l.action} size="small" /></TableCell>
++                    <TableCell>{l.level || '-'}</TableCell>
++                    <TableCell>{l.timestamp ? new Date(l.timestamp).toLocaleString() : 'N/A'}</TableCell>
++                  </TableRow>
++                );
++              })}
+             </TableBody>
+           </Table>
+         </TableContainer>
+       )}
+ 
+-      {/* Snackbar */}
+-      <Snackbar
+-        open={openSnackbar}
+-        autoHideDuration={6000}
+-        onClose={() => setOpenSnackbar(false)}
+-        message={snackbarMessage}
+-      />
++      <Snackbar open={openSnackbar} autoHideDuration={6000} onClose={() => setOpenSnackbar(false)} message={snackbarMessage} />
+     </Container>
+   );
+ }
+diff --git a/src/pages/CaregiverDashboard.js b/src/pages/CaregiverDashboard.js
+index 1fdcb9d..dcd6d6b 100644
+--- a/src/pages/CaregiverDashboard.js
++++ b/src/pages/CaregiverDashboard.js
+@@ -1,33 +1,33 @@
+ // src/pages/CaregiverDashboard.js
+-import React, { useEffect, useState } from 'react';
+-import { getDatabase, ref, onValue } from 'firebase/database';
+-import { getAuth } from 'firebase/auth';
++import React, { useEffect, useState, useMemo } from 'react';
++import { ref, onValue, get, query, orderByChild, limitToLast } from 'firebase/database';
++import { db } from '../firebaseConfig';
++import { useAuth } from '../contexts/AuthContext';
++import { Link } from 'react-router-dom';
+ import {
+-  Box,
+-  Typography,
+-  Paper,
+-  Container,
+-  CircularProgress,
++  Box, Typography, Paper, Container, CircularProgress,
++  Card, CardContent, Grid, Button, Table, TableHead,
++  TableBody, TableRow, TableCell, TableContainer, Chip, ButtonGroup
+ } from '@mui/material';
+ import SyncStatusCard from '../components/SyncStatusCard';
++import { DB_PATHS, getUserDisplayName, getLogUserId } from '../shared/schema';
+ 
+ export default function CaregiverDashboard() {
++  const { currentUser } = useAuth();
+   const [assignedUsers, setAssignedUsers] = useState([]);
++  const [recentLogs, setRecentLogs] = useState([]);
+   const [loading, setLoading] = useState(true);
+ 
++  // Fetch users assigned to this caregiver from the unified users collection
+   useEffect(() => {
+-    const auth = getAuth();
+-    const caregiverId = auth.currentUser?.uid;
+-    if (!caregiverId) return;
+-
+-    const db = getDatabase();
+-    const usersRef = ref(db, 'users');
++    if (!currentUser?.uid) return;
+ 
++    const usersRef = ref(db, DB_PATHS.USERS);
+     const unsubscribe = onValue(usersRef, (snapshot) => {
+       const data = snapshot.val();
+       const filtered = data
+         ? Object.entries(data)
+-            .filter(([uid, info]) => info.caregiverId === caregiverId)
++            .filter(([, info]) => info.caregiverId === currentUser.uid)
+             .map(([uid, info]) => ({ uid, ...info }))
+         : [];
+       setAssignedUsers(filtered);
+@@ -35,29 +35,139 @@ export default function CaregiverDashboard() {
+     });
+ 
+     return () => unsubscribe();
+-  }, []);
++  }, [currentUser]);
++
++  // Fetch recent logs for assigned users
++  useEffect(() => {
++    if (assignedUsers.length === 0) return;
++
++    const assignedUids = new Set(assignedUsers.map(u => u.uid));
++
++    get(query(ref(db, DB_PATHS.USER_LOGS), orderByChild('timestamp'), limitToLast(100)))
++      .then(snap => {
++        const all = Object.entries(snap.val() || {})
++          .map(([id, v]) => ({ id, ...v }))
++          .filter(l => {
++            const uid = getLogUserId(l);
++            return uid && assignedUids.has(uid);
++          })
++          .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
++        setRecentLogs(all.slice(0, 20));
++      })
++      .catch(() => setRecentLogs([]));
++  }, [assignedUsers]);
++
++  // Build name map for assigned users
++  const userNameMap = useMemo(() => {
++    const map = {};
++    assignedUsers.forEach(u => { map[u.uid] = getUserDisplayName(u); });
++    return map;
++  }, [assignedUsers]);
+ 
+   if (loading) {
+     return (
+       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+-        <CircularProgress size={60} sx={{ color: '#4CAF50' }} />
++        <CircularProgress size={60} />
+       </Box>
+     );
+   }
+ 
+   return (
+-    <Container maxWidth="md" sx={{ py: 4 }}>
+-      <Typography variant="h4" fontWeight="bold" gutterBottom>
+-        Caregiver Dashboard
+-      </Typography>
+-      {assignedUsers.map((user) => (
+-        <Paper key={user.uid} sx={{ mb: 3, p: 2, borderRadius: 2, backgroundColor: '#f1f8e9' }}>
+-          <Typography variant="subtitle1" fontWeight={600}>
+-            {user.email}
++    <Container maxWidth="lg" sx={{ py: 4 }}>
++      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
++        <Typography variant="h4" fontWeight="bold">
++          Caregiver Dashboard
++        </Typography>
++        <ButtonGroup variant="outlined">
++          <Button component={Link} to="/connect-user">Connect User</Button>
++          <Button component={Link} to="/logs">View All Logs</Button>
++        </ButtonGroup>
++      </Box>
++
++      {/* Summary */}
++      <Grid container spacing={3} sx={{ mb: 4 }}>
++        <Grid item md={4} xs={12}>
++          <Card>
++            <CardContent>
++              <Typography color="text.secondary">Assigned Users</Typography>
++              <Typography variant="h4">{assignedUsers.length}</Typography>
++            </CardContent>
++          </Card>
++        </Grid>
++        <Grid item md={4} xs={12}>
++          <Card>
++            <CardContent>
++              <Typography color="text.secondary">Recent Activities</Typography>
++              <Typography variant="h4">{recentLogs.length}</Typography>
++            </CardContent>
++          </Card>
++        </Grid>
++      </Grid>
++
++      {/* Assigned users */}
++      {assignedUsers.length === 0 ? (
++        <Paper sx={{ p: 4, textAlign: 'center' }}>
++          <Typography variant="h6" color="text.secondary">
++            No users assigned to you yet.
+           </Typography>
+-          <SyncStatusCard userId={user.uid} />
++          <Button component={Link} to="/connect-user" variant="contained" sx={{ mt: 2 }}>
++            Connect to a User
++          </Button>
+         </Paper>
+-      ))}
++      ) : (
++        <>
++          <Typography variant="h5" gutterBottom>Your Users</Typography>
++          {assignedUsers.map((user) => (
++            <Paper key={user.uid} sx={{ mb: 3, p: 3, borderRadius: 2 }}>
++              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
++                <Typography variant="h6">{getUserDisplayName(user)}</Typography>
++                <Button
++                  component={Link}
++                  to={`/user-actions/${user.uid}`}
++                  variant="outlined"
++                  size="small"
++                >
++                  View Activity
++                </Button>
++              </Box>
++              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
++                {user.email}
++              </Typography>
++              <SyncStatusCard userId={user.uid} />
++            </Paper>
++          ))}
++
++          {/* Recent logs for assigned users */}
++          {recentLogs.length > 0 && (
++            <>
++              <Typography variant="h5" gutterBottom sx={{ mt: 4 }}>Recent Activity</Typography>
++              <TableContainer component={Paper}>
++                <Table>
++                  <TableHead>
++                    <TableRow>
++                      <TableCell>User</TableCell>
++                      <TableCell>Action</TableCell>
++                      <TableCell>When</TableCell>
++                    </TableRow>
++                  </TableHead>
++                  <TableBody>
++                    {recentLogs.map(l => {
++                      const uid = getLogUserId(l);
++                      return (
++                        <TableRow key={l.id}>
++                          <TableCell>{uid ? (userNameMap[uid] || uid.slice(0, 8)) : 'N/A'}</TableCell>
++                          <TableCell><Chip label={l.action} size="small" /></TableCell>
++                          <TableCell>{l.timestamp ? new Date(l.timestamp).toLocaleString() : 'N/A'}</TableCell>
++                        </TableRow>
++                      );
++                    })}
++                  </TableBody>
++                </Table>
++              </TableContainer>
++            </>
++          )}
++        </>
++      )}
+     </Container>
+   );
+ }
+diff --git a/src/pages/Caregivers.js b/src/pages/Caregivers.js
+index 335618a..58e6836 100644
+--- a/src/pages/Caregivers.js
++++ b/src/pages/Caregivers.js
+@@ -1,465 +1,9 @@
+ // src/pages/Caregivers.js
+-import React, { useEffect, useState } from 'react';
+-import {
+-  ref,
+-  onValue,
+-  push,
+-  set,
+-  update,
+-  remove
+-} from 'firebase/database';
+-import { db } from '../firebaseConfig';
+-import {
+-  Box,
+-  Typography,
+-  TextField,
+-  Button,
+-  Table,
+-  TableBody,
+-  TableCell,
+-  TableContainer,
+-  TableHead,
+-  TableRow,
+-  Paper,
+-  Dialog,
+-  DialogTitle,
+-  DialogActions,
+-  DialogContent,
+-  DialogContentText,
+-  Select,
+-  MenuItem
+-} from '@mui/material';
+-import { toast } from 'react-hot-toast';
+-import { AiFillEdit, AiFillDelete } from 'react-icons/ai';
+-import Papa from 'papaparse';
+-import { getAuth } from 'firebase/auth';
++// This page is now replaced by UserManagement with role filtering.
++// Redirect to user management for backward compatibility.
++import React from 'react';
++import { Navigate } from 'react-router-dom';
+ 
+ export default function Caregivers() {
+-  // State for caregiver data
+-  const [caregivers, setCaregivers] = useState([]);
+-  // State for all users (used for connecting with caregivers)
+-  const [allUsers, setAllUsers] = useState([]);
+-  // Mapping: caregiver id → selected user id (for connection)
+-  const [selectedUserForCaregiver, setSelectedUserForCaregiver] = useState({});
+-  
+-  // Fields for adding a caregiver manually
+-  const [name, setName] = useState('');
+-  const [email, setEmail] = useState('');
+-  
+-  // Editing state
+-  const [editId, setEditId] = useState(null);
+-  const [editName, setEditName] = useState('');
+-  const [editEmail, setEditEmail] = useState('');
+-  
+-  // Search/filter field
+-  const [searchTerm, setSearchTerm] = useState('');
+-  
+-  // Delete confirmation dialog
+-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+-  const [deleteTargetId, setDeleteTargetId] = useState(null);
+-  
+-  // CSV file upload state
+-  const [csvFile, setCsvFile] = useState(null);
+-  
+-  // Role state: determine if the current user is an admin
+-  const [isAdmin, setIsAdmin] = useState(false);
+-  const auth = getAuth();
+-
+-  // Fetch the current user's custom claims to determine admin status
+-  useEffect(() => {
+-    if (auth.currentUser) {
+-      auth.currentUser.getIdTokenResult()
+-        .then((idTokenResult) => {
+-          setIsAdmin(idTokenResult.claims.role === 'admin');
+-          console.log('User claims:', idTokenResult.claims);
+-        })
+-        .catch((error) => {
+-          console.error('Error fetching token claims:', error);
+-        });
+-    }
+-  }, [auth.currentUser]);
+-  
+-  // Listen to caregivers in real time
+-  useEffect(() => {
+-    const caregiversRef = ref(db, 'caregivers');
+-    const unsubscribe = onValue(caregiversRef, (snapshot) => {
+-      const data = snapshot.val() || {};
+-      const list = Object.entries(data).map(([id, val]) => ({ id, ...val }));
+-      setCaregivers(list);
+-    });
+-    return () => unsubscribe();
+-  }, []);
+-  
+-  // Listen to all users (for connecting caregivers to users)
+-  useEffect(() => {
+-    const usersRef = ref(db, 'users/');
+-    const unsubscribe = onValue(usersRef, (snapshot) => {
+-      const data = snapshot.val() || {};
+-      const list = Object.entries(data).map(([id, val]) => ({ id, ...val }));
+-      setAllUsers(list);
+-    });
+-    return () => unsubscribe();
+-  }, []);
+-
+-  // Filter caregivers based on search term
+-  const filteredCaregivers = caregivers.filter((cg) =>
+-    cg.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+-    cg.email.toLowerCase().includes(searchTerm.toLowerCase())
+-  );
+-
+-  // Unassigned users: those without a caregiverId (available for connection)
+-  const unassignedUsers = allUsers.filter(user => !user.caregiverId);
+-
+-  // Function to add a new caregiver (admin only)
+-  const handleAddCaregiver = async () => {
+-    if (!isAdmin) {
+-      toast.error('You do not have permission to add caregivers.');
+-      return;
+-    }
+-    if (!name.trim() || !email.trim()) {
+-      toast.error('Please provide both name and email.');
+-      return;
+-    }
+-    if (!/^\S+@\S+\.\S+$/.test(email)) {
+-      toast.error('Invalid email format');
+-      return;
+-    }
+-    try {
+-      const newRef = push(ref(db, 'caregivers'));
+-      await set(newRef, { name, email });
+-      toast.success('Caregiver added successfully!');
+-      setName('');
+-      setEmail('');
+-    } catch (error) {
+-      console.error('Error adding caregiver:', error);
+-      toast.error('Error adding caregiver. Check console for details.');
+-    }
+-  };
+-
+-  // Function to start editing a caregiver
+-  const startEdit = (cg) => {
+-    if (!isAdmin) {
+-      toast.error('You do not have permission to edit caregivers.');
+-      return;
+-    }
+-    setEditId(cg.id);
+-    setEditName(cg.name);
+-    setEditEmail(cg.email);
+-  };
+-
+-  // Function to update a caregiver (admin only)
+-  const handleUpdateCaregiver = async () => {
+-    if (!editName.trim() || !editEmail.trim()) {
+-      toast.error('Please provide both name and email.');
+-      return;
+-    }
+-    if (!/^\S+@\S+\.\S+$/.test(editEmail)) {
+-      toast.error('Invalid email format');
+-      return;
+-    }
+-    try {
+-      await update(ref(db, `caregivers/${editId}`), {
+-        name: editName,
+-        email: editEmail
+-      });
+-      toast.success('Caregiver updated successfully!');
+-      setEditId(null);
+-      setEditName('');
+-      setEditEmail('');
+-    } catch (error) {
+-      console.error('Error updating caregiver:', error);
+-      toast.error('Error updating caregiver. Check console for details.');
+-    }
+-  };
+-
+-  // Confirm deletion (admin only)
+-  const confirmDelete = (id) => {
+-    if (!isAdmin) {
+-      toast.error('You do not have permission to delete caregivers.');
+-      return;
+-    }
+-    setDeleteTargetId(id);
+-    setDeleteDialogOpen(true);
+-  };
+-
+-  // Function to delete a caregiver (admin only)
+-  const handleDeleteCaregiver = async () => {
+-    try {
+-      await remove(ref(db, `caregivers/${deleteTargetId}`));
+-      toast.success('Caregiver deleted successfully!');
+-    } catch (error) {
+-      console.error('Error deleting caregiver:', error);
+-      toast.error('Error deleting caregiver. Check console for details.');
+-    }
+-    setDeleteDialogOpen(false);
+-    setDeleteTargetId(null);
+-  };
+-
+-  // Handle CSV file selection
+-  const handleFileChange = (e) => {
+-    setCsvFile(e.target.files[0]);
+-  };
+-
+-  // Process CSV upload (admin only)
+-  const handleCSVUpload = () => {
+-    if (!isAdmin) {
+-      toast.error('You do not have permission to upload CSV data.');
+-      return;
+-    }
+-    if (!csvFile) {
+-      toast.error('Please select a CSV file first.');
+-      return;
+-    }
+-    Papa.parse(csvFile, {
+-      header: true,
+-      complete: (results) => {
+-        const data = results.data;
+-        data.forEach(async (row, index) => {
+-          if (row.name && row.email && /^\S+@\S+\.\S+$/.test(row.email)) {
+-            try {
+-              const newRef = push(ref(db, 'caregivers'));
+-              await set(newRef, { name: row.name, email: row.email });
+-            } catch (error) {
+-              console.error(`Error adding caregiver from CSV at row ${index + 1}:`, error);
+-              toast.error(`Error adding caregiver from CSV at row ${index + 1}.`);
+-            }
+-          } else {
+-            toast.error(`Invalid row data at row ${index + 1}: ${JSON.stringify(row)}`);
+-          }
+-        });
+-        toast.success('CSV upload completed.');
+-        setCsvFile(null);
+-      },
+-      error: (error) => {
+-        console.error('Error parsing CSV:', error);
+-        toast.error('Error parsing CSV file.');
+-      }
+-    });
+-  };
+-
+-  // Function to assign an unassigned user to a caregiver (from caregivers view)
+-  const handleAssignUser = async (caregiverId, userId) => {
+-    if (!userId) return;
+-    try {
+-      await update(ref(db, `users/${userId}`), { caregiverId });
+-      toast.success('User connected successfully!');
+-      setSelectedUserForCaregiver(prev => ({ ...prev, [caregiverId]: '' }));
+-    } catch (error) {
+-      console.error('Error assigning user:', error);
+-      toast.error('Error connecting user.');
+-    }
+-  };
+-
+-  return (
+-    <Box sx={{ p: 2 }}>
+-      <Typography variant="h5" gutterBottom>
+-        Manage Caregivers
+-      </Typography>
+-
+-      {/* Admin-only: Add new caregiver manually */}
+-      {isAdmin ? (
+-        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+-          <TextField
+-            label="Name"
+-            variant="outlined"
+-            size="small"
+-            value={name}
+-            onChange={(e) => setName(e.target.value)}
+-          />
+-          <TextField
+-            label="Email"
+-            variant="outlined"
+-            size="small"
+-            value={email}
+-            onChange={(e) => setEmail(e.target.value)}
+-          />
+-          <Button variant="contained" size="small" onClick={handleAddCaregiver}>
+-            Add Caregiver
+-          </Button>
+-        </Box>
+-      ) : (
+-        <Typography variant="body1" color="error" sx={{ mb: 2 }}>
+-          You do not have admin privileges to add caregivers.
+-        </Typography>
+-      )}
+-
+-      {/* CSV Upload (admin only) */}
+-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+-        <input type="file" accept=".csv" onChange={handleFileChange} />
+-        {isAdmin ? (
+-          <Button variant="outlined" onClick={handleCSVUpload}>
+-            Upload CSV
+-          </Button>
+-        ) : (
+-          <Typography variant="body2" color="error">
+-            CSV upload requires admin privileges.
+-          </Typography>
+-        )}
+-      </Box>
+-
+-      {/* Search Field */}
+-      <Box sx={{ mb: 2 }}>
+-        <TextField
+-          label="Search by name or email"
+-          variant="outlined"
+-          size="small"
+-          value={searchTerm}
+-          onChange={(e) => setSearchTerm(e.target.value)}
+-          fullWidth
+-        />
+-      </Box>
+-
+-      {/* Caregiver Table */}
+-      <TableContainer component={Paper}>
+-        <Table>
+-          <TableHead>
+-            <TableRow sx={{ backgroundColor: '#f2f2f2' }}>
+-              <TableCell>ID</TableCell>
+-              <TableCell>Name</TableCell>
+-              <TableCell>Email</TableCell>
+-              <TableCell>Connected Users</TableCell>
+-              <TableCell>Assign User</TableCell>
+-              <TableCell>Actions</TableCell>
+-            </TableRow>
+-          </TableHead>
+-          <TableBody>
+-            {filteredCaregivers.map((cg) => {
+-              // Find users already connected to this caregiver
+-              const assignedUsers = allUsers.filter(
+-                (user) => user.caregiverId === cg.id
+-              );
+-              const assignedNames = assignedUsers.map((user) => user.name).join(', ');
+-              return (
+-                <TableRow key={cg.id}>
+-                  <TableCell>{cg.id}</TableCell>
+-                  {editId === cg.id ? (
+-                    <>
+-                      <TableCell>
+-                        <TextField
+-                          value={editName}
+-                          onChange={(e) => setEditName(e.target.value)}
+-                          size="small"
+-                        />
+-                      </TableCell>
+-                      <TableCell>
+-                        <TextField
+-                          value={editEmail}
+-                          onChange={(e) => setEditEmail(e.target.value)}
+-                          size="small"
+-                        />
+-                      </TableCell>
+-                      <TableCell>{assignedNames || 'None'}</TableCell>
+-                      <TableCell>
+-                        <Select
+-                          value={selectedUserForCaregiver[cg.id] || ''}
+-                          onChange={(e) => {
+-                            const selected = e.target.value;
+-                            setSelectedUserForCaregiver(prev => ({ ...prev, [cg.id]: selected }));
+-                            handleAssignUser(cg.id, selected);
+-                          }}
+-                          displayEmpty
+-                          size="small"
+-                        >
+-                          <MenuItem value="">-- Select User --</MenuItem>
+-                          {unassignedUsers.map((user) => (
+-                            <MenuItem key={user.id} value={user.id}>
+-                              {user.name} ({user.email})
+-                            </MenuItem>
+-                          ))}
+-                        </Select>
+-                      </TableCell>
+-                      <TableCell>
+-                        <Button
+-                          variant="contained"
+-                          size="small"
+-                          sx={{ mr: 1 }}
+-                          onClick={handleUpdateCaregiver}
+-                        >
+-                          Save
+-                        </Button>
+-                        <Button
+-                          variant="outlined"
+-                          size="small"
+-                          onClick={() => setEditId(null)}
+-                        >
+-                          Cancel
+-                        </Button>
+-                      </TableCell>
+-                    </>
+-                  ) : (
+-                    <>
+-                      <TableCell>{cg.name}</TableCell>
+-                      <TableCell>{cg.email}</TableCell>
+-                      <TableCell>{assignedNames || 'None'}</TableCell>
+-                      <TableCell>
+-                        {isAdmin && (
+-                          <Select
+-                            value={selectedUserForCaregiver[cg.id] || ''}
+-                            onChange={(e) => {
+-                              const selected = e.target.value;
+-                              setSelectedUserForCaregiver(prev => ({ ...prev, [cg.id]: selected }));
+-                              handleAssignUser(cg.id, selected);
+-                            }}
+-                            displayEmpty
+-                            size="small"
+-                          >
+-                            <MenuItem value="">-- Select User --</MenuItem>
+-                            {unassignedUsers.map((user) => (
+-                              <MenuItem key={user.id} value={user.id}>
+-                                {user.name} ({user.email})
+-                              </MenuItem>
+-                            ))}
+-                          </Select>
+-                        )}
+-                      </TableCell>
+-                      <TableCell>
+-                        {isAdmin ? (
+-                          <>
+-                            <Button
+-                              variant="text"
+-                              size="small"
+-                              sx={{ mr: 1 }}
+-                              onClick={() => startEdit(cg)}
+-                            >
+-                              Edit
+-                            </Button>
+-                            <Button
+-                              variant="text"
+-                              size="small"
+-                              color="error"
+-                              onClick={() => confirmDelete(cg.id)}
+-                            >
+-                              Delete
+-                            </Button>
+-                          </>
+-                        ) : (
+-                          'N/A'
+-                        )}
+-                      </TableCell>
+-                    </>
+-                  )}
+-                </TableRow>
+-              );
+-            })}
+-          </TableBody>
+-        </Table>
+-      </TableContainer>
+-
+-      {/* Delete Confirmation Dialog */}
+-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+-        <DialogTitle>Delete Caregiver</DialogTitle>
+-        <DialogContent>
+-          <DialogContentText>
+-            Are you sure you want to delete this caregiver? This action cannot be undone.
+-          </DialogContentText>
+-        </DialogContent>
+-        <DialogActions>
+-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+-          <Button color="error" onClick={handleDeleteCaregiver}>
+-            Confirm
+-          </Button>
+-        </DialogActions>
+-      </Dialog>
+-    </Box>
+-  );
++  return <Navigate to="/user-management" replace />;
+ }
+diff --git a/src/pages/ConnectUser.js b/src/pages/ConnectUser.js
+index c3308bb..2bc4542 100644
+--- a/src/pages/ConnectUser.js
++++ b/src/pages/ConnectUser.js
+@@ -3,50 +3,42 @@ import React, { useEffect, useState } from 'react';
+ import { ref, onValue, update } from 'firebase/database';
+ import { db } from '../firebaseConfig';
+ import {
+-  Container,
+-  Typography,
+-  Box,
+-  Button,
+-  Table,
+-  TableContainer,
+-  TableHead,
+-  TableRow,
+-  TableCell,
+-  TableBody,
+-  Paper,
+-  TextField,
++  Container, Typography, Box, Button, Table, TableContainer,
++  TableHead, TableRow, TableCell, TableBody, Paper, TextField
+ } from '@mui/material';
+-import { getAuth } from 'firebase/auth';
++import { useAuth } from '../contexts/AuthContext';
+ import { toast } from 'react-hot-toast';
++import { Link } from 'react-router-dom';
++import { DB_PATHS, ROLES, getUserDisplayName } from '../shared/schema';
+ 
+ export default function ConnectUser() {
+   const [unassignedUsers, setUnassignedUsers] = useState([]);
+   const [searchTerm, setSearchTerm] = useState('');
+-  const auth = getAuth();
+-  const currentUser = auth.currentUser; // Assumes the caregiver is logged in
++  const { currentUser } = useAuth();
+ 
+-  // Fetch users without a caregiverId (i.e. unassigned)
++  // Fetch users without a caregiverId (unassigned AAC users)
+   useEffect(() => {
+-    const usersRef = ref(db, 'users/');
++    const usersRef = ref(db, DB_PATHS.USERS);
+     const unsubscribe = onValue(usersRef, (snapshot) => {
+       const data = snapshot.val() || {};
+       const list = Object.entries(data)
+         .map(([id, val]) => ({ id, ...val }))
+-        .filter((user) => !user.caregiverId);
++        .filter((user) => !user.caregiverId && user.role !== ROLES.ADMIN && user.role !== ROLES.CAREGIVER);
+       setUnassignedUsers(list);
+     });
+     return () => unsubscribe();
+   }, []);
+ 
+-  // Function for connecting the current caregiver to a user
++  // Connect current caregiver to a user
+   const connectUser = async (userId) => {
+     if (!currentUser) {
+       toast.error('You must be logged in to connect to a user.');
+       return;
+     }
+     try {
+-      // Update the user's record by setting caregiverId to the current user's uid
+-      await update(ref(db, `users/${userId}`), { caregiverId: currentUser.uid });
++      await update(ref(db, `${DB_PATHS.USERS}/${userId}`), {
++        caregiverId: currentUser.uid
++      });
+       toast.success('User connected successfully!');
+     } catch (error) {
+       console.error('Error connecting user:', error);
+@@ -54,17 +46,20 @@ export default function ConnectUser() {
+     }
+   };
+ 
+-  // Filter unassigned users by search term
+-  const filteredUsers = unassignedUsers.filter((user) =>
+-    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
+-  );
++  const filteredUsers = unassignedUsers.filter((user) => {
++    const name = (user.name || '').toLowerCase();
++    const email = (user.email || '').toLowerCase();
++    return name.includes(searchTerm.toLowerCase()) || email.includes(searchTerm.toLowerCase());
++  });
+ 
+   return (
+     <Container sx={{ py: 4 }}>
+-      <Typography variant="h4" gutterBottom>
+-        Connect to a User
+-      </Typography>
++      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
++        <Typography variant="h4">Connect to a User</Typography>
++        <Button component={Link} to="/caregiver" variant="outlined">
++          Back to Dashboard
++        </Button>
++      </Box>
+       <Box sx={{ mb: 2 }}>
+         <TextField
+           label="Search Unassigned Users"
+@@ -87,14 +82,10 @@ export default function ConnectUser() {
+           <TableBody>
+             {filteredUsers.map((user) => (
+               <TableRow key={user.id}>
+-                <TableCell>{user.name}</TableCell>
++                <TableCell>{getUserDisplayName(user)}</TableCell>
+                 <TableCell>{user.email}</TableCell>
+                 <TableCell>
+-                  <Button
+-                    variant="contained"
+-                    size="small"
+-                    onClick={() => connectUser(user.id)}
+-                  >
++                  <Button variant="contained" size="small" onClick={() => connectUser(user.id)}>
+                     Connect
+                   </Button>
+                 </TableCell>
+@@ -102,7 +93,7 @@ export default function ConnectUser() {
+             ))}
+             {filteredUsers.length === 0 && (
+               <TableRow>
+-                <TableCell colSpan={3}>No unassigned users found.</TableCell>
++                <TableCell colSpan={3} align="center">No unassigned users found.</TableCell>
+               </TableRow>
+             )}
+           </TableBody>
+diff --git a/src/pages/Feedback.js b/src/pages/Feedback.js
+new file mode 100644
+index 0000000..02f3614
+--- /dev/null
++++ b/src/pages/Feedback.js
+@@ -0,0 +1,102 @@
++// src/pages/Feedback.js
++import React, { useEffect, useState, useMemo } from 'react';
++import { ref, get } from 'firebase/database';
++import { db } from '../firebaseConfig';
++import {
++  Container, Typography, Table, TableBody, TableCell,
++  TableContainer, TableHead, TableRow, Paper, Box,
++  Button, CircularProgress, Chip
++} from '@mui/material';
++import RefreshIcon from '@mui/icons-material/Refresh';
++import { Link } from 'react-router-dom';
++import { DB_PATHS } from '../shared/schema';
++
++export default function Feedback() {
++  const [feedback, setFeedback] = useState([]);
++  const [loading, setLoading] = useState(true);
++
++  const fetchFeedback = async () => {
++    setLoading(true);
++    try {
++      const snap = await get(ref(db, DB_PATHS.FEEDBACK));
++      const data = snap.val() || {};
++      const items = [];
++      // feedback/{uid}/{pushId} structure
++      Object.entries(data).forEach(([uid, userFeedback]) => {
++        if (typeof userFeedback === 'object') {
++          Object.entries(userFeedback).forEach(([fbId, fb]) => {
++            items.push({ id: fbId, uid, ...fb });
++          });
++        }
++      });
++      items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
++      setFeedback(items);
++    } catch (err) {
++      console.error('Error fetching feedback:', err);
++      setFeedback([]);
++    } finally {
++      setLoading(false);
++    }
++  };
++
++  useEffect(() => {
++    fetchFeedback();
++  }, []);
++
++  return (
++    <Container maxWidth="lg" sx={{ py: 4 }}>
++      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
++        <Typography variant="h4">User Feedback</Typography>
++        <Box>
++          <Button onClick={fetchFeedback} startIcon={<RefreshIcon />} sx={{ mr: 1 }}>
++            Refresh
++          </Button>
++          <Button component={Link} to="/admin" variant="outlined">
++            Back to Dashboard
++          </Button>
++        </Box>
++      </Box>
++
++      {loading ? (
++        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
++          <CircularProgress />
++        </Box>
++      ) : feedback.length === 0 ? (
++        <Paper sx={{ p: 4, textAlign: 'center' }}>
++          <Typography color="text.secondary">No feedback submitted yet.</Typography>
++        </Paper>
++      ) : (
++        <TableContainer component={Paper}>
++          <Table>
++            <TableHead>
++              <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
++                <TableCell><strong>From</strong></TableCell>
++                <TableCell><strong>Email</strong></TableCell>
++                <TableCell><strong>Role</strong></TableCell>
++                <TableCell><strong>Feedback</strong></TableCell>
++                <TableCell><strong>When</strong></TableCell>
++              </TableRow>
++            </TableHead>
++            <TableBody>
++              {feedback.map((fb) => (
++                <TableRow key={fb.id}>
++                  <TableCell>{fb.name || 'Anonymous'}</TableCell>
++                  <TableCell>{fb.email || '-'}</TableCell>
++                  <TableCell>
++                    <Chip label={fb.role || 'user'} size="small" />
++                  </TableCell>
++                  <TableCell sx={{ maxWidth: 400, wordBreak: 'break-word' }}>
++                    {fb.feedback}
++                  </TableCell>
++                  <TableCell>
++                    {fb.timestamp ? new Date(fb.timestamp).toLocaleString() : 'N/A'}
++                  </TableCell>
++                </TableRow>
++              ))}
++            </TableBody>
++          </Table>
++        </TableContainer>
++      )}
++    </Container>
++  );
++}
+diff --git a/src/pages/FineTuneMetrics.js b/src/pages/FineTuneMetrics.js
+index 34ea33b..43372f8 100644
+--- a/src/pages/FineTuneMetrics.js
++++ b/src/pages/FineTuneMetrics.js
+@@ -2,7 +2,9 @@
+ import React, { useState, useEffect } from 'react';
+ import { ref, onValue } from 'firebase/database';
+ import { db } from '../firebaseConfig';
+-import { Container, Typography, Paper } from '@mui/material';
++import { Container, Typography, Paper, Box, Button } from '@mui/material';
++import { Link } from 'react-router-dom';
++import { DB_PATHS } from '../shared/schema';
+ import { Line } from 'react-chartjs-2';
+ import {
+   Chart as ChartJS,
+@@ -21,7 +23,7 @@ export default function FineTuneMetrics() {
+   const [metrics, setMetrics] = useState([]);
+ 
+   useEffect(() => {
+-    const metricsRef = ref(db, 'fineTuneMetrics');
++    const metricsRef = ref(db, DB_PATHS.FINE_TUNE_METRICS);
+     const unsubscribe = onValue(metricsRef, (snapshot) => {
+       const data = snapshot.val() || {};
+       const metricsArray = Object.entries(data).map(([id, entry]) => ({ id, ...entry }));
+@@ -36,12 +38,13 @@ export default function FineTuneMetrics() {
+   if (metrics.length === 0) {
+     return (
+       <Container sx={{ py: 4 }}>
+-        <Typography variant="h4" gutterBottom>
+-          Fine-Tuning Progress
+-        </Typography>
++        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
++          <Typography variant="h4">AI Fine-Tuning Metrics</Typography>
++          <Button component={Link} to="/admin" variant="outlined">Back to Dashboard</Button>
++        </Box>
+         <Paper sx={{ p: 2 }}>
+           <Typography variant="body1" align="center">
+-            No training metrics found. Please run a fine-tuning session to see progress.
++            No training metrics found. Metrics appear here when the AAC app runs on-device model fine-tuning.
+           </Typography>
+         </Paper>
+       </Container>
+@@ -72,9 +75,10 @@ export default function FineTuneMetrics() {
+ 
+   return (
+     <Container sx={{ py: 4 }}>
+-      <Typography variant="h4" gutterBottom>
+-        Fine-Tuning Progress
+-      </Typography>
++      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
++        <Typography variant="h4">AI Fine-Tuning Metrics</Typography>
++        <Button component={Link} to="/admin" variant="outlined">Back to Dashboard</Button>
++      </Box>
+       <Paper sx={{ p: 2 }}>
+         <Line
+           data={chartData}
+diff --git a/src/pages/Home.js b/src/pages/Home.js
+index f5ed24a..5f28c2b 100644
+--- a/src/pages/Home.js
++++ b/src/pages/Home.js
+@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
+ import { Container, CircularProgress } from '@mui/material';
+ 
+ export default function Home() {
+-  const { currentUser, isAdmin, loading } = useAuth();
++  const { currentUser, isAdmin, isCaregiver, loading } = useAuth();
+   const navigate = useNavigate();
+ 
+   useEffect(() => {
+@@ -14,23 +14,17 @@ export default function Home() {
+         navigate('/login', { replace: true });
+       } else if (isAdmin) {
+         navigate('/admin', { replace: true });
+-      } else {
+-        // Redirect to caregiver dashboard or another page for non-admin users
++      } else if (isCaregiver) {
+         navigate('/caregiver', { replace: true });
++      } else {
++        // Regular AAC users shouldn't use the dashboard
++        navigate('/login', { replace: true });
+       }
+     }
+-  }, [currentUser, isAdmin, loading, navigate]);
++  }, [currentUser, isAdmin, isCaregiver, loading, navigate]);
+ 
+   return (
+-    <Container
+-      sx={{
+-        py: 8,
+-        display: 'flex',
+-        justifyContent: 'center',
+-        alignItems: 'center',
+-        minHeight: '60vh'
+-      }}
+-    >
++    <Container sx={{ py: 8, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+       <CircularProgress size={48} />
+     </Container>
+   );
+diff --git a/src/pages/Login.js b/src/pages/Login.js
+index 66b758d..68913e9 100644
+--- a/src/pages/Login.js
++++ b/src/pages/Login.js
+@@ -1,51 +1,65 @@
+ import React, { useState } from 'react';
+-import { Container, TextField, Button, CircularProgress, Box } from '@mui/material';
+-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
++import { Container, TextField, Button, CircularProgress, Box, Alert } from '@mui/material';
+ import { useNavigate } from 'react-router-dom';
+-import logo from '../assets/logo.png';
++import { useAuth } from '../contexts/AuthContext';
++import { ref, get } from 'firebase/database';
++import { db } from '../firebaseConfig';
++import { ROLES } from '../shared/schema';
+ 
+ export default function Login() {
+   const [email, setEmail] = useState('');
+   const [password, setPassword] = useState('');
+   const [loading, setLoading] = useState(false);
++  const [error, setError] = useState('');
+   const navigate = useNavigate();
+-  const auth = getAuth();
++  const { signIn } = useAuth();
+ 
+   const handleLogin = async () => {
+     setLoading(true);
++    setError('');
+     try {
+-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
++      const userCredential = await signIn(email, password);
+       const user = userCredential.user;
+ 
+-      const tokenResult = await user.getIdTokenResult();
+-      const role = tokenResult.claims.role;
++      // Read role from database (single source of truth)
++      const snap = await get(ref(db, `users/${user.uid}/role`));
++      const role = snap.val();
+ 
+-      if (role === 'admin') {
++      if (role === ROLES.ADMIN) {
+         navigate('/admin');
+-      } else if (role === 'caregiver') {
++      } else if (role === ROLES.CAREGIVER) {
+         navigate('/caregiver');
+       } else {
+-        navigate('/home');
++        // Regular AAC users shouldn't be using the dashboard
++        setError('This dashboard is for caregivers and administrators only.');
++        return;
+       }
+-
+-    } catch (error) {
+-      alert('Login error: ' + error.message);
+-      console.error(error);
++    } catch (err) {
++      setError(err.message || 'Login failed');
++      console.error(err);
+     } finally {
+       setLoading(false);
+     }
+   };
+ 
++  const handleKeyDown = (e) => {
++    if (e.key === 'Enter' && !loading) {
++      handleLogin();
++    }
++  };
++
+   return (
+     <Container maxWidth="sm" sx={{ mt: 8 }}>
+       <Box sx={{ textAlign: 'center', mb: 2 }}>
+-        <img 
+-          src={logo} 
+-          alt="App Logo" 
+-          style={{ width: '150px', height: 'auto', margin: '0 auto' }} 
+-        />
++        <Box sx={{ fontSize: 48, mb: 1 }}>CommAI</Box>
++        <Box sx={{ color: 'text.secondary', mb: 3 }}>Caregiver & Admin Dashboard</Box>
+       </Box>
+-      <Box component="form" noValidate sx={{ mt: 1 }}>
++
++      {error && (
++        <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
++      )}
++
++      <Box component="form" noValidate sx={{ mt: 1 }} onKeyDown={handleKeyDown}>
+         <TextField
+           label="Email"
+           fullWidth
+@@ -55,6 +69,7 @@ export default function Login() {
+           type="email"
+           inputProps={{ 'data-testid': 'emailInput' }}
+           required
++          autoFocus
+         />
+         <TextField
+           label="Password"
+@@ -81,9 +96,6 @@ export default function Login() {
+             Log In
+           </Button>
+         )}
+-        <Button fullWidth sx={{ mt: 2 }} onClick={() => navigate('/Signup')}>
+-          Don't have an account? Sign Up
+-        </Button>
+       </Box>
+     </Container>
+   );
+diff --git a/src/pages/Logs.js b/src/pages/Logs.js
+index 6f3e2b3..015b8d8 100644
+--- a/src/pages/Logs.js
++++ b/src/pages/Logs.js
+@@ -1,58 +1,69 @@
+ // src/pages/Logs.js
+-import React, { useEffect, useState, useCallback } from 'react';
++import React, { useEffect, useState, useCallback, useMemo } from 'react';
+ import { ref, get, query, orderByChild, limitToLast } from 'firebase/database';
+ import { db } from '../firebaseConfig';
+ import {
+-  Container,
+-  Typography,
+-  Table,
+-  TableBody,
+-  TableCell,
+-  TableContainer,
+-  TableHead,
+-  TableRow,
+-  Paper,
+-  CircularProgress,
+-  Box,
+-  Button
++  Container, Typography, Table, TableBody, TableCell,
++  TableContainer, TableHead, TableRow, Paper, CircularProgress,
++  Box, Button, Chip, FormControl, InputLabel, Select, MenuItem, TextField
+ } from '@mui/material';
+ import RefreshIcon from '@mui/icons-material/Refresh';
++import DownloadIcon from '@mui/icons-material/Download';
+ import { useAuth } from '../contexts/AuthContext';
++import { DB_PATHS, getUserDisplayName, getLogUserId, getLogCarerId } from '../shared/schema';
+ 
+ export default function Logs() {
+-  const { user, isAdmin, loading: authLoading } = useAuth();
++  const { currentUser, isAdmin, loading: authLoading } = useAuth();
++  const [allUsers, setAllUsers] = useState([]);
+   const [logs, setLogs] = useState([]);
+   const [linkedUserIds, setLinkedUserIds] = useState([]);
+   const [loading, setLoading] = useState(true);
++  const [actionFilter, setActionFilter] = useState('');
++  const [levelFilter, setLevelFilter] = useState('all');
+ 
+-  // For caregivers: fetch linked user IDs once
++  // Fetch all users for name resolution
+   useEffect(() => {
+-    if (!isAdmin) {
+-      // wait until authLoading is false
+-      if (authLoading || !user) return;
+-      get(ref(db, 'users'))
+-        .then(snap => {
+-          const data = snap.val() || {};
+-          const linked = Object.entries(data)
+-            .filter(([_, u]) => u.caregiverId === user.uid)
+-            .map(([id]) => id);
+-          setLinkedUserIds(linked);
+-        })
+-        .catch(() => {
+-          setLinkedUserIds([]);
+-        });
+-    }
+-  }, [user, isAdmin, authLoading]);
++    get(ref(db, DB_PATHS.USERS)).then(snap => {
++      const data = snap.val() || {};
++      setAllUsers(Object.entries(data).map(([id, v]) => ({ id, ...v })));
++    }).catch(() => {});
++  }, []);
++
++  // For caregivers: fetch linked user IDs
++  useEffect(() => {
++    if (isAdmin || authLoading || !currentUser) return;
++    get(ref(db, DB_PATHS.USERS))
++      .then(snap => {
++        const data = snap.val() || {};
++        const linked = Object.entries(data)
++          .filter(([, u]) => u.caregiverId === currentUser.uid)
++          .map(([id]) => id);
++        setLinkedUserIds(linked);
++      })
++      .catch(() => setLinkedUserIds([]));
++  }, [currentUser, isAdmin, authLoading]);
++
++  // Name map
++  const userNameMap = useMemo(() => {
++    const map = {};
++    allUsers.forEach(u => { map[u.id] = getUserDisplayName(u); });
++    return map;
++  }, [allUsers]);
++
++  // Unique action types for filter
++  const actionTypes = useMemo(() => {
++    const set = new Set(logs.map(l => l.action).filter(Boolean));
++    return Array.from(set).sort();
++  }, [logs]);
+ 
+   const fetchLogs = useCallback(() => {
+-    // Admins fetch immediately; caregivers wait until authLoading & linked IDs ready
+-    if (!isAdmin && (authLoading || !user)) return;
++    if (!isAdmin && (authLoading || !currentUser)) return;
+     setLoading(true);
+ 
+     const logsQuery = query(
+-      ref(db, 'userLogs'),
++      ref(db, DB_PATHS.USER_LOGS),
+       orderByChild('timestamp'),
+-      limitToLast(100)
++      limitToLast(500)
+     );
+ 
+     get(logsQuery)
+@@ -61,23 +72,51 @@ export default function Logs() {
+           .map(([id, log]) => ({ id, ...log }))
+           .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+         if (!isAdmin) {
+-          arr = arr.filter(l => linkedUserIds.includes(l.userId));
++          arr = arr.filter(l => {
++            const uid = getLogUserId(l);
++            return uid && linkedUserIds.includes(uid);
++          });
+         }
+         setLogs(arr);
+       })
+-      .catch(() => {
+-        setLogs([]);
+-      })
+-      .finally(() => {
+-        setLoading(false);
+-      });
+-  }, [isAdmin, authLoading, user, linkedUserIds]);
++      .catch(() => setLogs([]))
++      .finally(() => setLoading(false));
++  }, [isAdmin, authLoading, currentUser, linkedUserIds]);
+ 
+-  // Fetch on mount and whenever linkedUserIds updates
+   useEffect(() => {
+     fetchLogs();
+   }, [fetchLogs]);
+ 
++  // Filtered logs
++  const filteredLogs = useMemo(() => {
++    return logs.filter(l => {
++      if (actionFilter && l.action !== actionFilter) return false;
++      if (levelFilter !== 'all' && l.level !== levelFilter) return false;
++      return true;
++    });
++  }, [logs, actionFilter, levelFilter]);
++
++  // CSV export
++  const handleExport = () => {
++    const headers = ['Timestamp', 'User', 'Caregiver', 'Action', 'Level', 'Session'];
++    const rows = filteredLogs.map(l => [
++      l.timestamp ? new Date(l.timestamp).toISOString() : '',
++      getLogUserId(l) || '',
++      getLogCarerId(l) || '',
++      l.action || '',
++      l.level || '',
++      l.sessionId || ''
++    ]);
++    const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
++    const blob = new Blob([csv], { type: 'text/csv' });
++    const url = URL.createObjectURL(blob);
++    const a = document.createElement('a');
++    a.href = url;
++    a.download = `aac-logs-${new Date().toISOString().slice(0, 10)}.csv`;
++    a.click();
++    URL.revokeObjectURL(url);
++  };
++
+   if ((authLoading && !isAdmin) || loading) {
+     return (
+       <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+@@ -87,47 +126,89 @@ export default function Logs() {
+   }
+ 
+   return (
+-    <Container sx={{ py: 4 }}>
++    <Container maxWidth="xl" sx={{ py: 4 }}>
+       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+         <Typography variant="h4">User Logs</Typography>
+-        <Button
+-          onClick={fetchLogs}
+-          startIcon={<RefreshIcon />}
+-          disabled={loading}
+-        >
+-          Refresh
+-        </Button>
++        <Box>
++          <Button onClick={handleExport} startIcon={<DownloadIcon />} sx={{ mr: 1 }}>
++            Export CSV
++          </Button>
++          <Button onClick={fetchLogs} startIcon={<RefreshIcon />} disabled={loading}>
++            Refresh
++          </Button>
++        </Box>
+       </Box>
+ 
++      {/* Filters */}
++      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
++        <FormControl sx={{ minWidth: 200 }}>
++          <InputLabel>Action Type</InputLabel>
++          <Select value={actionFilter} label="Action Type" onChange={e => setActionFilter(e.target.value)}>
++            <MenuItem value="">All Actions</MenuItem>
++            {actionTypes.map(a => <MenuItem key={a} value={a}>{a}</MenuItem>)}
++          </Select>
++        </FormControl>
++        <FormControl sx={{ minWidth: 150 }}>
++          <InputLabel>Level</InputLabel>
++          <Select value={levelFilter} label="Level" onChange={e => setLevelFilter(e.target.value)}>
++            <MenuItem value="all">All Levels</MenuItem>
++            <MenuItem value="DEBUG">Debug</MenuItem>
++            <MenuItem value="INFO">Info</MenuItem>
++            <MenuItem value="WARN">Warning</MenuItem>
++            <MenuItem value="ERROR">Error</MenuItem>
++          </Select>
++        </FormControl>
++      </Box>
++
++      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
++        Showing {filteredLogs.length} of {logs.length} logs
++      </Typography>
++
+       <TableContainer component={Paper}>
+-        <Table>
++        <Table size="small">
+           <TableHead>
+             <TableRow sx={{ backgroundColor: '#f2f2f2' }}>
+-              <TableCell><strong>User ID</strong></TableCell>
+-              <TableCell><strong>Log ID</strong></TableCell>
++              <TableCell><strong>User</strong></TableCell>
++              <TableCell><strong>Caregiver</strong></TableCell>
+               <TableCell><strong>Action</strong></TableCell>
++              <TableCell><strong>Level</strong></TableCell>
++              <TableCell><strong>Session</strong></TableCell>
+               <TableCell><strong>Timestamp</strong></TableCell>
+             </TableRow>
+           </TableHead>
+           <TableBody>
+-            {logs.length > 0 ? (
+-              logs.map(log => (
+-                <TableRow key={log.id}>
+-                  <TableCell>{log.userId}</TableCell>
+-                  <TableCell>{log.id}</TableCell>
+-                  <TableCell>{log.action}</TableCell>
+-                  <TableCell>
+-                    {log.timestamp
+-                      ? new Date(log.timestamp).toLocaleString()
+-                      : 'N/A'}
+-                  </TableCell>
+-                </TableRow>
+-              ))
++            {filteredLogs.length > 0 ? (
++              filteredLogs.slice(0, 200).map(log => {
++                const uid = getLogUserId(log);
++                const cid = getLogCarerId(log);
++                return (
++                  <TableRow key={log.id}>
++                    <TableCell>{uid ? (userNameMap[uid] || uid.slice(0, 8)) : 'N/A'}</TableCell>
++                    <TableCell>{cid ? (userNameMap[cid] || cid.slice(0, 8)) : '-'}</TableCell>
++                    <TableCell><Chip label={log.action} size="small" /></TableCell>
++                    <TableCell>
++                      <Chip
++                        label={log.level || 'INFO'}
++                        size="small"
++                        color={
++                          log.level === 'ERROR' ? 'error' :
++                          log.level === 'WARN' ? 'warning' :
++                          log.level === 'DEBUG' ? 'default' : 'info'
++                        }
++                      />
++                    </TableCell>
++                    <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>
++                      {log.sessionId ? log.sessionId.slice(0, 12) : '-'}
++                    </TableCell>
++                    <TableCell>
++                      {log.timestamp ? new Date(log.timestamp).toLocaleString() : 'N/A'}
++                    </TableCell>
++                  </TableRow>
++                );
++              })
+             ) : (
+               <TableRow>
+-                <TableCell colSpan={4} align="center">
+-                  No logs found.
+-                </TableCell>
++                <TableCell colSpan={6} align="center">No logs found.</TableCell>
+               </TableRow>
+             )}
+           </TableBody>
+diff --git a/src/pages/Signup.js b/src/pages/Signup.js
+index 52c677c..b9d40de 100644
+--- a/src/pages/Signup.js
++++ b/src/pages/Signup.js
+@@ -1,33 +1,43 @@
+-// Code to create a new user account with email and password
+-// The user's name, email, and creation time are stored in the database
+-// The user is redirected to the home page after successful sign up
+-
++// src/pages/Signup.js
+ import React, { useState } from 'react';
+-import { Container, TextField, Button, Typography, Box } from '@mui/material';
++import {
++  Container, TextField, Button, Typography, Box,
++  FormControl, InputLabel, Select, MenuItem, Alert
++} from '@mui/material';
+ import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+-import { getDatabase, ref, set } from 'firebase/database';
++import { ref, set } from 'firebase/database';
++import { db } from '../firebaseConfig';
+ import { useNavigate } from 'react-router-dom';
++import { ROLES, DB_PATHS } from '../shared/schema';
+ 
+ export default function Signup() {
+   const [name, setName] = useState('');
+   const [email, setEmail] = useState('');
+   const [password, setPassword] = useState('');
++  const [role, setRole] = useState(ROLES.CAREGIVER);
++  const [error, setError] = useState('');
+   const navigate = useNavigate();
+   const auth = getAuth();
+-  const db = getDatabase();
+ 
+   const handleSignUp = async () => {
++    setError('');
++    if (!name.trim() || !email.trim() || !password.trim()) {
++      setError('Please fill in all fields.');
++      return;
++    }
+     try {
+       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+       const user = userCredential.user;
+-      await set(ref(db, `users/${user.uid}`), {
++      // Write to users/{uid} with correct schema matching the app
++      await set(ref(db, `${DB_PATHS.USERS}/${user.uid}`), {
+         name: name || 'Unnamed User',
+         email: email,
++        role: role,
+         createdAt: Date.now()
+       });
+       navigate('/home');
+-    } catch (error) {
+-      alert('Sign up error: ' + error.message);
++    } catch (err) {
++      setError(err.message || 'Sign up failed');
+     }
+   };
+ 
+@@ -36,6 +46,12 @@ export default function Signup() {
+       <Typography variant="h4" align="center" gutterBottom>
+         Sign Up
+       </Typography>
++      <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
++        Create a caregiver or admin account for the CommAI dashboard
++      </Typography>
++
++      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
++
+       <Box component="form" noValidate sx={{ mt: 1 }}>
+         <TextField
+           label="Name"
+@@ -43,6 +59,7 @@ export default function Signup() {
+           margin="normal"
+           value={name}
+           onChange={(e) => setName(e.target.value)}
++          required
+         />
+         <TextField
+           label="Email"
+@@ -51,6 +68,7 @@ export default function Signup() {
+           value={email}
+           onChange={(e) => setEmail(e.target.value)}
+           type="email"
++          required
+         />
+         <TextField
+           label="Password"
+@@ -59,10 +77,21 @@ export default function Signup() {
+           value={password}
+           onChange={(e) => setPassword(e.target.value)}
+           type="password"
++          required
+         />
++        <FormControl fullWidth margin="normal">
++          <InputLabel>Role</InputLabel>
++          <Select value={role} label="Role" onChange={(e) => setRole(e.target.value)}>
++            <MenuItem value={ROLES.CAREGIVER}>Caregiver</MenuItem>
++            <MenuItem value={ROLES.ADMIN}>Admin</MenuItem>
++          </Select>
++        </FormControl>
+         <Button variant="contained" fullWidth onClick={handleSignUp} sx={{ mt: 2 }}>
+           Sign Up
+         </Button>
++        <Button fullWidth sx={{ mt: 1 }} onClick={() => navigate('/login')}>
++          Already have an account? Log In
++        </Button>
+       </Box>
+     </Container>
+   );
+diff --git a/src/pages/UserActions.js b/src/pages/UserActions.js
+index b2541d1..91f08e8 100644
+--- a/src/pages/UserActions.js
++++ b/src/pages/UserActions.js
+@@ -1,68 +1,159 @@
+ // src/pages/UserActions.js
+-import React, { useEffect, useState } from 'react';
+-import { useParams } from 'react-router-dom';
+-import { ref, onValue } from 'firebase/database';
++import React, { useEffect, useState, useMemo } from 'react';
++import { useParams, Link } from 'react-router-dom';
++import { ref, onValue, get } from 'firebase/database';
+ import { db } from '../firebaseConfig';
+-import { Container, Typography, Table, TableHead, TableRow, TableCell, TableBody, Paper } from '@mui/material';
++import {
++  Container, Typography, Table, TableHead, TableRow, TableCell,
++  TableBody, Paper, TableContainer, Button, Box, Chip, Card, CardContent, Grid
++} from '@mui/material';
++import { DB_PATHS, getUserDisplayName, getLogUserId, getLogCarerId } from '../shared/schema';
+ 
+ export default function UserActions() {
+   const { userId } = useParams();
+   const [logs, setLogs] = useState([]);
++  const [userData, setUserData] = useState(null);
++  const [allUsers, setAllUsers] = useState({});
+ 
++  // Fetch user profile
+   useEffect(() => {
+-    const logsRef = ref(db, 'userLogs');
++    get(ref(db, `${DB_PATHS.USERS}/${userId}`)).then(snap => {
++      setUserData(snap.val());
++    }).catch(() => {});
++  }, [userId]);
++
++  // Fetch all users for name resolution
++  useEffect(() => {
++    get(ref(db, DB_PATHS.USERS)).then(snap => {
++      const data = snap.val() || {};
++      const map = {};
++      Object.entries(data).forEach(([id, u]) => { map[id] = getUserDisplayName(u); });
++      setAllUsers(map);
++    }).catch(() => {});
++  }, []);
++
++  // Listen to logs for this user
++  useEffect(() => {
++    const logsRef = ref(db, DB_PATHS.USER_LOGS);
+     const unsubscribe = onValue(logsRef, (snapshot) => {
+       const data = snapshot.val() || {};
+-      const logsArray = Object.entries(data).map(([id, log]) => ({ id, ...log }));
+-      // Filter logs where:
+-      // - If the log has a targetUserId, then it must equal the userId from the URL.
+-      // - Otherwise, if it doesn't have targetUserId, fall back to comparing log.userId.
+-      const filteredLogs = logsArray.filter((log) => {
+-        if (log.targetUserId !== undefined) {
+-          return log.targetUserId === userId;
+-        }
+-        return log.userId === userId;
+-      });
+-      setLogs(filteredLogs);
++      const logsArray = Object.entries(data)
++        .map(([id, log]) => ({ id, ...log }))
++        .filter(log => {
++          const uid = getLogUserId(log);
++          return uid === userId;
++        })
++        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
++      setLogs(logsArray);
+     });
+     return () => unsubscribe();
+   }, [userId]);
+ 
++  // Compute activity summary
++  const summary = useMemo(() => {
++    const actionCounts = {};
++    logs.forEach(l => {
++      const action = l.action || 'Unknown';
++      actionCounts[action] = (actionCounts[action] || 0) + 1;
++    });
++    const today = new Date().toDateString();
++    const todayCount = logs.filter(l => new Date(l.timestamp).toDateString() === today).length;
++    return { actionCounts, todayCount, totalCount: logs.length };
++  }, [logs]);
++
+   return (
+-    <Container sx={{ py: 4 }}>
+-      <Typography variant="h4" gutterBottom>
+-        Actions for User: {userId}
+-      </Typography>
+-      <Paper>
+-        <Table>
++    <Container maxWidth="lg" sx={{ py: 4 }}>
++      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
++        <Box>
++          <Typography variant="h4">
++            Activity: {userData ? getUserDisplayName(userData) : userId.slice(0, 8)}
++          </Typography>
++          {userData?.email && (
++            <Typography variant="body2" color="text.secondary">{userData.email}</Typography>
++          )}
++        </Box>
++        <Button component={Link} to="/user-management" variant="outlined">
++          Back to Users
++        </Button>
++      </Box>
++
++      {/* Summary cards */}
++      <Grid container spacing={3} sx={{ mb: 4 }}>
++        <Grid item md={3} xs={6}>
++          <Card>
++            <CardContent>
++              <Typography color="text.secondary">Total Actions</Typography>
++              <Typography variant="h4">{summary.totalCount}</Typography>
++            </CardContent>
++          </Card>
++        </Grid>
++        <Grid item md={3} xs={6}>
++          <Card>
++            <CardContent>
++              <Typography color="text.secondary">Today</Typography>
++              <Typography variant="h4">{summary.todayCount}</Typography>
++            </CardContent>
++          </Card>
++        </Grid>
++        <Grid item md={6} xs={12}>
++          <Card>
++            <CardContent>
++              <Typography color="text.secondary" gutterBottom>Action Breakdown</Typography>
++              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
++                {Object.entries(summary.actionCounts).map(([action, count]) => (
++                  <Chip key={action} label={`${action}: ${count}`} size="small" />
++                ))}
++              </Box>
++            </CardContent>
++          </Card>
++        </Grid>
++      </Grid>
++
++      {/* Logs table */}
++      <TableContainer component={Paper}>
++        <Table size="small">
+           <TableHead>
+-            <TableRow>
+-              <TableCell><strong>{'Target User ID / User ID'}</strong></TableCell>
+-              <TableCell><strong>Carer ID</strong></TableCell>
+-              <TableCell><strong>Log ID</strong></TableCell>
++            <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+               <TableCell><strong>Action</strong></TableCell>
++              <TableCell><strong>Caregiver</strong></TableCell>
++              <TableCell><strong>Level</strong></TableCell>
++              <TableCell><strong>Session</strong></TableCell>
+               <TableCell><strong>Timestamp</strong></TableCell>
+             </TableRow>
+           </TableHead>
+           <TableBody>
+             {logs.length > 0 ? (
+-              logs.map((log) => (
+-                <TableRow key={log.id}>
+-                  <TableCell>{log.targetUserId || log.userId}</TableCell>
+-                  <TableCell>{log.carerId || 'N/A'}</TableCell>
+-                  <TableCell>{log.id}</TableCell>
+-                  <TableCell>{log.action}</TableCell>
+-                  <TableCell>{new Date(log.timestamp).toLocaleString()}</TableCell>
+-                </TableRow>
+-              ))
++              logs.map((log) => {
++                const cid = getLogCarerId(log);
++                return (
++                  <TableRow key={log.id}>
++                    <TableCell><Chip label={log.action} size="small" /></TableCell>
++                    <TableCell>{cid ? (allUsers[cid] || cid.slice(0, 8)) : '-'}</TableCell>
++                    <TableCell>
++                      <Chip
++                        label={log.level || 'INFO'}
++                        size="small"
++                        color={
++                          log.level === 'ERROR' ? 'error' :
++                          log.level === 'WARN' ? 'warning' : 'default'
++                        }
++                      />
++                    </TableCell>
++                    <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>
++                      {log.sessionId ? log.sessionId.slice(0, 12) : '-'}
++                    </TableCell>
++                    <TableCell>{new Date(log.timestamp).toLocaleString()}</TableCell>
++                  </TableRow>
++                );
++              })
+             ) : (
+               <TableRow>
+-                <TableCell colSpan={5}>No actions found for this user.</TableCell>
++                <TableCell colSpan={5} align="center">No actions found for this user.</TableCell>
+               </TableRow>
+             )}
+           </TableBody>
+         </Table>
+-      </Paper>
++      </TableContainer>
+     </Container>
+   );
+ }
+diff --git a/src/pages/UserManagement.js b/src/pages/UserManagement.js
+index 7bf5d65..4ba23f7 100644
+--- a/src/pages/UserManagement.js
++++ b/src/pages/UserManagement.js
+@@ -1,59 +1,32 @@
+ // src/pages/UserManagement.js
+-import React, { useState, useEffect } from 'react';
++import React, { useState, useEffect, useMemo } from 'react';
+ import {
+-  Container,
+-  Typography,
+-  Box,
+-  Button,
+-  TextField,
+-  Paper,
+-  Table,
+-  TableHead,
+-  TableBody,
+-  TableRow,
+-  TableCell,
+-  Select,
+-  MenuItem,
+-  Dialog,
+-  DialogTitle,
+-  DialogContent,
+-  DialogActions
++  Container, Typography, Box, Button, TextField, Paper, Table,
++  TableHead, TableBody, TableRow, TableCell, Select, MenuItem,
++  Dialog, DialogTitle, DialogContent, DialogActions, Chip,
++  FormControl, InputLabel, TableContainer
+ } from '@mui/material';
+-import { ref, onValue, push, update } from 'firebase/database';
++import { ref, onValue, update } from 'firebase/database';
+ import { db } from '../firebaseConfig';
+-import Papa from 'papaparse';
+ import { toast } from 'react-hot-toast';
+ import SetPasswordForm from './SetPasswordForm';
+-import { useNavigate } from 'react-router-dom';
++import { useNavigate, Link } from 'react-router-dom';
++import { ROLES, DB_PATHS, getUserDisplayName } from '../shared/schema';
+ 
+ export default function UserManagement() {
+-  // State for users and caregivers
+-  const [users, setUsers] = useState([]);
+-  const [caregivers, setCaregivers] = useState([]);
+-  
+-  // For caregiver assignment dropdown per user
+-  const [selectedCaregiverForUser, setSelectedCaregiverForUser] = useState({});
+-  
+-  // States for manually adding a new user
+-  const [newUserName, setNewUserName] = useState('');
+-  const [newUserEmail, setNewUserEmail] = useState('');
+-  const [newUserCaregiverId, setNewUserCaregiverId] = useState('');
+-  
+-  // CSV upload state
+-  const [csvFile, setCsvFile] = useState(null);
+-  
+-  // Search field state
++  const [allUsers, setAllUsers] = useState([]);
+   const [searchTerm, setSearchTerm] = useState('');
++  const [roleFilter, setRoleFilter] = useState('all');
+ 
+-  // State for password modal
++  // Password modal
+   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+   const [selectedUserForPassword, setSelectedUserForPassword] = useState(null);
+ 
+   const navigate = useNavigate();
+ 
+-  // Fetch users from the "users" node
++  // Fetch all users from unified users collection
+   useEffect(() => {
+-    const usersRef = ref(db, 'users/');
++    const usersRef = ref(db, DB_PATHS.USERS);
+     const unsubscribe = onValue(usersRef, (snapshot) => {
+       const data = snapshot.val() || {};
+       const list = Object.entries(data).map(([id, val]) => ({ id, ...val }));
+@@ -62,268 +35,180 @@ export default function UserManagement() {
+     return () => unsubscribe();
+   }, []);
+ 
+-  // Fetch caregivers from the "caregivers" node
+-  useEffect(() => {
+-    const caregiversRef = ref(db, 'caregivers/');
+-    const unsubscribe = onValue(caregiversRef, (snapshot) => {
+-      const data = snapshot.val() || {};
+-      const list = Object.entries(data).map(([id, val]) => ({ id, ...val }));
+-      setCaregivers(list);
+-    });
+-    return () => unsubscribe();
+-  }, []);
++  function setUsers(list) {
++    setAllUsers(list);
++  }
+ 
+-  // Handler to manually add a new user (caregiverId is optional)
+-  const handleAddUser = async () => {
+-    if (!newUserName.trim() || !newUserEmail.trim()) {
+-      toast.error('Please provide a name and an email.');
+-      return;
+-    }
+-    if (!/^\S+@\S+\.\S+$/.test(newUserEmail)) {
+-      toast.error('Invalid email format.');
+-      return;
+-    }
+-    try {
+-      await push(ref(db, 'users/'), {
+-        name: newUserName,
+-        email: newUserEmail,
+-        caregiverId: newUserCaregiverId ? newUserCaregiverId : null
+-      });
+-      toast.success('User added successfully!');
+-      setNewUserName('');
+-      setNewUserEmail('');
+-      setNewUserCaregiverId('');
+-    } catch (error) {
+-      console.error('Error adding user:', error);
+-      toast.error('Error adding user.');
+-    }
+-  };
++  // Derive caregivers from users collection (no separate caregivers node)
++  const caregivers = useMemo(
++    () => allUsers.filter(u => u.role === ROLES.CAREGIVER || u.role === ROLES.ADMIN),
++    [allUsers]
++  );
+ 
+-  // CSV upload handler: expects CSV with headers: name, email, and optionally caregiverId
+-  const handleCSVUpload = () => {
+-    if (!csvFile) {
+-      toast.error('Please select a CSV file.');
+-      return;
+-    }
+-    Papa.parse(csvFile, {
+-      header: true,
+-      skipEmptyLines: true,
+-      complete: async (results) => {
+-        const data = results.data;
+-        for (const [index, row] of data.entries()) {
+-          if (row.name && row.email) {
+-            try {
+-              await push(ref(db, 'users/'), {
+-                name: row.name,
+-                email: row.email,
+-                caregiverId: row.caregiverId ? row.caregiverId : null
+-              });
+-            } catch (error) {
+-              console.error(`Error adding user from CSV at row ${index + 1}:`, error);
+-              toast.error(`Error adding CSV row ${index + 1}.`);
+-            }
+-          } else {
+-            toast.error(`Invalid row data at row ${index + 1}: ${JSON.stringify(row)}`);
+-          }
+-        }
+-        toast.success('CSV upload complete.');
+-        setCsvFile(null);
+-      },
+-      error: (error) => {
+-        console.error('CSV parse error:', error);
+-        toast.error('Error parsing CSV.');
+-      }
++  // Filter users
++  const filteredUsers = useMemo(() => {
++    return allUsers.filter(user => {
++      const name = (user.name || '').toLowerCase();
++      const email = (user.email || '').toLowerCase();
++      const search = searchTerm.toLowerCase();
++      const matchesSearch = name.includes(search) || email.includes(search);
++      const matchesRole = roleFilter === 'all' || (user.role || 'user') === roleFilter;
++      return matchesSearch && matchesRole;
+     });
+-  };
++  }, [allUsers, searchTerm, roleFilter]);
+ 
+-  // Dummy users for testing
+-  const addDummyUsers = async () => {
+-    const dummyUsers = [
+-      { name: 'Alice', email: 'alice@example.com', caregiverId: 'carer123' },
+-      { name: 'Bob', email: 'bob@example.com', caregiverId: 'carer123' },
+-      { name: 'Charlie', email: 'charlie@example.com', caregiverId: 'carer456' }
+-    ];
++  // Assign caregiver to user
++  const handleAssignCaregiver = async (userId, caregiverId) => {
+     try {
+-      for (const user of dummyUsers) {
+-        await push(ref(db, 'users/'), user);
+-      }
+-      toast.success('Dummy users added.');
++      await update(ref(db, `${DB_PATHS.USERS}/${userId}`), {
++        caregiverId: caregiverId || null
++      });
++      toast.success('Caregiver assigned successfully!');
+     } catch (error) {
+-      console.error('Error adding dummy users:', error);
+-      toast.error('Error adding dummy users.');
++      console.error('Error assigning caregiver:', error);
++      toast.error('Error assigning caregiver.');
+     }
+   };
+ 
+-  // Assign caregiver from the dropdown for a user
+-  const handleAssignCaregiverToUser = async (userId, caregiverId) => {
++  // Update user role
++  const handleRoleChange = async (userId, newRole) => {
+     try {
+-      await update(ref(db, `users/${userId}`), { caregiverId });
+-      toast.success('Caregiver assigned successfully!');
+-      setSelectedCaregiverForUser(prev => ({ ...prev, [userId]: '' }));
++      await update(ref(db, `${DB_PATHS.USERS}/${userId}`), { role: newRole });
++      toast.success(`Role updated to ${newRole}`);
+     } catch (error) {
+-      console.error('Error assigning caregiver:', error);
+-      toast.error('Error assigning caregiver.');
++      console.error('Error updating role:', error);
++      toast.error('Error updating role.');
+     }
+   };
+ 
+-  // Filter users based on search term, defaulting missing values to empty strings
+-  const filteredUsers = users.filter((user) => {
+-    const userName = user.name || "";
+-    const userEmail = user.email || "";
+-    const search = searchTerm.toLowerCase();
+-    return userName.toLowerCase().includes(search) || userEmail.toLowerCase().includes(search);
+-  });
+-
+   return (
+-    <Container sx={{ py: 4 }}>
+-      <Typography variant="h4" gutterBottom>
+-        User Management
+-      </Typography>
+-
+-      {/* Manual Add New User Section */}
+-      <Box component={Paper} sx={{ p: 2, mb: 4 }}>
+-        <Typography variant="h6">Add New User</Typography>
+-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 2 }}>
+-          <TextField
+-            label="Name"
+-            variant="outlined"
+-            size="small"
+-            value={newUserName}
+-            onChange={(e) => setNewUserName(e.target.value)}
+-          />
+-          <TextField
+-            label="Email"
+-            variant="outlined"
+-            size="small"
+-            value={newUserEmail}
+-            onChange={(e) => setNewUserEmail(e.target.value)}
+-          />
+-          <TextField
+-            label="Caregiver ID (optional)"
+-            variant="outlined"
+-            size="small"
+-            value={newUserCaregiverId}
+-            onChange={(e) => setNewUserCaregiverId(e.target.value)}
+-          />
+-          <Button variant="contained" size="small" onClick={handleAddUser}>
+-            Add User
+-          </Button>
+-        </Box>
+-      </Box>
+-
+-      {/* CSV Upload Section */}
+-      <Box component={Paper} sx={{ p: 2, mb: 4 }}>
+-        <Typography variant="h6">CSV Upload</Typography>
+-        <Box sx={{ mt: 2 }}>
+-          <input
+-            type="file"
+-            accept=".csv"
+-            onChange={(e) => setCsvFile(e.target.files[0])}
+-            style={{ marginBottom: 16 }}
+-          />
+-          <Button variant="outlined" onClick={handleCSVUpload}>
+-            Upload CSV
+-          </Button>
+-        </Box>
+-      </Box>
+-
+-      {/* Dummy Users Button */}
+-      <Box sx={{ mb: 4 }}>
+-        <Button variant="outlined" onClick={addDummyUsers}>
+-          Add Dummy Users
++    <Container maxWidth="xl" sx={{ py: 4 }}>
++      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
++        <Typography variant="h4">User Management</Typography>
++        <Button component={Link} to="/admin" variant="outlined">
++          Back to Dashboard
+         </Button>
+       </Box>
+ 
+-      {/* Search Field */}
+-      <Box sx={{ mb: 2 }}>
++      {/* Search and filter */}
++      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+         <TextField
+           label="Search by name or email"
+           variant="outlined"
+           size="small"
+           value={searchTerm}
+           onChange={(e) => setSearchTerm(e.target.value)}
+-          fullWidth
++          sx={{ flex: 1 }}
+         />
++        <FormControl sx={{ minWidth: 150 }}>
++          <InputLabel>Role</InputLabel>
++          <Select
++            value={roleFilter}
++            label="Role"
++            onChange={(e) => setRoleFilter(e.target.value)}
++            size="small"
++          >
++            <MenuItem value="all">All Roles</MenuItem>
++            <MenuItem value={ROLES.USER}>Users</MenuItem>
++            <MenuItem value={ROLES.CAREGIVER}>Caregivers</MenuItem>
++            <MenuItem value={ROLES.ADMIN}>Admins</MenuItem>
++          </Select>
++        </FormControl>
+       </Box>
+ 
+-      {/* Users Table with Caregiver Assignment Dropdown, Set Password Button, and View Actions */}
+-      <Paper sx={{ p: 2 }}>
+-        <Typography variant="h6" gutterBottom>
+-          User List
+-        </Typography>
+-        <Table>
++      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
++        Showing {filteredUsers.length} of {allUsers.length} users
++      </Typography>
++
++      {/* Users Table */}
++      <TableContainer component={Paper}>
++        <Table size="small">
+           <TableHead>
+-            <TableRow>
+-              <TableCell>ID</TableCell>
+-              <TableCell>Name</TableCell>
+-              <TableCell>Email</TableCell>
+-              <TableCell>Assigned Caregiver</TableCell>
+-              <TableCell>Assign Caregiver</TableCell>
+-              <TableCell>Set Password</TableCell>
+-              <TableCell>View Actions</TableCell>
++            <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
++              <TableCell><strong>Name</strong></TableCell>
++              <TableCell><strong>Email</strong></TableCell>
++              <TableCell><strong>Role</strong></TableCell>
++              <TableCell><strong>Assigned Caregiver</strong></TableCell>
++              <TableCell><strong>Created</strong></TableCell>
++              <TableCell><strong>Actions</strong></TableCell>
+             </TableRow>
+           </TableHead>
+           <TableBody>
+             {filteredUsers.map((user) => (
+               <TableRow key={user.id}>
+-                <TableCell>{user.id}</TableCell>
+-                <TableCell>{user.name}</TableCell>
++                <TableCell>{getUserDisplayName(user)}</TableCell>
+                 <TableCell>{user.email}</TableCell>
+-                <TableCell>{user.caregiverId || 'None'}</TableCell>
+                 <TableCell>
+                   <Select
+-                    value={selectedCaregiverForUser[user.id] || ''}
+-                    onChange={(e) => {
+-                      const selected = e.target.value;
+-                      setSelectedCaregiverForUser(prev => ({ ...prev, [user.id]: selected }));
+-                      handleAssignCaregiverToUser(user.id, selected);
+-                    }}
+-                    displayEmpty
++                    value={user.role || ROLES.USER}
++                    onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                     size="small"
++                    sx={{ minWidth: 120 }}
+                   >
+-                    <MenuItem value="">-- Select Caregiver --</MenuItem>
+-                    {caregivers.map((cg) => (
+-                      <MenuItem key={cg.id} value={cg.id}>
+-                        {cg.name} ({cg.email})
+-                      </MenuItem>
+-                    ))}
++                    <MenuItem value={ROLES.USER}>User</MenuItem>
++                    <MenuItem value={ROLES.CAREGIVER}>Caregiver</MenuItem>
++                    <MenuItem value={ROLES.ADMIN}>Admin</MenuItem>
+                   </Select>
+                 </TableCell>
+                 <TableCell>
+-                  <Button
+-                    variant="contained"
++                  <Select
++                    value={user.caregiverId || ''}
++                    onChange={(e) => handleAssignCaregiver(user.id, e.target.value)}
++                    displayEmpty
+                     size="small"
+-                    onClick={() => {
+-                      setSelectedUserForPassword(user.id);
+-                      setPasswordModalOpen(true);
+-                    }}
++                    sx={{ minWidth: 150 }}
+                   >
+-                    Set Password
+-                  </Button>
++                    <MenuItem value="">Unassigned</MenuItem>
++                    {caregivers
++                      .filter(cg => cg.id !== user.id) // don't assign to self
++                      .map((cg) => (
++                        <MenuItem key={cg.id} value={cg.id}>
++                          {getUserDisplayName(cg)}
++                        </MenuItem>
++                      ))
++                    }
++                  </Select>
+                 </TableCell>
+                 <TableCell>
+-                  <Button
+-                    variant="outlined"
+-                    size="small"
+-                    onClick={() => navigate(`/user-actions/${user.id}`)}
+-                  >
+-                    View Actions
+-                  </Button>
++                  {user.createdAt
++                    ? new Date(user.createdAt).toLocaleDateString()
++                    : '-'}
++                </TableCell>
++                <TableCell>
++                  <Box sx={{ display: 'flex', gap: 1 }}>
++                    <Button
++                      variant="outlined"
++                      size="small"
++                      onClick={() => {
++                        setSelectedUserForPassword(user.id);
++                        setPasswordModalOpen(true);
++                      }}
++                    >
++                      Password
++                    </Button>
++                    <Button
++                      variant="outlined"
++                      size="small"
++                      onClick={() => navigate(`/user-actions/${user.id}`)}
++                    >
++                      Activity
++                    </Button>
++                  </Box>
+                 </TableCell>
+               </TableRow>
+             ))}
+             {filteredUsers.length === 0 && (
+               <TableRow>
+-                <TableCell colSpan={7}>No users found.</TableCell>
++                <TableCell colSpan={6} align="center">No users found.</TableCell>
+               </TableRow>
+             )}
+           </TableBody>
+         </Table>
+-      </Paper>
++      </TableContainer>
+ 
+-      {/* Set Password Modal */}
+-      <Dialog open={passwordModalOpen} onClose={() => setPasswordModalOpen(false)}>
+-        <DialogTitle>Set Password for User {selectedUserForPassword}</DialogTitle>
++      {/* Password Modal */}
++      <Dialog open={passwordModalOpen} onClose={() => setPasswordModalOpen(false)} maxWidth="sm" fullWidth>
++        <DialogTitle>Set Password</DialogTitle>
+         <DialogContent>
+           <SetPasswordForm
+             prefilledUid={selectedUserForPassword}
+diff --git a/src/pages/UserSettings.js b/src/pages/UserSettings.js
+new file mode 100644
+index 0000000..3b5df37
+--- /dev/null
++++ b/src/pages/UserSettings.js
+@@ -0,0 +1,85 @@
++// src/pages/UserSettings.js
++import React, { useEffect, useState } from 'react';
++import { useParams, Link } from 'react-router-dom';
++import { ref, onValue, get } from 'firebase/database';
++import { db } from '../firebaseConfig';
++import {
++  Container, Typography, Paper, Box, Button,
++  Table, TableBody, TableRow, TableCell, CircularProgress
++} from '@mui/material';
++import { DB_PATHS, SETTINGS_DEFAULTS, getUserDisplayName } from '../shared/schema';
++
++export default function UserSettings() {
++  const { userId } = useParams();
++  const [settings, setSettings] = useState(null);
++  const [userData, setUserData] = useState(null);
++  const [loading, setLoading] = useState(true);
++
++  useEffect(() => {
++    get(ref(db, `${DB_PATHS.USERS}/${userId}`)).then(snap => {
++      setUserData(snap.val());
++    }).catch(() => {});
++  }, [userId]);
++
++  useEffect(() => {
++    const settingsRef = ref(db, `${DB_PATHS.USER_SETTINGS}/${userId}`);
++    const unsubscribe = onValue(settingsRef, (snap) => {
++      setSettings(snap.val() || {});
++      setLoading(false);
++    });
++    return () => unsubscribe();
++  }, [userId]);
++
++  if (loading) {
++    return (
++      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
++        <CircularProgress />
++      </Box>
++    );
++  }
++
++  const merged = { ...SETTINGS_DEFAULTS, ...settings };
++
++  const settingsRows = [
++    { label: 'Theme', value: merged.theme },
++    { label: 'Grid Size', value: `${merged.gridSize} columns` },
++    { label: 'High Contrast', value: merged.contrast ? 'Enabled' : 'Disabled' },
++    { label: 'Speech Rate', value: merged.speechRate },
++    { label: 'Speech Pitch', value: merged.speechPitch },
++    { label: 'Speech Voice', value: merged.speechVoice || 'System Default' },
++  ];
++
++  return (
++    <Container maxWidth="md" sx={{ py: 4 }}>
++      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
++        <Box>
++          <Typography variant="h4">User Settings</Typography>
++          <Typography variant="body2" color="text.secondary">
++            {userData ? getUserDisplayName(userData) : userId.slice(0, 8)}
++            {userData?.email ? ` (${userData.email})` : ''}
++          </Typography>
++        </Box>
++        <Button component={Link} to="/user-management" variant="outlined">
++          Back to Users
++        </Button>
++      </Box>
++
++      <Paper sx={{ p: 3 }}>
++        <Typography variant="h6" gutterBottom>Current Preferences</Typography>
++        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
++          These settings are configured by the user in the AAC app.
++        </Typography>
++        <Table>
++          <TableBody>
++            {settingsRows.map(row => (
++              <TableRow key={row.label}>
++                <TableCell sx={{ fontWeight: 'bold', width: 200 }}>{row.label}</TableCell>
++                <TableCell>{String(row.value)}</TableCell>
++              </TableRow>
++            ))}
++          </TableBody>
++        </Table>
++      </Paper>
++    </Container>
++  );
++}
+diff --git a/src/shared/schema.js b/src/shared/schema.js
+new file mode 100644
+index 0000000..72f320b
+--- /dev/null
++++ b/src/shared/schema.js
+@@ -0,0 +1,160 @@
++/**
++ * Shared schema constants for the CommAI AAC platform.
++ *
++ * These constants define the Firebase data contract between
++ * the AAC app (React Native) and the dashboard (React web).
++ *
++ * IMPORTANT: Any changes here must be reflected in both codebases.
++ */
++
++// ── Firebase Realtime Database Paths ──
++
++export const DB_PATHS = {
++  USERS: 'users',                    // users/{uid}
++  USER_SETTINGS: 'userSettings',     // userSettings/{uid}
++  USER_LOGS: 'userLogs',            // userLogs/{pushId}
++  USER_SYNC: 'userSync',            // userSync/{uid}
++  FEEDBACK: 'feedback',             // feedback/{uid}/{pushId}
++  FINE_TUNE_METRICS: 'fineTuneMetrics', // fineTuneMetrics/{pushId}
++};
++
++// ── User Roles ──
++// Roles are stored in users/{uid}/role
++// Admin role is set via Firebase custom claims AND in the DB
++
++export const ROLES = {
++  USER: 'user',
++  CAREGIVER: 'caregiver',
++  ADMIN: 'admin',
++};
++
++// ── User Profile Schema ──
++// Path: users/{uid}
++// Key: Firebase Auth UID (NOT a push ID)
++
++export const USER_FIELDS = {
++  EMAIL: 'email',           // string - from Firebase Auth
++  NAME: 'name',             // string - display name (optional from app, required from dashboard)
++  ROLE: 'role',             // 'user' | 'caregiver' | 'admin'
++  CAREGIVER_ID: 'caregiverId', // string | null - UID of assigned caregiver (from users collection)
++  CREATED_AT: 'createdAt',  // number - Date.now() at creation
++};
++
++// ── User Settings Schema ──
++// Path: userSettings/{uid}
++
++export const SETTINGS_DEFAULTS = {
++  theme: 'light',           // 'light' | 'dark' | 'highContrast'
++  gridSize: 3,              // 2 | 3 | 4
++  contrast: false,          // boolean
++  speechRate: 1.0,          // 0.5 - 1.5
++  speechPitch: 1.0,         // 0.5 - 1.5
++  speechVoice: null,        // string | null
++};
++
++// ── Log Entry Schema ──
++// Path: userLogs/{pushId}
++// The app writes logs with these fields:
++
++export const LOG_FIELDS = {
++  TARGET_USER_ID: 'targetUserId',  // string - the AAC user this log is about
++  CARER_ID: 'carerId',            // string | null - the caregiver performing the action
++  ACTION: 'action',                // string - action type
++  TIMESTAMP: 'timestamp',         // number - Date.now()
++  LEVEL: 'level',                 // 'DEBUG' | 'INFO' | 'WARN' | 'ERROR'
++  SESSION_ID: 'sessionId',        // string - session identifier
++  DEVICE_INFO: 'deviceInfo',      // { platform, appVersion }
++};
++
++// ── Log Action Types ──
++// These are the action strings the app writes
++
++export const LOG_ACTIONS = {
++  EMOTION_SELECTED: 'Emotion selected',
++  EMOTION_SPOKEN: 'Emotion spoken',
++  EMOTION_SAVED: 'Emotion saved',
++  USER_LOGGED_IN: 'User logged in',
++  LOGIN_ERROR: 'Login error',
++  PREDICTION_REQUEST: 'prediction_request',
++  PREDICTION_LEARNING: 'prediction_learning',
++  MODEL_FINE_TUNING: 'model_fine_tuning',
++  LOGS_SYNCED: 'logs_synced',
++  ADD_WORD: 'addWord',
++  WORD_SPOKEN: 'word_spoken',
++  SENTENCE_SPOKEN: 'sentence_spoken',
++  BOARD_TAP: 'board_tap',
++};
++
++// ── Log Levels ──
++
++export const LOG_LEVELS = {
++  DEBUG: 0,
++  INFO: 1,
++  WARN: 2,
++  ERROR: 3,
++};
++
++// ── Feedback Schema ──
++// Path: feedback/{uid}/{pushId}
++
++export const FEEDBACK_FIELDS = {
++  NAME: 'name',
++  EMAIL: 'email',
++  ROLE: 'role',
++  FEEDBACK: 'feedback',
++  TIMESTAMP: 'timestamp',
++};
++
++// ── Fine-Tune Metrics Schema ──
++// Path: fineTuneMetrics/{pushId}
++
++export const FINE_TUNE_FIELDS = {
++  EPOCH: 'epoch',
++  LOSS: 'loss',
++  ACCURACY: 'accuracy',
++  TIMESTAMP: 'timestamp',
++};
++
++// ── Theme Values ──
++
++export const THEMES = {
++  LIGHT: 'light',
++  DARK: 'dark',
++  HIGH_CONTRAST: 'highContrast',
++};
++
++// ── Emotions (from app) ──
++
++export const EMOTIONS = [
++  'Happy', 'Sad', 'Angry', 'Excited',
++  'Scared', 'Calm', 'Tired', 'Surprised',
++];
++
++/**
++ * Helper: get user display name with fallback
++ */
++export function getUserDisplayName(user) {
++  return user?.name || user?.email || 'Unknown User';
++}
++
++/**
++ * Helper: check if a user record is a caregiver
++ */
++export function isCaregiver(user) {
++  return user?.role === ROLES.CAREGIVER || user?.role === ROLES.ADMIN;
++}
++
++/**
++ * Helper: get the correct user ID field from a log entry.
++ * The app writes targetUserId; legacy/test writes userId.
++ */
++export function getLogUserId(log) {
++  return log?.targetUserId || log?.userId || null;
++}
++
++/**
++ * Helper: get the caregiver ID from a log entry.
++ */
++export function getLogCarerId(log) {
++  return log?.carerId || null;
++}
+diff --git a/src/utils/logger.js b/src/utils/logger.js
+index 06102b8..a7f329c 100644
+--- a/src/utils/logger.js
++++ b/src/utils/logger.js
+@@ -1,42 +1,36 @@
+ // src/utils/logger.js
+-import AsyncStorage from '@react-native-async-storage/async-storage';
++// Dashboard-side logger - uses Firebase directly (not AsyncStorage)
++import { ref, push } from 'firebase/database';
++import { db } from '../firebaseConfig';
+ import { getAuth } from 'firebase/auth';
++import { DB_PATHS } from '../shared/schema';
+ 
+ /**
+- * Logs an event by saving it locally to AsyncStorage.
+- * Later, these logs can be pushed manually to Firebase.
++ * Logs a dashboard event to Firebase.
+  *
+- * @param {string} action - A description of the event.
+- * @param {Object} [metadata={}] - Additional data about the event.
+- *   Optional property: targetUserId (the user for whom the action is intended)
++ * @param {string} action - Description of the event
++ * @param {Object} [metadata={}] - Additional data
+  */
+ export async function logEvent(action, metadata = {}) {
+   const auth = getAuth();
+   const currentUser = auth.currentUser;
+-  // If a targetUserId is provided, use that; otherwise, default to the current user's UID
++
+   const targetUserId = metadata.targetUserId || (currentUser ? currentUser.uid : null);
+-  // The carerId is always the current authenticated user performing the action
+   const carerId = currentUser ? currentUser.uid : null;
+-  
+-  // Create the log entry object
++
+   const logEntry = {
+-    targetUserId, // the user the action is about
+-    carerId,      // the caregiver who performed the action
++    targetUserId,
++    carerId,
+     action,
+     timestamp: Date.now(),
++    level: metadata.level || 'INFO',
++    source: 'dashboard',
+     ...metadata
+   };
+ 
+   try {
+-    // Retrieve existing logs from AsyncStorage
+-    const storedLogs = await AsyncStorage.getItem('userInteractionLog');
+-    let logsArray = storedLogs ? JSON.parse(storedLogs) : [];
+-    // Append the new log entry
+-    logsArray.push(logEntry);
+-    // Save the updated logs back to AsyncStorage
+-    await AsyncStorage.setItem('userInteractionLog', JSON.stringify(logsArray));
+-    console.log('Log saved locally:', logEntry);
++    await push(ref(db, DB_PATHS.USER_LOGS), logEntry);
+   } catch (error) {
+-    console.error('Error saving log locally:', error);
++    console.error('Error logging event:', error);
+   }
+ }
+-- 
+2.43.0
+
