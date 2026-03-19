@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ScrollView, View, Text, TextInput, Button, Alert, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity, Image } from 'react-native';
-import * as Speech from 'expo-speech';
+import { speak } from '../services/speechService';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { searchPictograms } from '../services/arasaacService';
@@ -90,7 +90,11 @@ export default function EasySentenceBuilderScreen() {
 
   const removeWord = (i) => setSentenceWords(ws => ws.filter((_, idx) => idx !== i));
   const clearSentence = () => setSentenceWords([]);
-  const speakSentence = () => Speech.speak(sentenceWords.join(' ') || ' ');
+  const speakSentence = () => speak(sentenceWords.join(' ') || ' ', {
+    rate: settings.speechRate,
+    pitch: settings.speechPitch,
+    voice: settings.speechVoice,
+  });
 
   if (settingsLoading) {
     return <View style={[styles.center, { backgroundColor: palette.background }]}><ActivityIndicator size="large" color="#4CAF50"/></View>;
@@ -100,7 +104,7 @@ export default function EasySentenceBuilderScreen() {
     const id = item.id ?? item._id;
     const uri = `https://static.arasaac.org/pictograms/${id}/${id}_500.png`;
     const keyword = item.keywords?.[0]?.keyword || wordSearch;
-    return <TouchableOpacity style={styles.picContainer} onPress={() => addWord(keyword)}><Image source={{ uri }} style={styles.picImage}/></TouchableOpacity>;
+    return <TouchableOpacity style={styles.picContainer} onPress={() => addWord(keyword)} accessibilityRole="button" accessibilityLabel={`Add ${keyword} to sentence`}><Image source={{ uri }} style={styles.picImage} accessibilityElementsHidden/></TouchableOpacity>;
   };
 
   const renderCategory = ({ item }) => {
