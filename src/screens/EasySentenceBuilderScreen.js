@@ -8,6 +8,7 @@ import { getAISuggestions } from '../services/getAISuggestions';
 import { updateLastActivity } from '../utils/syncStatus';
 import { useSettings } from '../contexts/SettingsContext';
 import { useOnDevicePrediction } from '../hooks/useOnDevicePrediction';
+import { recordWordSelection, recordSentenceSpoken, recordSuggestionsShown, recordFailedSearch } from '../services/aiProfileStore';
 
 export default function EasySentenceBuilderScreen() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -50,6 +51,8 @@ export default function EasySentenceBuilderScreen() {
           Alert.alert('Error', 'Failed to load pictograms.');
         } else {
           wordSearch ? setSearchResults([]) : setCategoryPictures([]);
+          // AI Profile: record failed search for vocabulary gap detection
+          if (wordSearch) recordFailedSearch(wordSearch).catch(() => {});
         }
       } finally {
         setLoadingPictures(false);
@@ -69,10 +72,13 @@ export default function EasySentenceBuilderScreen() {
       } else {
         setSuggestions(local);
       }
+      // AI Profile: track that suggestions were shown
+      const shown = local.length > 0 ? local : [];
+      if (shown.length > 0) recordSuggestionsShown(shown.length).catch(() => {});
     })();
   }, [sentenceWords]);
 
-  const addWord = async (word) => {
+  const addWord = async (word, wasSuggestion = false) => {
     const next = [...sentenceWords, word];
     setSentenceWords(next);
     try {
@@ -83,6 +89,8 @@ export default function EasySentenceBuilderScreen() {
       await AsyncStorage.setItem(key, JSON.stringify(logArray));
       await updateLastActivity();
       await recordTap(sentenceWords, word);
+      // AI Profile: record word selection for personalized learning
+      await recordWordSelection(word, sentenceWords, wasSuggestion);
     } catch (e) {
       console.error('Logging or training error:', e);
     }
@@ -90,11 +98,17 @@ export default function EasySentenceBuilderScreen() {
 
   const removeWord = (i) => setSentenceWords(ws => ws.filter((_, idx) => idx !== i));
   const clearSentence = () => setSentenceWords([]);
-  const speakSentence = () => speak(sentenceWords.join(' ') || ' ', {
-    rate: settings.speechRate,
-    pitch: settings.speechPitch,
-    voice: settings.speechVoice,
-  });
+  const speakSentence = () => {
+    speak(sentenceWords.join(' ') || ' ', {
+      rate: settings.speechRate,
+      pitch: settings.speechPitch,
+      voice: settings.speechVoice,
+    });
+    // AI Profile: record the spoken sentence for phrase learning
+    if (sentenceWords.length > 0) {
+      recordSentenceSpoken(sentenceWords).catch(() => {});
+    }
+  };
 
   if (settingsLoading) {
     return <View style={[styles.center, { backgroundColor: palette.background }]}><ActivityIndicator size="large" color="#4CAF50"/></View>;
@@ -124,7 +138,7 @@ export default function EasySentenceBuilderScreen() {
       <TextInput style={[styles.input, { borderColor: '#ccc', color: palette.text }]} placeholder="Search any English word" placeholderTextColor="#888" value={wordSearch} onChangeText={setWordSearch}/>
       {loadingPictures ? <ActivityIndicator/> : <FlatList data={wordSearch ? searchResults : categoryPictures} horizontal keyExtractor={item => ((item.id ?? item._id) ?? '').toString()} showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, maxHeight: 100, marginBottom: 12 }} contentContainerStyle={{ paddingVertical: 4 }} renderItem={renderPic} ListEmptyComponent={() => <Text style={[styles.emptyText, { color: palette.text }]}>No pictograms.</Text>} />}
       <Text style={[styles.label, { color: palette.text }]}>AI Suggestions</Text>
-      <FlatList data={suggestions} horizontal keyExtractor={(_, i) => i.toString()} showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }} contentContainerStyle={{ paddingVertical: 4 }} renderItem={({ item }) => <View style={{ marginRight: 8 }}><Button title={item} onPress={() => addWord(item)} color="#4CAF50"/></View>} />
+      <FlatList data={suggestions} horizontal keyExtractor={(_, i) => i.toString()} showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }} contentContainerStyle={{ paddingVertical: 4 }} renderItem={({ item }) => <View style={{ marginRight: 8 }}><Button title={item} onPress={() => addWord(item, true)} color="#4CAF50"/></View>} />
       <StatusBar style={settings.theme === 'dark' ? 'light' : 'dark'}/>
     </ScrollView>
   );

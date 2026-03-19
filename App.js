@@ -37,6 +37,7 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 
 // Non-blocking model load
 import { loadImprovedModel } from './src/services/improvedModelLoader';
+import { loadAIProfile, recordSessionStart } from './src/services/aiProfileStore';
 
 const Tab = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -44,6 +45,11 @@ const RootStack = createNativeStackNavigator();
 
 // Start model loading in background — do not block app render
 loadImprovedModel().catch(err => console.warn('Model load failed (non-blocking):', err));
+
+// Load AI profile and record session start
+loadAIProfile()
+  .then(() => recordSessionStart())
+  .catch(err => console.warn('AI profile load failed (non-blocking):', err));
 
 function MainApp() {
   const insets = useSafeAreaInsets();

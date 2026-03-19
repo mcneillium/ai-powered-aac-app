@@ -5,6 +5,7 @@ import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getDatabase, ref, set } from 'firebase/database';
 
 export default function SignupScreen({ navigation }) {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('user');
@@ -18,6 +19,7 @@ export default function SignupScreen({ navigation }) {
       const user = userCredential.user;
       const db = getDatabase();
       await set(ref(db, `users/${user.uid}`), {
+        name: name.trim() || email.split('@')[0],
         email,
         role,
         createdAt: Date.now(),
@@ -33,6 +35,14 @@ export default function SignupScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Sign Up</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Your Name"
+        autoCapitalize="words"
+        onChangeText={setName}
+        value={name}
+        accessibilityLabel="Name input"
+      />
       <TextInput
         style={styles.input}
         placeholder="Email"
