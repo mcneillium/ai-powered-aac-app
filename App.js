@@ -21,6 +21,7 @@ import EmotionScreen                   from './src/screens/EmotionScreen';
 import LiveSceneModeScreen             from './src/screens/LiveSceneModeScreen';
 import ProfileScreen                   from './src/screens/ProfileScreen';
 import SettingsScreen                  from './src/screens/SettingsScreen';
+import FeedbackScreen                  from './src/screens/FeedbackScreen';
 import OnboardingScreen                from './src/screens/OnboardingScreen';
 import { loadImprovedModel }           from './src/services/improvedModelLoader';
 import AsyncStorage                    from '@react-native-async-storage/async-storage';
@@ -158,6 +159,11 @@ function RootNavigator() {
         name="Settings"
         component={SettingsScreen}
         options={{ title: 'Settings' }}
+      />
+      <RootStack.Screen
+        name="Feedback"
+        component={FeedbackScreen}
+        options={{ title: 'Feedback' }}
       />
     </RootStack.Navigator>
   );

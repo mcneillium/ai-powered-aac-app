@@ -47,6 +47,11 @@ export async function predictNextWordWithImprovedModel(model, tokenizer, sentenc
 
   const logitsTensor = model.predict(inputTensor);
   const logits = Array.from(logitsTensor.dataSync());
+
+  // Dispose tensors to free memory
+  inputTensor.dispose();
+  logitsTensor.dispose();
+
   const scaledLogits = logits.map(logit => logit / temperature);
   const expLogits = scaledLogits.map(Math.exp);
   const sumExp = expLogits.reduce((a, b) => a + b, 0);
@@ -88,6 +93,11 @@ export async function predictTopKWordsWithImprovedModel(
 
   const logitsTensor = model.predict(inputTensor);
   const logits = Array.from(logitsTensor.dataSync());
+
+  // Dispose tensors to free memory
+  inputTensor.dispose();
+  logitsTensor.dispose();
+
   const scaledLogits = logits.map(logit => logit / temperature);
   const expLogits = scaledLogits.map(Math.exp);
   const sumExp = expLogits.reduce((a, b) => a + b, 0);

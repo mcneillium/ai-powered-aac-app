@@ -16,22 +16,25 @@ export function useOnDevicePrediction() {
   const bufferRef = useRef({ xs: [], ys: [] });
 
   useEffect(() => {
+    let mounted = true;
     (async () => {
       await tf.ready();
-      await tf.setBackend('rn-webgl');
       try {
-        modelRef.current = await tf.loadLayersModel('localstorage://personalized-model');
-      } catch {
         modelRef.current = await tf.loadLayersModel(
           bundleResourceIO(MODEL_JSON, MODEL_WEIGHTS)
         );
+      } catch (err) {
+        console.warn('Failed to load bundled model:', err);
+        return;
       }
+      if (!mounted) return;
       modelRef.current.compile({ optimizer: 'adam', loss: 'sparseCategoricalCrossentropy' });
       bufferRef.current.xs.forEach(t => t.dispose());
       bufferRef.current.ys.forEach(t => t.dispose());
       bufferRef.current.xs = [];
       bufferRef.current.ys = [];
     })();
+    return () => { mounted = false; };
   }, []);
 
   function encodeSequence(words) {
@@ -79,11 +82,7 @@ export function useOnDevicePrediction() {
       const xsBatch = tf.concat(bufferRef.current.xs);
       const ysBatch = tf.concat(bufferRef.current.ys);
       await modelRef.current.fit(xsBatch, ysBatch, { epochs: 1, batchSize: BATCH_SIZE });
-      try {
-        await modelRef.current.save('localstorage://personalized-model');
-      } catch (saveError) {
-        console.warn('On-device save failed:', saveError);
-      }
+      // Model is kept in memory only (localStorage not available in React Native)
       bufferRef.current.xs.forEach(t => t.dispose());
       bufferRef.current.ys.forEach(t => t.dispose());
       bufferRef.current.xs = [];

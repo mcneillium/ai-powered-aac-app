@@ -7,7 +7,7 @@ module.exports = function(api) {
         'module-resolver',
         {
           alias: {
-            '@': './src'
+            '@': './src',
             'idb': './src/mocks/idb-mock.js'
           }
         }
