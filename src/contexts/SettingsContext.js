@@ -4,8 +4,9 @@
 
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getAuth } from 'firebase/auth';
-import { getDatabase, ref, onValue, set } from 'firebase/database';
+import { ref, onValue, set } from 'firebase/database';
+import { auth, db } from '../../firebaseConfig';
+import { useAuth } from './AuthContext';
 
 const SETTINGS_STORAGE_KEY = '@aac_settings';
 
@@ -27,6 +28,7 @@ export const SettingsContext = createContext({
 export function SettingsProvider({ children }) {
   const [settings, setSettings] = useState(defaultSettings);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   // Load from AsyncStorage first (instant, offline-safe)
   useEffect(() => {
@@ -46,12 +48,11 @@ export function SettingsProvider({ children }) {
   }, []);
 
   // Subscribe to Firebase as secondary sync (non-blocking)
+  // Re-subscribes when the user changes (login/logout)
   useEffect(() => {
-    const auth = getAuth();
-    const uid = auth.currentUser?.uid;
+    const uid = user?.uid;
     if (!uid) return;
 
-    const db = getDatabase();
     const settingsRef = ref(db, `userSettings/${uid}`);
     const unsubscribe = onValue(
       settingsRef,
@@ -73,7 +74,7 @@ export function SettingsProvider({ children }) {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   // Update settings: write to AsyncStorage immediately, sync to Firebase if possible
   const updateSettings = useCallback(async (updates) => {
@@ -89,17 +90,15 @@ export function SettingsProvider({ children }) {
 
     // Try Firebase sync (non-blocking)
     try {
-      const auth = getAuth();
-      const uid = auth.currentUser?.uid;
+      const uid = user?.uid;
       if (uid) {
-        const db = getDatabase();
         await set(ref(db, `userSettings/${uid}`), newSettings);
       }
     } catch (e) {
       // Firebase sync failure is acceptable — local is source of truth
       console.warn('Firebase settings sync failed (will retry later):', e.message);
     }
-  }, [settings]);
+  }, [settings, user]);
 
   return (
     <SettingsContext.Provider value={{ settings, loading, updateSettings }}>

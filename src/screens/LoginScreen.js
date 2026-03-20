@@ -23,7 +23,10 @@ export default function LoginScreen() {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       console.log('✅ Logged in as', cred.user.uid);
       logEvent('User logged in', { email });
-      // navigation is driven by AuthContext in App.js
+      // Dismiss the login modal — AuthContext will reflect the new state
+      if (navigation.getParent()?.canGoBack()) {
+        navigation.getParent().goBack();
+      }
     } catch (error) {
       console.error('❌ Login error', error);
       logEvent('Login error', { email, error: error.message });

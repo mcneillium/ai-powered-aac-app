@@ -1,8 +1,9 @@
 // src/screens/SignupScreen.js
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
-import { getDatabase, ref, set } from 'firebase/database';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { ref, set } from 'firebase/database';
+import { auth, db } from '../../firebaseConfig';
 
 export default function SignupScreen({ navigation }) {
   const [name, setName] = useState('');
@@ -10,21 +11,22 @@ export default function SignupScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('user');
   const [loading, setLoading] = useState(false);
-  const auth = getAuth();
 
   const handleSignUp = async () => {
     setLoading(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      const db = getDatabase();
       await set(ref(db, `users/${user.uid}`), {
         name: name.trim() || email.split('@')[0],
         email,
         role,
         createdAt: Date.now(),
       });
-      navigation.navigate('MainApp');
+      // Dismiss the login/signup modal — AuthContext will reflect the new state
+      if (navigation.getParent()?.canGoBack()) {
+        navigation.getParent().goBack();
+      }
     } catch (error) {
       alert('Sign up error: ' + error.message);
     } finally {
