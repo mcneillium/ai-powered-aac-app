@@ -1,50 +1,38 @@
-// Tests for the prediction utility functions in improvedModelLoader.
-// Model loading itself is tested via integration; here we test the
-// prediction logic with a mock model.
+// Tests for the prediction re-export in improvedModelLoader.
+// Verifies that improvedModelLoader properly re-exports from localPredictor.
 
-jest.mock('@tensorflow/tfjs', () => ({
-  ready: jest.fn(() => Promise.resolve()),
-  loadLayersModel: jest.fn(),
-  tensor2d: jest.fn(() => ({
-    dispose: jest.fn(),
-  })),
-}));
-jest.mock('@tensorflow/tfjs-react-native', () => ({
-  bundleResourceIO: jest.fn(),
-}));
+describe('improvedModelLoader exports', () => {
+  beforeEach(() => {
+    jest.resetModules();
+  });
 
-// Mock asset requires
-jest.mock('../../assets/tf_model/word_prediction_tfjs/model.json', () => ({}), { virtual: true });
-jest.mock('../../assets/tf_model/word_prediction_tfjs/group1-shard1of1.bin', () => ({}), { virtual: true });
-jest.mock('../../assets/tf_model/word_prediction_tfjs/tokenizer.json', () => ({
-  hello: 1,
-  world: 2,
-  how: 3,
-  are: 4,
-  you: 5,
-}), { virtual: true });
+  test('re-exports ensureImprovedModelLoaded from localPredictor', () => {
+    // Mock localPredictor before importing
+    jest.mock('../services/localPredictor', () => ({
+      ensureImprovedModelLoaded: jest.fn(() => Promise.resolve(true)),
+      predictTopKWordsWithImprovedModel: jest.fn(() => Promise.resolve(['hello'])),
+    }));
 
-describe('predictNextWordWithImprovedModel', () => {
-  test('returns a word from the tokenizer', async () => {
-    const { predictNextWordWithImprovedModel } = require('../services/improvedModelLoader');
+    const loader = require('../services/improvedModelLoader');
+    expect(typeof loader.ensureImprovedModelLoaded).toBe('function');
+    expect(typeof loader.loadImprovedModel).toBe('function');
+    expect(typeof loader.predictTopKWordsWithImprovedModel).toBe('function');
 
-    const mockModel = {
-      predict: jest.fn(() => ({
-        dataSync: () => new Float32Array([0.1, 0.9, 0.05, 0.02, 0.01, 0.01]),
-        dispose: jest.fn(),
-      })),
-    };
-    const tokenizer = { hello: 1, world: 2, how: 3, are: 4, you: 5 };
+    // loadImprovedModel should be the same function as ensureImprovedModelLoaded
+    expect(loader.loadImprovedModel).toBe(loader.ensureImprovedModelLoaded);
+  });
 
-    const result = await predictNextWordWithImprovedModel(
-      mockModel,
-      tokenizer,
-      'hello how are',
-      1.0,
-      4
-    );
+  test('predictTopKWordsWithImprovedModel delegates to localPredictor', async () => {
+    const mockPredict = jest.fn(() => Promise.resolve(['want', 'go', 'help']));
+    jest.mock('../services/localPredictor', () => ({
+      ensureImprovedModelLoaded: jest.fn(() => Promise.resolve(true)),
+      predictTopKWordsWithImprovedModel: mockPredict,
+    }));
 
-    expect(typeof result).toBe('string');
-    expect(mockModel.predict).toHaveBeenCalled();
+    const { predictTopKWordsWithImprovedModel } = require('../services/improvedModelLoader');
+    const result = await predictTopKWordsWithImprovedModel('I want to', 5);
+
+    expect(mockPredict).toHaveBeenCalledWith('I want to', 5);
+    expect(result).toEqual(['want', 'go', 'help']);
   });
 });

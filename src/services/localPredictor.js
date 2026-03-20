@@ -178,15 +178,12 @@ export async function ensureImprovedModelLoaded() {
 // Prediction API
 // -------------------------------------------------------------
 export async function predictTopKWordsWithImprovedModel(
-  model,
-  _unusedTokenizer,
   sentence,
-  temperature = 0.8,
-  seqLen = _seqLen,
-  topK = 5
+  topK = 5,
+  { temperature = 0.8, seqLen } = {}
 ) {
   await ensureImprovedModelLoaded();
-  const m = model || _model;
+  const m = _model;
   const L = seqLen || _seqLen;
 
   const words = safeSplit(sentence);

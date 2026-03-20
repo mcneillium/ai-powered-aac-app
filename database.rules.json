@@ -1,37 +1,56 @@
 {
   "rules": {
+    ".read": false,
+    ".write": false,
+
     "users": {
       "$uid": {
-        ".read": "$uid === auth.uid",
+        ".read": "$uid === auth.uid || root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'caregiver' && root.child('users').child($uid).child('caregiverId').val() === auth.uid)",
         ".write": "$uid === auth.uid"
       }
     },
+
     "userSettings": {
       "$uid": {
-        ".read": "$uid === auth.uid",
+        ".read": "$uid === auth.uid || root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'caregiver' && root.child('users').child($uid).child('caregiverId').val() === auth.uid)",
         ".write": "$uid === auth.uid"
       }
     },
+
     "userLogs": {
-      ".read": false,
-      ".write": "auth !== null"
+      ".read": "root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      ".write": "auth !== null",
+      "$logId": {
+        ".read": "data.child('targetUserId').val() === auth.uid || root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'caregiver' && data.child('targetUserId').val() !== null && root.child('users').child(data.child('targetUserId').val()).child('caregiverId').val() === auth.uid)"
+      }
     },
+
     "sessions": {
       "$uid": {
-        ".read": "$uid === auth.uid",
+        ".read": "$uid === auth.uid || root.child('users').child(auth.uid).child('role').val() === 'admin'",
         ".write": "$uid === auth.uid"
       }
     },
+
     "feedback": {
-      ".read": false,
+      ".read": "root.child('users').child(auth.uid).child('role').val() === 'admin'",
       ".write": "auth !== null",
-      "$feedbackId": {
-        ".validate": "newData.hasChildren(['message', 'createdAt']) && newData.child('uid').val() === auth.uid"
+      "$uid": {
+        ".read": "$uid === auth.uid || root.child('users').child(auth.uid).child('role').val() === 'admin'",
+        "$feedbackId": {
+          ".validate": "newData.hasChildren(['feedback', 'timestamp'])"
+        }
       }
     },
+
+    "fineTuneMetrics": {
+      ".read": "root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      ".write": "auth !== null"
+    },
+
     "logs": {
       "$uid": {
-        ".read": "$uid === auth.uid",
+        ".read": "$uid === auth.uid || root.child('users').child(auth.uid).child('role').val() === 'admin'",
         ".write": "$uid === auth.uid"
       }
     }

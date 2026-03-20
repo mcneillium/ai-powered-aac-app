@@ -5,8 +5,9 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ref, onValue, set } from 'firebase/database';
-import { auth, db } from '../../firebaseConfig';
+import { db } from '../../firebaseConfig';
 import { useAuth } from './AuthContext';
+import { DB_PATHS, dbPath } from '../shared/schema';
 
 const SETTINGS_STORAGE_KEY = '@aac_settings';
 
@@ -53,7 +54,7 @@ export function SettingsProvider({ children }) {
     const uid = user?.uid;
     if (!uid) return;
 
-    const settingsRef = ref(db, `userSettings/${uid}`);
+    const settingsRef = ref(db, dbPath(DB_PATHS.USER_SETTINGS, uid));
     const unsubscribe = onValue(
       settingsRef,
       (snapshot) => {
@@ -92,7 +93,7 @@ export function SettingsProvider({ children }) {
     try {
       const uid = user?.uid;
       if (uid) {
-        await set(ref(db, `userSettings/${uid}`), newSettings);
+        await set(ref(db, dbPath(DB_PATHS.USER_SETTINGS, uid)), newSettings);
       }
     } catch (e) {
       // Firebase sync failure is acceptable — local is source of truth
