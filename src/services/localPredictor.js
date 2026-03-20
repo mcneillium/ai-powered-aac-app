@@ -208,3 +208,62 @@ export async function predictTopKWordsWithImprovedModel(
   _remember(key, candidates);
   return candidates;
 }
+
+// -------------------------------------------------------------
+// Personalized prediction: blends model output with user profile
+// -------------------------------------------------------------
+export async function predictPersonalized(sentence, topK = 7) {
+  let aiProfileStore;
+  try {
+    aiProfileStore = require('./aiProfileStore');
+  } catch {
+    // AI profile not available — fall back to model-only predictions
+    return predictTopKWordsWithImprovedModel(sentence, topK);
+  }
+
+  const words = safeSplit(sentence);
+  const prevWord = words.length > 0 ? words[words.length - 1] : null;
+
+  // Get model predictions
+  let modelCandidates = [];
+  try {
+    modelCandidates = await predictTopKWordsWithImprovedModel(sentence, topK * 2);
+  } catch {
+    // Model failed — use profile-only predictions
+  }
+
+  // Get bigram predictions from user profile
+  const bigramPreds = prevWord
+    ? aiProfileStore.getBigramPredictions(prevWord, 5)
+    : [];
+
+  // Merge: model candidates + bigram predictions (deduplicated)
+  const seen = new Set();
+  const merged = [];
+
+  // Bigram predictions first (user's own patterns are highest signal)
+  for (const w of bigramPreds) {
+    const lw = w.toLowerCase();
+    if (!seen.has(lw)) {
+      seen.add(lw);
+      merged.push(lw);
+    }
+  }
+
+  // Then model predictions
+  for (const w of modelCandidates) {
+    const lw = (typeof w === 'string' ? w : '').toLowerCase();
+    if (lw && !seen.has(lw)) {
+      seen.add(lw);
+      merged.push(lw);
+    }
+  }
+
+  // Score by frequency + recency and sort
+  if (merged.length > 0 && typeof aiProfileStore.scoreByFrequencyAndRecency === 'function') {
+    const scored = aiProfileStore.scoreByFrequencyAndRecency(merged);
+    return scored.slice(0, topK).map(s => s.word);
+  }
+
+  return merged.slice(0, topK);
+}

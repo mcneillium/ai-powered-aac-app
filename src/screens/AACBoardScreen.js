@@ -22,6 +22,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { getPalette } from '../theme';
 import { speak, stop } from '../services/speechService';
 import { getHomePage, getPage } from '../data/coreVocabulary';
+import { recordWordSelection, recordSentenceSpoken } from '../services/aiProfileStore';
 
 export default function AACBoardScreen() {
   const { settings } = useSettings();
@@ -56,7 +57,12 @@ export default function AACBoardScreen() {
 
   // Add word to sentence bar
   const addWord = useCallback((button) => {
-    setSentenceWords(prev => [...prev, button.label]);
+    setSentenceWords(prev => {
+      const next = [...prev, button.label];
+      // Record for AI personalization (non-blocking)
+      recordWordSelection(button.label, prev).catch(() => {});
+      return next;
+    });
     // Speak the individual word immediately for feedback
     speak(button.label, {
       rate: settings.speechRate,
@@ -83,6 +89,8 @@ export default function AACBoardScreen() {
         pitch: settings.speechPitch,
         voice: settings.speechVoice,
       });
+      // Record for AI phrase learning (non-blocking)
+      recordSentenceSpoken(sentenceWords).catch(() => {});
     }
   }, [sentenceWords, settings]);
 

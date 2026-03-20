@@ -198,15 +198,13 @@ async function getSessionId() {
  */
 async function getDeviceInfo() {
   try {
-    // This would typically use React Native's Platform and other APIs
-    // to get actual device info, but we'll use a placeholder for now
+    const { Platform } = require('react-native');
     return {
-      platform: 'React Native',
+      platform: Platform.OS,
+      version: Platform.Version,
       appVersion: '1.0.0',
-      // Add more device info as needed
     };
-  } catch (error) {
-    console.error('Error getting device info:', error);
+  } catch {
     return { platform: 'unknown' };
   }
 }

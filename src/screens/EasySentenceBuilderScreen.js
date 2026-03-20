@@ -12,9 +12,9 @@ import { updateLastActivity } from '../utils/syncStatus';
 import { useSettings } from '../contexts/SettingsContext';
 import {
   ensureImprovedModelLoaded,
-  predictTopKWordsWithImprovedModel
+  predictPersonalized,
 } from '../services/improvedModelLoader';
-import { recordSentenceSpoken, recordSuggestionsShown } from '../services/aiProfileStore';
+import { recordWordSelection, recordSentenceSpoken, recordSuggestionsShown } from '../services/aiProfileStore';
 
 export default function EasySentenceBuilderScreen() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -111,7 +111,7 @@ export default function EasySentenceBuilderScreen() {
       let localResults = [];
       if (modelReady) {
         try {
-          const local = await predictTopKWordsWithImprovedModel(sentenceStr, 7);
+          const local = await predictPersonalized(sentenceStr, 7);
           if (!alive) return;
           localResults = Array.isArray(local) ? local : [];
           if (localResults.length > 0) {
@@ -158,6 +158,8 @@ export default function EasySentenceBuilderScreen() {
       });
       await AsyncStorage.setItem(key, JSON.stringify(logArray));
       await updateLastActivity();
+      // Record for AI personalization
+      recordWordSelection(String(word), sentenceWords).catch(() => {});
     } catch (e) {
       console.error('Logging error:', e);
     }

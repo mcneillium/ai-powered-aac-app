@@ -6,4 +6,5 @@ export {
   ensureImprovedModelLoaded,
   ensureImprovedModelLoaded as loadImprovedModel,
   predictTopKWordsWithImprovedModel,
+  predictPersonalized,
 } from './localPredictor';
