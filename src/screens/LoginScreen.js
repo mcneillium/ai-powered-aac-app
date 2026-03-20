@@ -7,7 +7,7 @@ import {
 }                                                      from 'react-native';
 import { signInWithEmailAndPassword }                  from 'firebase/auth';
 import { auth }                                        from '../../firebaseConfig';
-import { logEvent }                                    from '../utils/logger';
+import { logEvent }                                    from '../utils/enhancedLogger';
 import { useNavigation }                               from '@react-navigation/native';
 import logo                                           from '../../assets/icon.png';
 
@@ -23,11 +23,22 @@ export default function LoginScreen() {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       console.log('✅ Logged in as', cred.user.uid);
       logEvent('User logged in', { email });
-      // navigation is driven by AuthContext in App.js
+      // Dismiss the login modal — AuthContext will reflect the new state
+      if (navigation.getParent()?.canGoBack()) {
+        navigation.getParent().goBack();
+      }
     } catch (error) {
       console.error('❌ Login error', error);
       logEvent('Login error', { email, error: error.message });
-      Alert.alert('Login Error', error.message);
+      const messages = {
+        'auth/invalid-email': 'Please enter a valid email address.',
+        'auth/user-not-found': 'No account found with this email. Sign up first.',
+        'auth/wrong-password': 'Incorrect password. Please try again.',
+        'auth/invalid-credential': 'Invalid email or password. Please try again.',
+        'auth/too-many-requests': 'Too many attempts. Please wait and try again.',
+        'auth/network-request-failed': 'Network error. Check your connection.',
+      };
+      Alert.alert('Login Error', messages[error.code] || error.message);
     } finally {
       setLoading(false);
     }

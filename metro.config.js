@@ -24,6 +24,7 @@ config.resolver.extraNodeModules = {
   ...(config.resolver.extraNodeModules || {}),
   idb: path.resolve(__dirname, './empty-module.js'),
   './postinstall.mjs': path.resolve(__dirname, './empty-module.js'),
+  'react-native-fs': path.resolve(__dirname, './empty-module.js'),
 };
 
 module.exports = config;

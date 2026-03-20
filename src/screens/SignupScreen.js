@@ -1,28 +1,33 @@
 // src/screens/SignupScreen.js
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
-import { getDatabase, ref, set } from 'firebase/database';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { ref, set } from 'firebase/database';
+import { auth, db } from '../../firebaseConfig';
+import { COLLECTIONS, USER_FIELDS, dbPath } from '../shared/schema';
 
 export default function SignupScreen({ navigation }) {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('user');
   const [loading, setLoading] = useState(false);
-  const auth = getAuth();
 
   const handleSignUp = async () => {
     setLoading(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      const db = getDatabase();
-      await set(ref(db, `users/${user.uid}`), {
-        email,
-        role,
-        createdAt: Date.now(),
+      await set(ref(db, dbPath(COLLECTIONS.USERS, user.uid)), {
+        [USER_FIELDS.NAME]: name.trim() || email.split('@')[0],
+        [USER_FIELDS.EMAIL]: email,
+        [USER_FIELDS.ROLE]: role,
+        [USER_FIELDS.CREATED_AT]: Date.now(),
       });
-      navigation.navigate('MainApp');
+      // Dismiss the login/signup modal — AuthContext will reflect the new state
+      if (navigation.getParent()?.canGoBack()) {
+        navigation.getParent().goBack();
+      }
     } catch (error) {
       alert('Sign up error: ' + error.message);
     } finally {
@@ -33,6 +38,14 @@ export default function SignupScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Sign Up</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Your Name"
+        autoCapitalize="words"
+        onChangeText={setName}
+        value={name}
+        accessibilityLabel="Name input"
+      />
       <TextInput
         style={styles.input}
         placeholder="Email"

@@ -1,4 +1,6 @@
 // src/screens/SettingsScreen.js
+// Offline-first settings with speech controls.
+// Uses updateSettings() which writes to AsyncStorage first, then syncs to Firebase.
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -6,121 +8,305 @@ import {
   Text,
   StyleSheet,
   Switch,
-  Button,
+  TouchableOpacity,
+  ScrollView,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
+import Slider from '@react-native-picker/picker'; // Using Picker for theme/grid
 import { Picker } from '@react-native-picker/picker';
-import { getDatabase, ref, set } from 'firebase/database';
-import { getAuth } from 'firebase/auth';
 import { useSettings } from '../contexts/SettingsContext';
+import { getPalette } from '../theme';
+import { speak, getAvailableVoices } from '../services/speechService';
 
 export default function SettingsScreen() {
-  const { settings, loading: settingsLoading } = useSettings();
-  const [theme, setTheme]       = useState(settings.theme);
-  const [gridSize, setGridSize] = useState(settings.gridSize);
-  const [contrast, setContrast] = useState(settings.contrast);
+  const { settings, loading: settingsLoading, updateSettings } = useSettings();
+  const palette = getPalette(settings.theme);
 
-  // Once the context finishes loading, seed our local form state
+  const [voices, setVoices] = useState([]);
+  const [loadingVoices, setLoadingVoices] = useState(true);
+
   useEffect(() => {
-    if (!settingsLoading) {
-      setTheme(settings.theme);
-      setGridSize(settings.gridSize);
-      setContrast(settings.contrast);
-    }
-  }, [settingsLoading, settings]);
+    getAvailableVoices().then(v => {
+      // Filter to English voices for now; multilingual support in V1
+      const englishVoices = v.filter(voice =>
+        voice.language?.startsWith('en')
+      );
+      setVoices(englishVoices);
+      setLoadingVoices(false);
+    });
+  }, []);
 
-  // Write back to Firebase
-  const saveSettings = async () => {
-    const uid = getAuth().currentUser?.uid;
-    if (!uid) return Alert.alert('Error', 'No user is signed in.');
-
-    try {
-      await set(ref(getDatabase(), `userSettings/${uid}`), {
-        theme,
-        gridSize,
-        contrast,
-      });
-      Alert.alert('Success', 'Settings saved.');
-    } catch (error) {
-      Alert.alert('Error', error.message);
-    }
+  const testSpeech = () => {
+    speak('This is how I will sound when communicating.', {
+      rate: settings.speechRate,
+      pitch: settings.speechPitch,
+      voice: settings.speechVoice,
+    });
   };
 
-  // Show spinner while context is loading
   if (settingsLoading) {
     return (
-      <View style={[styles.container, styles.center]}>
-        <ActivityIndicator size="large" color="#4CAF50" />
+      <View style={[styles.container, styles.center, { backgroundColor: palette.background }]}>
+        <ActivityIndicator size="large" color={palette.primary} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Personalise Your Experience</Text>
+    <ScrollView
+      style={[styles.container, { backgroundColor: palette.background }]}
+      contentContainerStyle={styles.content}
+    >
+      <Text style={[styles.heading, { color: palette.text }]}>
+        Personalise Your Experience
+      </Text>
 
-      <Text style={styles.label}>Theme</Text>
-      <Picker
-        selectedValue={theme}
-        onValueChange={(val) => setTheme(val)}
-      >
-        <Picker.Item label="Light" value="light" />
-        <Picker.Item label="Dark" value="dark" />
-        <Picker.Item label="High Contrast" value="highContrast" />
-      </Picker>
-
-      <Text style={styles.label}>Grid Size</Text>
-      <Picker
-        selectedValue={gridSize}
-        onValueChange={(val) => setGridSize(Number(val))}
-      >
-        <Picker.Item label="2 columns" value={2} />
-        <Picker.Item label="3 columns" value={3} />
-        <Picker.Item label="4 columns" value={4} />
-      </Picker>
-
-      <View style={styles.switchContainer}>
-        <Text style={styles.label}>Enable High Contrast</Text>
-        <Switch
-          value={contrast}
-          onValueChange={(val) => setContrast(val)}
-        />
+      {/* Theme */}
+      <Text style={[styles.label, { color: palette.text }]}>Theme</Text>
+      <View style={[styles.pickerContainer, { borderColor: palette.border }]}>
+        <Picker
+          selectedValue={settings.theme}
+          onValueChange={(val) => updateSettings({ theme: val })}
+          style={{ color: palette.text }}
+          dropdownIconColor={palette.text}
+          accessibilityLabel="Select theme"
+        >
+          <Picker.Item label="Light" value="light" />
+          <Picker.Item label="Dark" value="dark" />
+          <Picker.Item label="High Contrast" value="highContrast" />
+        </Picker>
       </View>
 
-      <Button
-        title="Save Settings"
-        onPress={saveSettings}
-        color="#4CAF50"
-      />
-    </View>
+      {/* Grid Size */}
+      <Text style={[styles.label, { color: palette.text }]}>Grid Size</Text>
+      <View style={styles.gridSizeRow}>
+        {[2, 3, 4].map(size => (
+          <TouchableOpacity
+            key={size}
+            style={[
+              styles.gridSizeBtn,
+              {
+                backgroundColor: settings.gridSize === size ? palette.primary : palette.surface,
+                borderColor: palette.border,
+              },
+            ]}
+            onPress={() => updateSettings({ gridSize: size })}
+            accessibilityRole="button"
+            accessibilityLabel={`${size} columns`}
+            accessibilityState={{ selected: settings.gridSize === size }}
+          >
+            <Text style={{
+              color: settings.gridSize === size ? '#FFF' : palette.text,
+              fontSize: 18,
+              fontWeight: '600',
+            }}>
+              {size}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Speech Rate */}
+      <Text style={[styles.label, { color: palette.text }]}>
+        Speech Speed: {settings.speechRate?.toFixed(1) || '1.0'}x
+      </Text>
+      <View style={styles.sliderRow}>
+        <Text style={[styles.sliderLabel, { color: palette.textSecondary }]}>Slow</Text>
+        <View style={styles.sliderButtons}>
+          {[0.5, 0.75, 1.0, 1.25, 1.5].map(rate => (
+            <TouchableOpacity
+              key={rate}
+              style={[
+                styles.rateBtn,
+                {
+                  backgroundColor: settings.speechRate === rate ? palette.primary : palette.surface,
+                  borderColor: palette.border,
+                },
+              ]}
+              onPress={() => updateSettings({ speechRate: rate })}
+              accessibilityRole="button"
+              accessibilityLabel={`Speech speed ${rate}x`}
+              accessibilityState={{ selected: settings.speechRate === rate }}
+            >
+              <Text style={{
+                color: settings.speechRate === rate ? '#FFF' : palette.text,
+                fontSize: 14,
+                fontWeight: '500',
+              }}>
+                {rate}x
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={[styles.sliderLabel, { color: palette.textSecondary }]}>Fast</Text>
+      </View>
+
+      {/* Speech Pitch */}
+      <Text style={[styles.label, { color: palette.text }]}>
+        Speech Pitch: {settings.speechPitch?.toFixed(1) || '1.0'}
+      </Text>
+      <View style={styles.sliderRow}>
+        <Text style={[styles.sliderLabel, { color: palette.textSecondary }]}>Low</Text>
+        <View style={styles.sliderButtons}>
+          {[0.5, 0.75, 1.0, 1.25, 1.5].map(pitch => (
+            <TouchableOpacity
+              key={pitch}
+              style={[
+                styles.rateBtn,
+                {
+                  backgroundColor: settings.speechPitch === pitch ? palette.primary : palette.surface,
+                  borderColor: palette.border,
+                },
+              ]}
+              onPress={() => updateSettings({ speechPitch: pitch })}
+              accessibilityRole="button"
+              accessibilityLabel={`Speech pitch ${pitch}`}
+              accessibilityState={{ selected: settings.speechPitch === pitch }}
+            >
+              <Text style={{
+                color: settings.speechPitch === pitch ? '#FFF' : palette.text,
+                fontSize: 14,
+                fontWeight: '500',
+              }}>
+                {pitch}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={[styles.sliderLabel, { color: palette.textSecondary }]}>High</Text>
+      </View>
+
+      {/* Voice Selection */}
+      {!loadingVoices && voices.length > 0 && (
+        <>
+          <Text style={[styles.label, { color: palette.text }]}>Voice</Text>
+          <View style={[styles.pickerContainer, { borderColor: palette.border }]}>
+            <Picker
+              selectedValue={settings.speechVoice || ''}
+              onValueChange={(val) => updateSettings({ speechVoice: val || null })}
+              style={{ color: palette.text }}
+              dropdownIconColor={palette.text}
+              accessibilityLabel="Select voice"
+            >
+              <Picker.Item label="System Default" value="" />
+              {voices.map(v => (
+                <Picker.Item
+                  key={v.identifier}
+                  label={v.name || v.identifier}
+                  value={v.identifier}
+                />
+              ))}
+            </Picker>
+          </View>
+        </>
+      )}
+
+      {/* Test Speech Button */}
+      <TouchableOpacity
+        style={[styles.testButton, { backgroundColor: palette.primary }]}
+        onPress={testSpeech}
+        accessibilityRole="button"
+        accessibilityLabel="Test speech with current settings"
+      >
+        <Text style={styles.testButtonText}>Test Speech</Text>
+      </TouchableOpacity>
+
+      {/* High Contrast Toggle */}
+      <View style={styles.switchContainer}>
+        <Text style={[styles.label, { color: palette.text }]}>High Contrast Mode</Text>
+        <Switch
+          value={settings.contrast}
+          onValueChange={(val) => {
+            updateSettings({
+              contrast: val,
+              theme: val ? 'highContrast' : 'light',
+            });
+          }}
+          accessibilityLabel="Toggle high contrast mode"
+        />
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex:       1,
-    padding:    20,
-    backgroundColor: '#fff',
+    flex: 1,
+  },
+  content: {
+    padding: 20,
+    paddingBottom: 40,
   },
   center: {
     justifyContent: 'center',
-    alignItems:     'center',
+    alignItems: 'center',
   },
   heading: {
-    fontSize:   24,
+    fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 20,
     textAlign: 'center',
   },
   label: {
     fontSize: 18,
-    marginTop: 10,
+    marginTop: 16,
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  gridSizeRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 8,
+  },
+  gridSizeBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  sliderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  sliderLabel: {
+    fontSize: 12,
+  },
+  sliderButtons: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 6,
+  },
+  rateBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: 'center',
   },
   switchContainer: {
     flexDirection: 'row',
-    justifyContent:  'space-between',
-    alignItems:      'center',
-    marginVertical:  15,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  testButton: {
+    marginTop: 20,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  testButtonText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '600',
   },
 });

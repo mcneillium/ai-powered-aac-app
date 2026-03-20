@@ -9,8 +9,12 @@ export async function ensureImprovedModelLoaded() {
   _initialized = true;
 }
 
-// tokens: string[], k: number
-export async function predictTopKWordsWithImprovedModel(tokens, k = 5) {
+// Alias used by App.js for non-blocking background load
+export const loadImprovedModel = ensureImprovedModelLoaded;
+
+// sentence: string, k: number
+export async function predictTopKWordsWithImprovedModel(sentence, k = 5) {
   await ensureImprovedModelLoaded();
+  const tokens = String(sentence || '').toLowerCase().split(' ').filter(Boolean);
   return predictTopKLocal(tokens, k);
 }

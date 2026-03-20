@@ -12,7 +12,7 @@ import {
 import * as Speech from 'expo-speech';
 import { StatusBar } from 'expo-status-bar';
 import { searchPictograms } from '../services/arasaacService';
-import { logEvent } from '../utils/logger';
+import { logEvent } from '../utils/enhancedLogger';
 import { useSettings } from '../contexts/SettingsContext';
 
 export default function CommunicationScreen() {
@@ -118,10 +118,15 @@ export default function CommunicationScreen() {
                 selected?._id === item._id && styles.selectedItem
               ]}
               onPress={() => selectPictogram(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`Say ${item.keywords?.[0]?.keyword || 'pictogram'}`}
+              accessibilityHint="Speaks this word aloud"
+              accessibilityState={{ selected: selected?._id === item._id }}
             >
               <Image
                 source={{ uri: `https://static.arasaac.org/pictograms/${item._id}/${item._id}_500.png` }}
                 style={styles.picImage}
+                accessibilityElementsHidden
               />
             </TouchableOpacity>
           )}

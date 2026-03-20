@@ -3,18 +3,18 @@ import {
   ScrollView, View, Text, TextInput, Button,
   StyleSheet, ActivityIndicator, FlatList, TouchableOpacity, Image
 } from 'react-native';
-import * as Speech from 'expo-speech';
+import { speak } from '../services/speechService';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { searchPictograms } from '../services/arasaacService';
 import { getAISuggestions } from '../services/getAISuggestions';
 import { updateLastActivity } from '../utils/syncStatus';
 import { useSettings } from '../contexts/SettingsContext';
-
 import {
   ensureImprovedModelLoaded,
   predictTopKWordsWithImprovedModel
-} from '../services/localPredictor';
+} from '../services/improvedModelLoader';
+import { recordSentenceSpoken, recordSuggestionsShown } from '../services/aiProfileStore';
 
 export default function EasySentenceBuilderScreen() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -108,22 +108,18 @@ export default function EasySentenceBuilderScreen() {
   useEffect(() => {
     let alive = true;
     (async () => {
+      let localResults = [];
       if (modelReady) {
         try {
-          const local = await predictTopKWordsWithImprovedModel(
-            null,          // model (use global cached model)
-            null,          // _unusedTokenizer
-            sentenceStr,   // sentence
-            1.15,          // temperature
-            undefined,     // seqLen → let it use detected _seqLen (16)
-            7              // topK
-          );
+          const local = await predictTopKWordsWithImprovedModel(sentenceStr, 7);
           if (!alive) return;
-          if (Array.isArray(local) && local.length > 0) {
-            const dedup = Array.from(new Set(local))
+          localResults = Array.isArray(local) ? local : [];
+          if (localResults.length > 0) {
+            const dedup = Array.from(new Set(localResults))
               .filter(w => w && !sentenceWords.includes(w))
               .slice(0, 5);
             setSuggestions(dedup);
+            recordSuggestionsShown(dedup.length).catch(() => {});
             return;
           }
         } catch (e) {
@@ -137,6 +133,7 @@ export default function EasySentenceBuilderScreen() {
           .filter(w => w && !sentenceWords.includes(w))
           .slice(0, 5);
         setSuggestions(dedup);
+        if (dedup.length > 0) recordSuggestionsShown(dedup.length).catch(() => {});
       } catch {
         if (!alive) return;
         setSuggestions([]);
@@ -175,7 +172,17 @@ export default function EasySentenceBuilderScreen() {
 
   const removeWord = (i) => setSentenceWords(ws => ws.filter((_, idx) => idx !== i));
   const clearSentence = () => setSentenceWords([]);
-  const speakSentence = () => Speech.speak(sentenceWords.join(' ') || ' ');
+  const speakSentence = () => {
+    speak(sentenceWords.join(' ') || ' ', {
+      rate: settings.speechRate,
+      pitch: settings.speechPitch,
+      voice: settings.speechVoice,
+    });
+    // AI Profile: record the spoken sentence for phrase learning
+    if (sentenceWords.length > 0) {
+      recordSentenceSpoken(sentenceWords).catch(() => {});
+    }
+  };
 
   // 6) Loading UI
   if (settingsLoading) {
@@ -199,7 +206,7 @@ export default function EasySentenceBuilderScreen() {
       wordSearch ||
       selectedCategory;
     return (
-      <TouchableOpacity style={styles.picContainer} onPress={() => addWord(keyword)}>
+      <TouchableOpacity style={styles.picContainer} onPress={() => addWord(keyword)} accessibilityRole="button" accessibilityLabel={`Add ${keyword} to sentence`}>
         <Image source={{ uri }} style={styles.picImage} />
       </TouchableOpacity>
     );

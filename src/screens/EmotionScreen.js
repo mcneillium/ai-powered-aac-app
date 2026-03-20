@@ -10,11 +10,11 @@ import {
   Easing,
   Alert
 } from 'react-native';
-import * as Speech from 'expo-speech';
+import { speak } from '../services/speechService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
-import { logEvent } from '../utils/logger';
+import { logEvent } from '../utils/enhancedLogger';
 import { StatusBar } from 'expo-status-bar';
 
 const emotions = [
@@ -67,7 +67,11 @@ export default function EmotionScreen() {
   const speakEmotion = () => {
     if (!selectedEmotion) return;
     const text = `I am ${selectedEmotion.label}`;
-    Speech.speak(text);
+    speak(text, {
+      rate: settings.speechRate,
+      pitch: settings.speechPitch,
+      voice: settings.speechVoice,
+    });
     logEvent('Emotion spoken', { emotion: selectedEmotion.label, screen: 'EmotionScreen' });
   };
 
@@ -116,6 +120,9 @@ export default function EmotionScreen() {
               onPressIn={onPressIn}
               onPressOut={onPressOut}
               style={[styles.card, isSel && styles.cardSelected]}
+              accessibilityRole="button"
+              accessibilityLabel={`I feel ${item.label}`}
+              accessibilityState={{ selected: isSel }}
             >
               <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
                 <Text style={[styles.emoji, { color: palette.text }]}>{item.emoji}</Text>

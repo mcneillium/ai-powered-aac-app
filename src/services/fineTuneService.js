@@ -94,5 +94,4 @@ export async function updateModelPeriodically() {
   }
 }
 
-// Trigger fine-tuning every 10 minutes (adjust the interval as needed)
-setInterval(updateModelPeriodically, 10 * 60 * 1000);
+// To trigger periodic fine-tuning, call updateModelPeriodically() from a useEffect with cleanup.

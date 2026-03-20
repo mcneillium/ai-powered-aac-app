@@ -1,0 +1,55 @@
+name: Train Model
+
+on:
+  workflow_dispatch:
+    inputs:
+      epochs:
+        description: 'Training epochs'
+        default: '10'
+      vocab_size:
+        description: 'Vocabulary size'
+        default: '1000'
+      upload_gcs:
+        description: 'Upload to GCS after training'
+        type: boolean
+        default: false
+
+jobs:
+  train:
+    name: Train AAC Model
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements-train.txt
+
+      - name: Train model
+        run: |
+          python train_aac_model.py \
+            --epochs ${{ github.event.inputs.epochs }} \
+            --vocab-size ${{ github.event.inputs.vocab_size }}
+
+      - name: Upload model artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aac-model-${{ github.run_number }}
+          path: assets/tf_model/word_prediction_tfjs/
+
+      - name: Upload to GCS
+        if: ${{ github.event.inputs.upload_gcs == 'true' }}
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Upload model to GCS
+        if: ${{ github.event.inputs.upload_gcs == 'true' }}
+        run: |
+          pip install google-cloud-storage
+          bash scripts/upload_model_gcs.sh ${{ secrets.GCS_BUCKET_NAME || 'commai-models' }}

@@ -1,0 +1,6 @@
+# Training pipeline dependencies
+# Install: pip install -r requirements-train.txt
+tensorflow>=2.15,<3
+tensorflowjs>=4.0
+datasets>=2.14
+numpy>=1.24

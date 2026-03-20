@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAuth } from 'firebase/auth';
 import { ref, push, set, serverTimestamp } from 'firebase/database';
-import { db } from '../firebaseConfig';
+import { db } from '../../firebaseConfig';
 import NetInfo from '@react-native-community/netinfo';
 
 // Maximum number of logs to store locally before auto-sync

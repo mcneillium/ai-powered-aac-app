@@ -11,7 +11,7 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Speech from 'expo-speech';
-import { getImageCaption } from '../services/hfImageCaption';
+import { getVisionLabels } from '../services/visionService';
 import { useSettings } from '../contexts/SettingsContext';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -58,7 +58,7 @@ export default function CombinedImageScreen() {
   const processImage = async (uri) => {
     setProcessing(true);
     try {
-      const desc = await getImageCaption(uri);
+      const desc = await getVisionLabels(uri);
       setSelected({ uri, name: desc });
       Speech.speak(desc);
     } catch (e) {

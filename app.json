@@ -9,7 +9,8 @@
     "newArchEnabled": true,
     "plugins": [
       "expo-camera",
-      "expo-dev-client"
+      "expo-dev-client",
+      "expo-asset"
     ],
     "assetBundlePatterns": [
       "assets/**/*"
