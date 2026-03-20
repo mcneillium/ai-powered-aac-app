@@ -4,6 +4,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator 
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { ref, set } from 'firebase/database';
 import { auth, db } from '../../firebaseConfig';
+import { COLLECTIONS, USER_FIELDS, dbPath } from '../shared/schema';
 
 export default function SignupScreen({ navigation }) {
   const [name, setName] = useState('');
@@ -17,11 +18,11 @@ export default function SignupScreen({ navigation }) {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      await set(ref(db, `users/${user.uid}`), {
-        name: name.trim() || email.split('@')[0],
-        email,
-        role,
-        createdAt: Date.now(),
+      await set(ref(db, dbPath(COLLECTIONS.USERS, user.uid)), {
+        [USER_FIELDS.NAME]: name.trim() || email.split('@')[0],
+        [USER_FIELDS.EMAIL]: email,
+        [USER_FIELDS.ROLE]: role,
+        [USER_FIELDS.CREATED_AT]: Date.now(),
       });
       // Dismiss the login/signup modal — AuthContext will reflect the new state
       if (navigation.getParent()?.canGoBack()) {
