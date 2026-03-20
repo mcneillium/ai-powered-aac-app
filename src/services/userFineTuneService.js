@@ -82,9 +82,9 @@ export async function fineTuneUserModel(epochs = 3) {
     'int32'
   );
   
-  // Instead of using int32 labels (which can trigger issues with tf.floor in loss computations),
-  // one-hot encode the targets and cast to float32.
-  const vocabSize = 21; // Adjust this value to match your model's output size.
+  // Derive vocab size from the model's output layer to stay in sync
+  const outputShape = global.betterWordPredictionModel.outputShape;
+  const vocabSize = outputShape[outputShape.length - 1];
   const yIndices = tf.tensor1d(
     trainingExamples.map(example => example.targetWord),
     'int32'

@@ -11,78 +11,18 @@ let predictionCache = {};
 let frequencyModel = null;
 
 /**
- * Initializes the word prediction system
- * Loads the TensorFlow model and initializes the frequency model from stored data
+ * Initializes the word prediction system.
+ * The TF model is loaded by improvedModelLoader.js at app startup (non-blocking).
+ * This function initializes the frequency-based fallback model.
  */
 export async function initWordPrediction() {
   try {
-    console.log("🚀 Initializing word prediction system...");
-    
-    // Initialize TensorFlow
-    await tf.ready();
-    console.log("✅ TensorFlow.js is ready");
-    
-    // Try to load the model
-    await loadModel();
-    
-    // Initialize frequency-based fallback model
     await initFrequencyModel();
-    
     return true;
   } catch (error) {
-    console.error("❌ Error initializing word prediction:", error);
-    // Even if the TensorFlow model fails, initialize the frequency model
+    console.error("Error initializing word prediction:", error);
     await initFrequencyModel();
     return false;
-  }
-}
-
-/**
- * Loads the TensorFlow.js model for word prediction
- */
-async function loadModel() {
-  try {
-    // Check if we have a cached model path
-    const modelInfo = await AsyncStorage.getItem('wordPredictionModel');
-    
-    if (modelInfo) {
-      // Load from cached location
-      const modelData = JSON.parse(modelInfo);
-      global.wordPredictionModel = await tf.loadLayersModel(modelData.path);
-      global.tokenizer = modelData.tokenizer;
-      console.log("✅ Model loaded from cache");
-    } else {
-      // Load the bundled model
-      console.log("Loading bundled model...");
-      
-      try {
-        // Import the bundled model files
-        const modelJson = require('../../assets/tf_model/word_prediction_tfjs/model.json');
-        const modelWeights = [require('../../assets/tf_model/word_prediction_tfjs/group1-shard1of1.bin')];
-        const tokenizerData = require('../../assets/tf_model/tokenizer.json');
-        
-        // Load model using bundleResourceIO
-        const { bundleResourceIO } = require('@tensorflow/tfjs-react-native');
-        global.wordPredictionModel = await tf.loadLayersModel(bundleResourceIO(modelJson, modelWeights));
-        global.tokenizer = tokenizerData;
-        
-        console.log("✅ Bundled model loaded successfully");
-      } catch (error) {
-        console.error("❌ Error loading bundled model:", error);
-        throw error;
-      }
-    }
-    
-    // Warm up the model with a test prediction
-    const dummyInput = tf.tensor2d([[1, 2, 3, 4]], [1, 4]);
-    global.wordPredictionModel.predict(dummyInput);
-    dummyInput.dispose();
-    
-    console.log("✅ Model is ready for predictions");
-    return true;
-  } catch (error) {
-    console.error("❌ Error in loadModel:", error);
-    throw error;
   }
 }
 
@@ -322,7 +262,7 @@ function decodeToken(tokenId) {
  */
 async function getTensorFlowPredictions(inputText, numPredictions = 5, temperature = 1.0) {
   try {
-    if (!global.wordPredictionModel || !global.tokenizer) {
+    if (!global.betterWordPredictionModel || !global.tokenizer) {
       throw new Error("Model or tokenizer not loaded");
     }
     
@@ -339,7 +279,7 @@ async function getTensorFlowPredictions(inputText, numPredictions = 5, temperatu
     const inputTensor = tf.tensor2d([tokens], [1, tokens.length]);
     
     // Get prediction from model
-    const predictions = global.wordPredictionModel.predict(inputTensor);
+    const predictions = global.betterWordPredictionModel.predict(inputTensor);
     const probabilities = await predictions.data();
     
     // Get the top K predictions
@@ -406,7 +346,7 @@ export async function getPredictions(inputText, numPredictions = 5) {
     logEvent('prediction_request', { inputText, length: inputText.split(' ').length });
     
     // Try to use the TensorFlow model first
-    if (global.wordPredictionModel && global.tokenizer) {
+    if (global.betterWordPredictionModel && global.tokenizer) {
       try {
         const tfPredictions = await getTensorFlowPredictions(inputText, numPredictions);
         
@@ -458,48 +398,19 @@ export function clearPredictionCache() {
 }
 
 /**
- * Attempts to fine-tune the neural model with user data
+ * Fine-tune the neural model with user data.
+ * Delegates to userFineTuneService which does actual on-device training.
  * @param {number} epochs - Number of training epochs
  * @returns {Promise<boolean>} Success status
  */
 export async function fineTuneModel(epochs = 3) {
   try {
-    if (!global.wordPredictionModel) {
-      throw new Error("Model not loaded");
-    }
-    
-    // This would be replaced with actual fine-tuning logic in a production app
-    // For now, we'll simulate success and log the attempt
-    
-    console.log(`Fine-tuning model for ${epochs} epochs...`);
-    
-    // Simulate training time
-    await new Promise(resolve => setTimeout(resolve, epochs * 1000));
-    
-    // Log the fine-tuning attempt
-    logEvent('model_fine_tuning', {
-      epochs,
-      success: true,
-      timestamp: new Date().toISOString()
-    });
-    
-    console.log("✅ Model fine-tuning completed");
-    
-    // Clear the prediction cache after fine-tuning
+    const { fineTuneUserModel } = require('./userFineTuneService');
+    await fineTuneUserModel(epochs);
     clearPredictionCache();
-    
     return true;
   } catch (error) {
     console.error("Error fine-tuning model:", error);
-    
-    // Log the failure
-    logEvent('model_fine_tuning', {
-      epochs,
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-    
     return false;
   }
 }
