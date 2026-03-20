@@ -13,7 +13,7 @@
       "expo-asset"
     ],
     "assetBundlePatterns": [
-      "assets/tf_model/**/*"
+      "assets/**/*"
     ],
     "splash": {
       "image": "./assets/splash-icon.png",

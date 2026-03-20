@@ -1,416 +1,159 @@
-// src/services/improvedWordPrediction.js
+// improvedWordPrediction.js
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { logEvent } from '../utils/enhancedLogger';
+import { bundleResourceIO } from '@tensorflow/tfjs-react-native';
 
-// Cache for storing frequently predicted sequences
-let predictionCache = {};
+let model = null;
+let tokenizer = null;
+let wordIndex = null;   // { "i": 1, "want": 2, ... }
+let indexWord = null;   // { "1": "i", "2": "want", ... }
+let padToken = 0;       // adjust if your PAD is different
+let oovToken = 1;       // adjust if your OOV is different
 
-// Local frequency-based model for fallback when TensorFlow model isn't working
-let frequencyModel = null;
+const ctxCache = new Map();
+const MAX_CACHE = 200;
 
-/**
- * Initializes the word prediction system.
- * The TF model is loaded by improvedModelLoader.js at app startup (non-blocking).
- * This function initializes the frequency-based fallback model.
- */
-export async function initWordPrediction() {
-  try {
-    await initFrequencyModel();
-    return true;
-  } catch (error) {
-    console.error("Error initializing word prediction:", error);
-    await initFrequencyModel();
-    return false;
+// Simple LRU behaviour
+function remember(key, value) {
+  if (ctxCache.has(key)) ctxCache.delete(key);
+  ctxCache.set(key, value);
+  if (ctxCache.size > MAX_CACHE) {
+    const first = ctxCache.keys().next().value;
+    ctxCache.delete(first);
   }
 }
 
-/**
- * Initialize the frequency-based fallback model from stored user data
- */
-async function initFrequencyModel() {
-  try {
-    // Try to load saved frequency data
-    const storedFrequencyData = await AsyncStorage.getItem('wordFrequencyModel');
-    
-    if (storedFrequencyData) {
-      frequencyModel = JSON.parse(storedFrequencyData);
-      console.log("✅ Frequency model loaded from storage with", 
-        Object.keys(frequencyModel).length, "patterns");
-    } else {
-      // Initialize with common phrases and patterns
-      frequencyModel = {
-        "i want": ["to", "some", "a", "the", "more"],
-        "i need": ["help", "to", "a", "some", "water"],
-        "i am": ["happy", "sad", "tired", "hungry", "thirsty"],
-        "i feel": ["good", "bad", "sick", "happy", "tired"],
-        "can you": ["help", "please", "get", "show", "bring"],
-        "i like": ["to", "this", "it", "that", "the"],
-        "thank you": ["for", "so", "very", "much", "."],
-        "how are": ["you", "they", "we", "things", "the"],
-        "where is": ["the", "my", "your", "it", "that"],
-        "what time": ["is", "was", "will", "does", "do"]
-      };
-      
-      // Save the initial frequency model
-      await AsyncStorage.setItem('wordFrequencyModel', JSON.stringify(frequencyModel));
-      console.log("✅ Initial frequency model created");
-    }
-    
-    return true;
-  } catch (error) {
-    console.error("❌ Error initializing frequency model:", error);
-    
-    // Create a minimal model even if loading failed
-    frequencyModel = {
-      "i want": ["to", "a", "some"],
-      "i need": ["help", "to", "a"],
-      "thank you": [".", "very", "much"]
-    };
-    
-    return false;
-  }
+export async function initWordPredictor() {
+  if (model && tokenizer) return true;
+
+  // 1) Load model (names must match model.json)
+  const modelJson = require('../assets/tf_model/word_prediction_tfjs/model.json');
+  const weights = [
+    require('../assets/tf_model/word_prediction_tfjs/group1-shard1of1.bin'),
+  ];
+  model = await tf.loadLayersModel(bundleResourceIO(modelJson, weights));
+
+  // 2) Load tokenizer JSON with top-level word_index & index_word
+  const tkn = require('../assets/childes_model/crowdsourced_aac_tokenizer.json');
+  wordIndex = tkn.word_index || tkn.wordIndex || {};
+  indexWord = tkn.index_word || tkn.indexWord || {};
+  tokenizer = { wordIndex, indexWord };
+
+  // 3) Warm-up (batch of zeros with expected shape [1,4])
+  tf.tidy(() => {
+    const warm = tf.tensor2d([[padToken, padToken, padToken, padToken]], [1,4]);
+    model.predict(warm);
+  });
+
+  return true;
 }
 
-/**
- * Update the frequency model with new input
- * @param {string} prefix - The prefix words (e.g., "I want")
- * @param {string} nextWord - The word that followed the prefix
- */
-export async function updateFrequencyModel(prefix, nextWord) {
-  try {
-    if (!prefix || !nextWord || prefix.length === 0 || nextWord.length === 0) {
-      return;
-    }
-    
-    // Normalize inputs
-    prefix = prefix.toLowerCase().trim();
-    nextWord = nextWord.toLowerCase().trim();
-    
-    // Get last few words as the key (up to 3 words)
-    const words = prefix.split(' ');
-    let key = '';
-    
-    if (words.length >= 2) {
-      // Use last two words as key
-      key = words.slice(-2).join(' ');
-    } else {
-      // Use the single word
-      key = prefix;
-    }
-    
-    // Update the frequency model
-    if (!frequencyModel[key]) {
-      frequencyModel[key] = [nextWord];
-    } else {
-      // If this word is already in the list, move it up in frequency
-      const index = frequencyModel[key].indexOf(nextWord);
-      if (index !== -1) {
-        // Remove it from current position
-        frequencyModel[key].splice(index, 1);
-      }
-      
-      // Add it to the front (most frequent position)
-      frequencyModel[key].unshift(nextWord);
-      
-      // Keep only top 10 predictions for each key
-      if (frequencyModel[key].length > 10) {
-        frequencyModel[key] = frequencyModel[key].slice(0, 10);
-      }
-    }
-    
-    // Every 20 updates, save the model to storage
-    const updateCount = parseInt(await AsyncStorage.getItem('frequencyUpdateCount') || '0');
-    if (updateCount % 20 === 0) {
-      await AsyncStorage.setItem('wordFrequencyModel', JSON.stringify(frequencyModel));
-      console.log("✓ Frequency model saved to storage");
-    }
-    await AsyncStorage.setItem('frequencyUpdateCount', (updateCount + 1).toString());
-    
-  } catch (error) {
-    console.error("Error updating frequency model:", error);
+// Utility: convert array of tokens to padded length 4
+function toContext(tokens, contextSize=4) {
+  const arr = [...tokens];
+  if (arr.length > contextSize) {
+    return arr.slice(arr.length - contextSize);
   }
+  while (arr.length < contextSize) arr.unshift(padToken);
+  return arr;
 }
 
-/**
- * Get word predictions from the frequency model
- * @param {string} inputText - The input text to generate predictions for
- * @param {number} numPredictions - Number of predictions to return
- * @returns {string[]} Array of predicted words
- */
-function getFrequencyBasedPredictions(inputText, numPredictions = 5) {
-  try {
-    if (!frequencyModel || !inputText) {
-      return [];
-    }
-    
-    inputText = inputText.toLowerCase().trim();
-    
-    // Check for exact matches in our model
-    for (const key of Object.keys(frequencyModel)) {
-      if (inputText.endsWith(key)) {
-        // Return the top predictions for this key
-        return frequencyModel[key].slice(0, numPredictions);
-      }
-    }
-    
-    // No exact match, try to find the best partial match
-    const words = inputText.split(' ');
-    if (words.length >= 2) {
-      const lastTwoWords = words.slice(-2).join(' ');
-      
-      // Find keys that start with our last two words
-      for (const key of Object.keys(frequencyModel)) {
-        if (key.startsWith(lastTwoWords)) {
-          return frequencyModel[key].slice(0, numPredictions);
-        }
-      }
-      
-      // Try just the last word
-      const lastWord = words[words.length - 1];
-      for (const key of Object.keys(frequencyModel)) {
-        if (key.startsWith(lastWord + ' ') || key === lastWord) {
-          return frequencyModel[key].slice(0, numPredictions);
-        }
-      }
-    }
-    
-    // If nothing else worked, return some common words based on the last character
-    if (inputText.endsWith('?')) {
-      return ['yes', 'no', 'maybe', 'sometimes', 'often'];
-    } else if (inputText.endsWith('!')) {
-      return ['yes', 'thanks', 'please', 'help', 'now'];
-    } else {
-      // Just return some common next words
-      return ['the', 'to', 'a', 'and', 'is'];
-    }
-  } catch (error) {
-    console.error("Error in frequency predictions:", error);
-    return ['the', 'to', 'a', 'and', 'is']; // fallback
+// Temperature + top-k + top-p sampling
+function sampleFromLogits(logits, {temperature=0.8, topK=8, topP=0.9}) {
+  // logits: Float32Array
+  const scores = Float32Array.from(logits, v => v / Math.max(1e-6, temperature));
+
+  // Convert to probs (softmax) in a numerically stable way
+  const maxLogit = Math.max(...scores);
+  const exps = scores.map(v => Math.exp(v - maxLogit));
+  const sumExp = exps.reduce((a,b) => a+b, 0);
+  let probs = exps.map(v => v / sumExp);
+
+  // Apply top-k
+  const idxs = probs.map((p,i)=>[i,p]).sort((a,b)=>b[1]-a[1]);
+  const topKCut = idxs.slice(0, topK);
+
+  // Apply top-p (nucleus)
+  let cum = 0;
+  const nucleus = [];
+  for (const [i,p] of topKCut) {
+    nucleus.push([i,p]);
+    cum += p;
+    if (cum >= topP) break;
   }
+
+  // Renormalize within nucleus
+  const nucleusSum = nucleus.reduce((a, [,p])=>a+p, 0) || 1;
+  const renorm = nucleus.map(([i,p]) => [i, p / nucleusSum]);
+
+  // Draw
+  let r = Math.random();
+  for (const [i,p] of renorm) {
+    if ((r -= p) <= 0) return i;
+  }
+  return renorm[renorm.length - 1][0];
 }
 
-/**
- * Tokenize the input sentence for the TensorFlow model
- * @param {string} sentence - Input sentence
- * @param {number} sequenceLength - The sequence length required by the model
- * @returns {number[]} Array of token IDs
- */
-function tokenizeSentence(sentence, sequenceLength = 4) {
-  try {
-    if (!global.tokenizer) {
-      throw new Error("Tokenizer not loaded");
-    }
-    
-    const words = sentence.toLowerCase().trim().split(/\s+/);
-    let tokens = [];
-    
-    // Convert words to tokens using the tokenizer
-    for (const word of words) {
-      const tokenId = global.tokenizer[word] || 0; // 0 for unknown tokens
-      tokens.push(tokenId);
-    }
-    
-    // Ensure we have the correct sequence length
-    if (tokens.length < sequenceLength) {
-      // Pad with zeros at the beginning
-      tokens = Array(sequenceLength - tokens.length).fill(0).concat(tokens);
-    } else if (tokens.length > sequenceLength) {
-      // Keep only the last 'sequenceLength' tokens
-      tokens = tokens.slice(tokens.length - sequenceLength);
-    }
-    
-    return tokens;
-  } catch (error) {
-    console.error("Error tokenizing sentence:", error);
-    return Array(sequenceLength).fill(0); // Return zeros on error
-  }
+export function wordsToTokens(words=[]) {
+  return words.map(w => {
+    const key = String(w).trim().toLowerCase();
+    return wordIndex[key] ?? oovToken;
+  });
 }
 
-/**
- * Convert token ID back to a word
- * @param {number} tokenId - The token ID to decode
- * @returns {string} The corresponding word
- */
-function decodeToken(tokenId) {
-  try {
-    if (!global.tokenizer) {
-      throw new Error("Tokenizer not loaded");
-    }
-    
-    // Find the word corresponding to this token ID
-    for (const [word, id] of Object.entries(global.tokenizer)) {
-      if (id === tokenId) {
-        return word;
-      }
-    }
-    
-    return "[UNK]"; // Unknown token
-  } catch (error) {
-    console.error("Error decoding token:", error);
-    return "[ERROR]";
-  }
+export function tokenToWord(id) {
+  const w = indexWord[String(id)];
+  return (w && w !== '<pad>' && w !== '<unk>') ? w : null;
 }
 
-/**
- * Get predictions using the TensorFlow model
- * @param {string} inputText - The input text
- * @param {number} numPredictions - Number of predictions to return
- * @param {number} temperature - Controls randomness (higher = more random)
- * @returns {Promise<string[]>} Array of predicted words
- */
-async function getTensorFlowPredictions(inputText, numPredictions = 5, temperature = 1.0) {
-  try {
-    if (!global.betterWordPredictionModel || !global.tokenizer) {
-      throw new Error("Model or tokenizer not loaded");
-    }
-    
-    // Check cache first
-    const cacheKey = `${inputText}-${numPredictions}-${temperature}`;
-    if (predictionCache[cacheKey]) {
-      return predictionCache[cacheKey];
-    }
-    
-    // Tokenize the input
-    const tokens = tokenizeSentence(inputText);
-    
-    // Convert to tensor
-    const inputTensor = tf.tensor2d([tokens], [1, tokens.length]);
-    
-    // Get prediction from model
-    const predictions = global.betterWordPredictionModel.predict(inputTensor);
-    const probabilities = await predictions.data();
-    
-    // Get the top K predictions
-    const topIndices = [];
-    for (let i = 0; i < numPredictions; i++) {
-      let maxIndex = 0;
-      let maxProb = -Infinity;
-      
-      for (let j = 0; j < probabilities.length; j++) {
-        // Skip if this index is already in our results
-        if (topIndices.includes(j)) continue;
-        
-        // Apply temperature scaling for controlled randomness
-        const scaledProb = Math.log(probabilities[j] + 1e-10) / temperature;
-        
-        if (scaledProb > maxProb) {
-          maxProb = scaledProb;
-          maxIndex = j;
-        }
-      }
-      
-      if (maxIndex > 0) { // Skip padding token (0)
-        topIndices.push(maxIndex);
-      }
-    }
-    
-    // Convert token IDs back to words
-    const predictedWords = topIndices.map(index => decodeToken(index))
-      .filter(word => word !== "[UNK]" && word !== "[ERROR]");
-    
-    // Clean up tensors
-    inputTensor.dispose();
-    predictions.dispose();
-    
-    // Cache the results
-    predictionCache[cacheKey] = predictedWords;
-    
-    // Limit cache size
-    const cacheKeys = Object.keys(predictionCache);
-    if (cacheKeys.length > 100) {
-      delete predictionCache[cacheKeys[0]];
-    }
-    
-    return predictedWords;
-  } catch (error) {
-    console.error("Error in TensorFlow predictions:", error);
-    return [];
+export async function predictNextTokens(tokens, {
+  k=4,                    // return top k candidates
+  temperature=0.8,
+  topK=12,
+  topP=0.9,
+  banned = [],           // words to avoid in AAC context if needed
+} = {}) {
+  if (!model || !tokenizer) {
+    const ok = await initWordPredictor();
+    if (!ok) return [];
   }
+
+  const context = toContext(tokens, 4);
+  const cacheKey = context.join('-');
+  if (ctxCache.has(cacheKey)) return ctxCache.get(cacheKey);
+
+  let logits;
+  await tf.nextFrame(); // yield to keep UI smooth
+  logits = await tf.tidy(() => {
+    const x = tf.tensor2d([context], [1,4]);
+    const out = model.predict(x);
+    return out.dataSync(); // Float32Array
+  });
+
+  // Convert logits → ranked candidates with robust sampling
+  const chosen = [];
+  const used = new Set();
+  const bannedSet = new Set(banned.map(s => s.toLowerCase()));
+
+  for (let i=0; i<Math.max(1,k*2); i++) { // oversample then filter
+    const id = sampleFromLogits(logits, {temperature, topK, topP});
+    if (used.has(id)) continue;
+    used.add(id);
+    const w = tokenToWord(id);
+    if (!w) continue;
+    if (bannedSet.has(w.toLowerCase())) continue;
+    if (w === '<eos>' || w === '<pad>' || w === '<unk>') continue;
+    chosen.push({ id, word: w });
+    if (chosen.length >= k) break;
+  }
+
+  remember(cacheKey, chosen);
+  return chosen;
 }
 
-/**
- * Main function to get word predictions
- * @param {string} inputText - The input text to generate predictions for
- * @param {number} numPredictions - Number of predictions to return
- * @returns {Promise<string[]>} Array of predicted words
- */
-export async function getPredictions(inputText, numPredictions = 5) {
-  if (!inputText || inputText.trim().length === 0) {
-    return [];
-  }
-  
-  try {
-    // Log this prediction request
-    logEvent('prediction_request', { inputText, length: inputText.split(' ').length });
-    
-    // Try to use the TensorFlow model first
-    if (global.betterWordPredictionModel && global.tokenizer) {
-      try {
-        const tfPredictions = await getTensorFlowPredictions(inputText, numPredictions);
-        
-        if (tfPredictions && tfPredictions.length > 0) {
-          return tfPredictions;
-        }
-      } catch (error) {
-        console.log("TensorFlow prediction failed, falling back to frequency model");
-      }
-    }
-    
-    // Fall back to frequency-based predictions
-    return getFrequencyBasedPredictions(inputText, numPredictions);
-  } catch (error) {
-    console.error("Error getting predictions:", error);
-    return ["I", "you", "the", "to", "and"].slice(0, numPredictions);
-  }
-}
-
-/**
- * Learn from user input to improve future predictions
- * @param {string} context - The context (previous words)
- * @param {string} selectedWord - The word the user selected
- */
-export async function learnFromUserInput(context, selectedWord) {
-  try {
-    // Update the frequency model
-    await updateFrequencyModel(context, selectedWord);
-    
-    // Log the learning event
-    logEvent('prediction_learning', { 
-      context, 
-      selectedWord,
-      success: true
-    });
-    
-    // Eventually this could also be used to collect training data for model fine-tuning
-  } catch (error) {
-    console.error("Error learning from user input:", error);
-  }
-}
-
-/**
- * Clear the prediction cache
- */
-export function clearPredictionCache() {
-  predictionCache = {};
-  console.log("Prediction cache cleared");
-}
-
-/**
- * Fine-tune the neural model with user data.
- * Delegates to userFineTuneService which does actual on-device training.
- * @param {number} epochs - Number of training epochs
- * @returns {Promise<boolean>} Success status
- */
-export async function fineTuneModel(epochs = 3) {
-  try {
-    const { fineTuneUserModel } = require('./userFineTuneService');
-    await fineTuneUserModel(epochs);
-    clearPredictionCache();
-    return true;
-  } catch (error) {
-    console.error("Error fine-tuning model:", error);
-    return false;
-  }
+// Convenience for your UI: return just words
+export async function suggestWordsFor(prefixWords=[], opts={}) {
+  const tokens = wordsToTokens(prefixWords);
+  const cands = await predictNextTokens(tokens, opts);
+  return cands.map(c => c.word);
 }
