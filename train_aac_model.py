@@ -9,11 +9,13 @@ Outputs to assets/tf_model/word_prediction_tfjs/:
     model.json            - TFJS model architecture + weight manifest
     group1-shard1of1.bin  - Model weights
     tokenizer.json        - Word-to-index mapping (used by the app)
+    training_report.json  - Training metrics and hyperparameters
 """
 
 import argparse
 import json
 import os
+import time
 
 import numpy as np
 import tensorflow as tf
@@ -35,6 +37,7 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=64, help="Training batch size")
     parser.add_argument("--lstm-units", type=int, default=128, help="LSTM hidden units")
     parser.add_argument("--embedding-dim", type=int, default=64, help="Embedding dimension")
+    parser.add_argument("--output-dir", type=str, default=OUTPUT_DIR, help="Output directory")
     return parser.parse_args()
 
 
@@ -102,6 +105,34 @@ def save_tokenizer(tokenizer, output_dir):
     print(f"Tokenizer saved to {path} ({len(tokenizer.word_index)} words)")
 
 
+def save_training_report(args, history, val_loss, val_acc, num_samples, vocab_size, output_dir):
+    """Save training metadata for reproducibility and tracking."""
+    report = {
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "hyperparameters": {
+            "epochs": args.epochs,
+            "vocab_size": vocab_size,
+            "seq_len": args.seq_len,
+            "batch_size": args.batch_size,
+            "lstm_units": args.lstm_units,
+            "embedding_dim": args.embedding_dim,
+        },
+        "training_samples": num_samples,
+        "final_val_loss": round(val_loss, 4),
+        "final_val_accuracy": round(val_acc, 4),
+        "epoch_history": {
+            "loss": [round(v, 4) for v in history.history.get("loss", [])],
+            "accuracy": [round(v, 4) for v in history.history.get("accuracy", [])],
+            "val_loss": [round(v, 4) for v in history.history.get("val_loss", [])],
+            "val_accuracy": [round(v, 4) for v in history.history.get("val_accuracy", [])],
+        },
+    }
+    path = os.path.join(output_dir, "training_report.json")
+    with open(path, "w") as f:
+        json.dump(report, f, indent=2)
+    print(f"Training report saved to {path}")
+
+
 def main():
     args = parse_args()
 
@@ -118,7 +149,7 @@ def main():
     vocab_size = min(args.vocab_size, len(tokenizer.word_index) + 1)
     model = build_model(vocab_size, args.seq_len, args.embedding_dim, args.lstm_units)
 
-    model.fit(
+    history = model.fit(
         X, y,
         epochs=args.epochs,
         batch_size=args.batch_size,
@@ -133,8 +164,11 @@ def main():
     print(f"Final — loss: {val_loss:.4f}, accuracy: {val_acc:.4f}")
 
     # Export to TFJS format (what the app loads)
-    export_tfjs(model, OUTPUT_DIR)
-    save_tokenizer(tokenizer, OUTPUT_DIR)
+    export_tfjs(model, args.output_dir)
+    save_tokenizer(tokenizer, args.output_dir)
+
+    # Save training report
+    save_training_report(args, history, val_loss, val_acc, len(X), vocab_size, args.output_dir)
 
     # Also save Keras format for future fine-tuning
     h5_path = os.path.join("assets", "tf_model", "word_pred_model.h5")
