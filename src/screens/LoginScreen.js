@@ -30,7 +30,15 @@ export default function LoginScreen() {
     } catch (error) {
       console.error('❌ Login error', error);
       logEvent('Login error', { email, error: error.message });
-      Alert.alert('Login Error', error.message);
+      const messages = {
+        'auth/invalid-email': 'Please enter a valid email address.',
+        'auth/user-not-found': 'No account found with this email. Sign up first.',
+        'auth/wrong-password': 'Incorrect password. Please try again.',
+        'auth/invalid-credential': 'Invalid email or password. Please try again.',
+        'auth/too-many-requests': 'Too many attempts. Please wait and try again.',
+        'auth/network-request-failed': 'Network error. Check your connection.',
+      };
+      Alert.alert('Login Error', messages[error.code] || error.message);
     } finally {
       setLoading(false);
     }

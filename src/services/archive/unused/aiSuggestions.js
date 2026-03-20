@@ -9,7 +9,7 @@ export const getAISuggestions = async (sentence) => {
     // Note: Future development and fine-tuning on an AAC dataset will be required 
     // to improve suggestion relevance and accuracy.
     const apiUrl = "https://api-inference.huggingface.co/models/distilgpt2";
-    const hfToken = "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";
+    const hfToken = process.env.EXPO_PUBLIC_HF_API_TOKEN;
     
     // Construct prompt instructing the model to list the top 5 words to continue the sentence.
     const prompt = "List the top 5 words to continue the sentence: " + sentence;

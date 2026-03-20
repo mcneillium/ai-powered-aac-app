@@ -5,7 +5,7 @@ export const getRearrangedSentence = async (sentence) => {
     
     try {
       const apiUrl = "https://api-inference.huggingface.co/models/distilgpt2"; // Using general-purpose model for now
-      const hfToken = "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";
+      const hfToken = process.env.EXPO_PUBLIC_HF_API_TOKEN;
       
       // Prompt instructing the model to rearrange the sentence.
       const prompt = "Rearrange the following words into a grammatically correct sentence: " + sentence;

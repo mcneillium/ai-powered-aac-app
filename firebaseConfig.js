@@ -18,6 +18,17 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
+// Validate required config at startup so missing .env is caught early
+const missing = Object.entries(firebaseConfig)
+  .filter(([, v]) => !v)
+  .map(([k]) => k);
+if (missing.length > 0) {
+  console.error(
+    `Firebase config: missing env vars for: ${missing.join(', ')}.\n` +
+    'Copy .env.example to .env and fill in your values.'
+  );
+}
+
 // 1) Initialize (or reuse) the Firebase App
 const app = !getApps().length
   ? initializeApp(firebaseConfig)
