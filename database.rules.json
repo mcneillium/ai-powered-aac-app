@@ -1,0 +1,29 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      }
+    },
+    "sessions": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      }
+    },
+    "feedback": {
+      ".read": false,
+      ".write": "auth !== null",
+      "$feedbackId": {
+        ".validate": "newData.hasChildren(['message', 'createdAt']) && newData.child('uid').val() === auth.uid"
+      }
+    },
+    "logs": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      }
+    }
+  }
+}
