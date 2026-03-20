@@ -73,20 +73,20 @@ async function processLogQueue() {
   
   isProcessingQueue = true;
   
+  // Drain queue before the try block so logsToAdd is in scope for the catch
+  const logsToAdd = [...logQueue];
+  logQueue = [];
+
   try {
     // Get current logs
     const storedLogsString = await AsyncStorage.getItem('userInteractionLog');
     let storedLogs = storedLogsString ? JSON.parse(storedLogsString) : [];
-    
-    // Add queued logs
-    const logsToAdd = [...logQueue];
-    logQueue = []; // Clear the queue
-    
+
     storedLogs = [...storedLogs, ...logsToAdd];
-    
+
     // Store logs back to AsyncStorage
     await AsyncStorage.setItem('userInteractionLog', JSON.stringify(storedLogs));
-    
+
     // If we're at the threshold, try to sync to Firebase
     if (storedLogs.length >= MAX_CACHED_LOGS && isOnline) {
       await syncLogsToFirebase();

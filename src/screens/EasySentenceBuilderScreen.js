@@ -10,6 +10,7 @@ import { searchPictograms } from '../services/arasaacService';
 import { getAISuggestions } from '../services/getAISuggestions';
 import { updateLastActivity } from '../utils/syncStatus';
 import { useSettings } from '../contexts/SettingsContext';
+import { getPalette } from '../theme';
 import {
   ensureImprovedModelLoaded,
   predictPersonalized,
@@ -35,13 +36,8 @@ export default function EasySentenceBuilderScreen() {
 
   const categories = ['Everyday', 'Food', 'Drinks', 'People', 'Places'];
 
-  const palettes = {
-    light: { background: '#fff', text: '#000', inputBg: '#fff' },
-    dark: { background: '#000', text: '#fff', inputBg: '#111' },
-    highContrast: { background: '#000', text: '#FFD600', inputBg: '#111' }
-  };
   const themeKey = ['light', 'dark', 'highContrast'].includes(settings?.theme) ? settings.theme : 'light';
-  const palette = palettes[themeKey];
+  const palette = getPalette(themeKey);
 
   // 1) Initialize local model once
   useEffect(() => {
@@ -258,7 +254,7 @@ export default function EasySentenceBuilderScreen() {
         <TextInput
           style={[
             styles.typeInput,
-            { color: palette.text, backgroundColor: palette.inputBg, borderColor: '#ccc' }
+            { color: palette.text, backgroundColor: palette.surface, borderColor: '#ccc' }
           ]}
           placeholder="Type a word… (press Add or Enter)"
           placeholderTextColor="#888"
@@ -287,7 +283,7 @@ export default function EasySentenceBuilderScreen() {
       />
 
       <TextInput
-        style={[styles.input, { borderColor: '#ccc', color: palette.text, backgroundColor: palette.inputBg }]}
+        style={[styles.input, { borderColor: '#ccc', color: palette.text, backgroundColor: palette.surface }]}
         placeholder="Search any English word"
         placeholderTextColor="#888"
         value={wordSearch}

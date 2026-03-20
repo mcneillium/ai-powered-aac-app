@@ -14,6 +14,7 @@ import { speak } from '../services/speechService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
+import { getPalette } from '../theme';
 import { logEvent } from '../utils/enhancedLogger';
 import { StatusBar } from 'expo-status-bar';
 
@@ -33,12 +34,7 @@ export default function EmotionScreen() {
   const [selectedEmotion, setSelectedEmotion] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  const palettes = {
-    light:       { background: '#eef2f3', text: '#000' },
-    dark:        { background: '#000', text: '#fff' },
-    highContrast:{ background: '#000', text: '#FFD600' }
-  };
-  const palette = palettes[settings.theme];
+  const palette = getPalette(settings.theme);
 
   const scaleAnim = useState(new Animated.Value(1))[0];
 
@@ -119,7 +115,7 @@ export default function EmotionScreen() {
               onPress={() => selectEmotion(item)}
               onPressIn={onPressIn}
               onPressOut={onPressOut}
-              style={[styles.card, isSel && styles.cardSelected]}
+              style={[styles.card, { backgroundColor: palette.cardBg || palette.surface }, isSel && styles.cardSelected]}
               accessibilityRole="button"
               accessibilityLabel={`I feel ${item.label}`}
               accessibilityState={{ selected: isSel }}
