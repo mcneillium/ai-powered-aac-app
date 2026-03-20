@@ -25,6 +25,7 @@ defaultConfig.resolver.extraNodeModules = {
   ...defaultConfig.resolver.extraNodeModules,
   idb: require.resolve('./empty-module.js'),
   './postinstall.mjs': require.resolve('./empty-module.js'),
+  'react-native-fs': require.resolve('./empty-module.js'),
 };
 
 module.exports = defaultConfig;

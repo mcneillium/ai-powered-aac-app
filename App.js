@@ -1,108 +1,104 @@
-// App.js (at project root)
-import React, { useState, useEffect } from 'react';
-import { NavigationContainer }         from '@react-navigation/native';
-import { createBottomTabNavigator }    from '@react-navigation/bottom-tabs';
-import { createNativeStackNavigator }  from '@react-navigation/native-stack';
-import { Ionicons }                    from '@expo/vector-icons';
-import {
-  ActivityIndicator,
-  View,
-  Text,
-  StyleSheet
-} from 'react-native';
-import { AuthProvider, useAuth }       from './src/contexts/AuthContext';
-import { SettingsProvider, useSettings } from './src/contexts/SettingsContext';
-import LoginScreen                     from './src/screens/LoginScreen';
-import SignupScreen                    from './src/screens/SignupScreen';
-import CommunicationStackScreen        from './src/screens/CommunicationScreen';
-import EasySentenceBuilderScreen       from './src/screens/EasySentenceBuilderScreen';
-import CameraScreen                    from './src/screens/CameraScreen';
-import EmotionScreen                   from './src/screens/EmotionScreen';
-import LiveSceneModeScreen             from './src/screens/LiveSceneModeScreen';
-import ProfileScreen                   from './src/screens/ProfileScreen';
-import SettingsScreen                  from './src/screens/SettingsScreen';
-import OnboardingScreen                from './src/screens/OnboardingScreen';
-import { loadImprovedModel }           from './src/services/improvedModelLoader';
-import AsyncStorage                    from '@react-native-async-storage/async-storage';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets
-} from 'react-native-safe-area-context';
+// App.js
+// Root component for the AAC app.
+//
+// Architecture decisions:
+// 1. AAC Board is available WITHOUT login (offline-first communication)
+// 2. Auth is optional — enables sync, logging, and caregiver features
+// 3. Error boundary wraps the entire app to prevent total crash
+// 4. Model loading is non-blocking — app renders immediately
+// 5. Shared theme from src/theme.js
 
-const Tab       = createBottomTabNavigator();
+import React, { useState, useEffect } from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { SettingsProvider, useSettings } from './src/contexts/SettingsContext';
+import { getPalette } from './src/theme';
+import ErrorBoundary from './src/components/ErrorBoundary';
+
+// Screens
+import AACBoardScreen from './src/screens/AACBoardScreen';
+import CommunicationStackScreen from './src/screens/CommunicationScreen';
+import EasySentenceBuilderScreen from './src/screens/EasySentenceBuilderScreen';
+import CameraScreen from './src/screens/CameraScreen';
+import EmotionScreen from './src/screens/EmotionScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import FeedbackScreen from './src/screens/FeedbackScreen';
+import LoginScreen from './src/screens/LoginScreen';
+import SignupScreen from './src/screens/SignupScreen';
+import OnboardingScreen from './src/screens/OnboardingScreen';
+
+// Non-blocking model load
+import { loadImprovedModel } from './src/services/improvedModelLoader';
+import { loadAIProfile, recordSessionStart } from './src/services/aiProfileStore';
+
+const Tab = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();
 const RootStack = createNativeStackNavigator();
 
-function MainApp() {
-  const insets   = useSafeAreaInsets();
-  const { settings } = useSettings();
+// Start model loading in background — do not block app render
+loadImprovedModel().catch(err => console.warn('Model load failed (non-blocking):', err));
 
-  // Define palette per theme + contrast
-  const palettes = {
-    light: {
-      background:    '#FFFFFF',
-      text:          '#000000',
-      tabBarBg:      '#FFF',
-      tabBarActive:  '#4CAF50',
-      tabBarInactive:'gray',
-    },
-    dark: {
-      background:    '#000000',
-      text:          '#FFFFFF',
-      tabBarBg:      '#121212',
-      tabBarActive:  '#4CAF50',
-      tabBarInactive:'gray',
-    },
-    highContrast: {
-      background:    '#000000',
-      text:          '#FFD600',
-      tabBarBg:      '#000000',
-      tabBarActive:  '#FFD600',
-      tabBarInactive:'white',
-    },
-  };
-  const palette = palettes[settings.theme];
+// Load AI profile and record session start
+loadAIProfile()
+  .then(() => recordSessionStart())
+  .catch(err => console.warn('AI profile load failed (non-blocking):', err));
+
+function MainApp() {
+  const insets = useSafeAreaInsets();
+  const { settings } = useSettings();
+  const palette = getPalette(settings.theme);
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        headerStyle:      { backgroundColor: palette.tabBarBg },
-        headerTintColor:  palette.text,
+        headerStyle: { backgroundColor: palette.tabBarBg },
+        headerTintColor: palette.text,
         headerTitleStyle: { color: palette.text },
-        tabBarActiveTintColor:   palette.tabBarActive,
+        tabBarActiveTintColor: palette.tabBarActive,
         tabBarInactiveTintColor: palette.tabBarInactive,
         tabBarStyle: {
-          backgroundColor:   palette.tabBarBg,
-          borderTopWidth:    0,
-          elevation:         5,
-          shadowColor:       '#000',
-          shadowOffset:      { width: 0, height: -1 },
-          shadowOpacity:     0.1,
-          shadowRadius:      3,
-          borderTopLeftRadius:  15,
+          backgroundColor: palette.tabBarBg,
+          borderTopWidth: 0,
+          elevation: 5,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -1 },
+          shadowOpacity: 0.1,
+          shadowRadius: 3,
+          borderTopLeftRadius: 15,
           borderTopRightRadius: 15,
-          position:          'absolute',
-          height:            60 + insets.bottom,
-          paddingBottom:     insets.bottom,
+          position: 'absolute',
+          height: 60 + insets.bottom,
+          paddingBottom: insets.bottom,
         },
         tabBarIcon: ({ color, size }) => {
-          let iconName;
-          if (route.name === 'Communication') iconName = 'chatbubble-ellipses-outline';
-          if (route.name === 'Easy Sentence') iconName = 'text-outline';
-          if (route.name === 'Camera')         iconName = 'camera-outline';
-          if (route.name === 'Emotion')        iconName = 'happy-outline';
-          if (route.name === 'Live Scene')     iconName = 'eye-outline';
-          if (route.name === 'Profile')        iconName = 'person-outline';
-          return <Ionicons name={iconName} size={size} color={color} />;
-        }
+          const icons = {
+            'AAC Board': 'grid-outline',
+            'Communication': 'chatbubble-ellipses-outline',
+            'Sentence': 'text-outline',
+            'Emotion': 'happy-outline',
+            'Profile': 'person-outline',
+          };
+          return <Ionicons name={icons[route.name] || 'help-outline'} size={size} color={color} />;
+        },
       })}
     >
+      <Tab.Screen
+        name="AAC Board"
+        component={AACBoardScreen}
+        options={{ title: 'Communicate' }}
+      />
       <Tab.Screen name="Communication" component={CommunicationStackScreen} />
-      <Tab.Screen name="Easy Sentence"  component={EasySentenceBuilderScreen} />
-      <Tab.Screen name="Camera"         component={CameraScreen} />
-      <Tab.Screen name="Emotion"        component={EmotionScreen} />
-      <Tab.Screen name="Live Scene"     component={LiveSceneModeScreen} />
-      <Tab.Screen name="Profile"        component={ProfileScreen} />
+      <Tab.Screen name="Sentence" component={EasySentenceBuilderScreen} />
+      <Tab.Screen name="Emotion" component={EmotionScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
@@ -110,14 +106,14 @@ function MainApp() {
 function AuthStackScreen() {
   return (
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
-      <AuthStack.Screen name="Login"  component={LoginScreen} />
-      <AuthStack.Screen name="Signup" component={SignupScreen}/>
+      <AuthStack.Screen name="Login" component={LoginScreen} />
+      <AuthStack.Screen name="Signup" component={SignupScreen} />
     </AuthStack.Navigator>
   );
 }
 
 function AppNavigator() {
-  const { user, loading, error } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [hasLaunched, setHasLaunched] = useState(null);
 
   useEffect(() => {
@@ -126,24 +122,21 @@ function AppNavigator() {
     });
   }, []);
 
-  if (loading || hasLaunched === null) {
+  if (hasLaunched === null) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#4CAF50" />
       </View>
     );
   }
-  if (error) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.error}>Authentication error</Text>
-        <Text style={styles.suberror}>{error.message}</Text>
-      </View>
-    );
+
+  // Show onboarding for first launch (regardless of auth)
+  if (!hasLaunched) {
+    return <OnboardingScreen onComplete={() => setHasLaunched(true)} />;
   }
-  return user
-    ? hasLaunched ? <MainApp /> : <OnboardingScreen onComplete={() => setHasLaunched(true)} />
-    : <AuthStackScreen />;
+
+  // Main app is ALWAYS available — auth is not required for communication
+  return <MainApp />;
 }
 
 function RootNavigator() {
@@ -159,57 +152,41 @@ function RootNavigator() {
         component={SettingsScreen}
         options={{ title: 'Settings' }}
       />
+      <RootStack.Screen
+        name="Feedback"
+        component={FeedbackScreen}
+        options={{ title: 'Feedback' }}
+      />
+      <RootStack.Screen
+        name="Login"
+        component={AuthStackScreen}
+        options={{ headerShown: false, presentation: 'modal' }}
+      />
     </RootStack.Navigator>
   );
 }
 
 export default function App() {
-  const [modelLoading, setModelLoading] = useState(true);
-
-  useEffect(() => {
-    loadImprovedModel()
-      .catch(err => console.warn('Model load failed', err))
-      .finally(() => setModelLoading(false));
-  }, []);
-
-  if (modelLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#4CAF50" />
-      </View>
-    );
-  }
-
   return (
-    <AuthProvider>
-      <SettingsProvider>
-        <SafeAreaProvider>
-          <NavigationContainer>
-            <RootNavigator/>
-          </NavigationContainer>
-        </SafeAreaProvider>
-      </SettingsProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <SettingsProvider>
+          <SafeAreaProvider>
+            <NavigationContainer>
+              <RootNavigator />
+            </NavigationContainer>
+          </SafeAreaProvider>
+        </SettingsProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
 const styles = StyleSheet.create({
   center: {
-    flex:            1,
-    justifyContent:  'center',
-    alignItems:      'center',
-    backgroundColor: '#f5f5f5'
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
   },
-  error: {
-    fontSize:   18,
-    fontWeight: 'bold',
-    color:      '#d32f2f',
-    marginBottom: 8
-  },
-  suberror: {
-    fontSize:  14,
-    color:     '#666',
-    textAlign: 'center',
-    paddingHorizontal: 20
-  }
 });

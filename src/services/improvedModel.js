@@ -88,12 +88,12 @@ function decodePrediction(index, tokenizer) {
  * @returns {number} The sampled token index.
  */
 function samplePrediction(predictions, temperature = 1.0) {
-  // Scale logits by temperature and sample from the probability distribution.
-  const logits = tf.div(tf.log(tf.tensor1d(predictions)), tf.scalar(temperature));
-  const expLogits = tf.exp(logits);
-  const probabilities = expLogits.div(expLogits.sum());
-  const sampledIndex = tf.multinomial(probabilities, 1).dataSync()[0];
-  return sampledIndex;
+  return tf.tidy(() => {
+    const logits = tf.div(tf.log(tf.tensor1d(predictions)), tf.scalar(temperature));
+    const expLogits = tf.exp(logits);
+    const probabilities = expLogits.div(expLogits.sum());
+    return tf.multinomial(probabilities, 1).dataSync()[0];
+  });
 }
 
 /**
@@ -115,11 +115,14 @@ export async function predictNextWordWithImprovedModel(model, tokenizer, sentenc
   const inputTensor = tf.tensor2d([inputTokens], [1, sequenceLength]);
   const prediction = model.predict(inputTensor);
   const predictionData = prediction.dataSync();
-  
+
+  // Clean up tensors
+  inputTensor.dispose();
+  prediction.dispose();
+
   // Use sampling to generate a more diverse prediction.
   const predictedIndex = samplePrediction(predictionData, temperature);
   const predictedWord = decodePrediction(predictedIndex, tokenizer);
-  
-  console.log("✅ Predicted next word:", predictedWord);
+
   return predictedWord;
 }

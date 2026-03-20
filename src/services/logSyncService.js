@@ -1,7 +1,7 @@
 // src/services/logSyncService.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ref, push } from 'firebase/database';
-import { db } from 'firebaseConfig';
+import { db } from '../../firebaseConfig';
 
 export async function pushLogsToFirebase() {
   try {
