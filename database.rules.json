@@ -6,6 +6,16 @@
         ".write": "$uid === auth.uid"
       }
     },
+    "userSettings": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      }
+    },
+    "userLogs": {
+      ".read": false,
+      ".write": "auth !== null"
+    },
     "sessions": {
       "$uid": {
         ".read": "$uid === auth.uid",
