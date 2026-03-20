@@ -14,7 +14,7 @@ import { speak } from '../services/speechService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
-import { logEvent } from '../utils/logger';
+import { logEvent } from '../utils/enhancedLogger';
 import { StatusBar } from 'expo-status-bar';
 
 const emotions = [

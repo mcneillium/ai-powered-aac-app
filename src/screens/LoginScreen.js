@@ -7,7 +7,7 @@ import {
 }                                                      from 'react-native';
 import { signInWithEmailAndPassword }                  from 'firebase/auth';
 import { auth }                                        from '../../firebaseConfig';
-import { logEvent }                                    from '../utils/logger';
+import { logEvent }                                    from '../utils/enhancedLogger';
 import { useNavigation }                               from '@react-navigation/native';
 import logo                                           from '../../assets/icon.png';
 

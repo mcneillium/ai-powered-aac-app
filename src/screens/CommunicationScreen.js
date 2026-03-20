@@ -12,7 +12,7 @@ import {
 import * as Speech from 'expo-speech';
 import { StatusBar } from 'expo-status-bar';
 import { searchPictograms } from '../services/arasaacService';
-import { logEvent } from '../utils/logger';
+import { logEvent } from '../utils/enhancedLogger';
 import { useSettings } from '../contexts/SettingsContext';
 
 export default function CommunicationScreen() {

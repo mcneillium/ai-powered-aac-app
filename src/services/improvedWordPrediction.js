@@ -2,7 +2,7 @@
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { logEvent } from '../utils/logger';
+import { logEvent } from '../utils/enhancedLogger';
 
 // Cache for storing frequently predicted sequences
 let predictionCache = {};
