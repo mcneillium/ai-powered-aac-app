@@ -8,6 +8,9 @@ import NetInfo from '@react-native-community/netinfo';
 // Maximum number of logs to store locally before auto-sync
 const MAX_CACHED_LOGS = 50;
 
+// Maximum logs to keep locally (prevents AsyncStorage overflow ~2MB)
+const MAX_LOCAL_LOGS = 500;
+
 // Log levels
 const LOG_LEVELS = {
   DEBUG: 0,
@@ -83,6 +86,11 @@ async function processLogQueue() {
     let storedLogs = storedLogsString ? JSON.parse(storedLogsString) : [];
 
     storedLogs = [...storedLogs, ...logsToAdd];
+
+    // Log rotation: keep only the most recent logs to prevent AsyncStorage overflow
+    if (storedLogs.length > MAX_LOCAL_LOGS) {
+      storedLogs = storedLogs.slice(-MAX_LOCAL_LOGS);
+    }
 
     // Store logs back to AsyncStorage
     await AsyncStorage.setItem('userInteractionLog', JSON.stringify(storedLogs));

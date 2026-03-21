@@ -61,6 +61,8 @@ export default function AACBoardScreen() {
       const next = [...prev, button.label];
       // Record for AI personalization (non-blocking)
       recordWordSelection(button.label, prev).catch(() => {});
+      // Announce to screen reader
+      AccessibilityInfo.announceForAccessibility(`Added ${button.label}. Sentence: ${next.join(' ')}`);
       return next;
     });
     // Speak the individual word immediately for feedback
@@ -96,13 +98,23 @@ export default function AACBoardScreen() {
 
   // Remove last word (backspace)
   const removeLastWord = useCallback(() => {
-    setSentenceWords(prev => prev.slice(0, -1));
+    setSentenceWords(prev => {
+      const next = prev.slice(0, -1);
+      const removed = prev[prev.length - 1];
+      AccessibilityInfo.announceForAccessibility(
+        next.length > 0
+          ? `Removed ${removed}. Sentence: ${next.join(' ')}`
+          : 'Sentence cleared'
+      );
+      return next;
+    });
   }, []);
 
   // Clear entire sentence
   const clearSentence = useCallback(() => {
     setSentenceWords([]);
     stop();
+    AccessibilityInfo.announceForAccessibility('Sentence cleared');
   }, []);
 
   const numColumns = settings.gridSize || 4;
@@ -302,8 +314,8 @@ const styles = StyleSheet.create({
   sentenceActionBtn: {
     padding: 8,
     borderRadius: 8,
-    minWidth: 40,
-    minHeight: 40,
+    minWidth: 44,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -349,6 +361,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     padding: 8,
     minHeight: 72,
+    minWidth: 60, // WCAG: minimum 44pt touch target (60 > 44 after margin)
     alignItems: 'center',
     justifyContent: 'center',
   },
