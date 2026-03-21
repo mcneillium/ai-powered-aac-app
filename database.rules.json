@@ -43,6 +43,13 @@
       }
     },
 
+    "userSync": {
+      "$uid": {
+        ".read": "$uid === auth.uid || root.child('users').child(auth.uid).child('role').val() === 'admin' || (root.child('users').child(auth.uid).child('role').val() === 'caregiver' && root.child('users').child($uid).child('caregiverId').val() === auth.uid)",
+        ".write": "$uid === auth.uid"
+      }
+    },
+
     "fineTuneMetrics": {
       ".read": "root.child('users').child(auth.uid).child('role').val() === 'admin'",
       ".write": "auth !== null"

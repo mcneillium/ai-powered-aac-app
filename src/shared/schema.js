@@ -15,6 +15,7 @@
  *   sessions/{uid}/{id}      - Session records per user
  *   feedback/{uid}/{pushId}  - User feedback submissions
  *   fineTuneMetrics/{pushId} - AI model fine-tune metrics
+ *   userSync/{uid}           - Last activity timestamps for sync status
  */
 
 // ── Firebase Realtime Database Paths ──
@@ -27,6 +28,7 @@ export const DB_PATHS = {
   SESSIONS: 'sessions',                  // sessions/{uid}/{id}
   FEEDBACK: 'feedback',                  // feedback/{uid}/{pushId}
   FINE_TUNE_METRICS: 'fineTuneMetrics',  // fineTuneMetrics/{pushId}
+  USER_SYNC: 'userSync',                // userSync/{uid}
 };
 
 // Legacy alias — prefer DB_PATHS for new code

@@ -11,6 +11,7 @@ describe('shared/schema', () => {
     expect(schema.DB_PATHS.SESSIONS).toBe('sessions');
     expect(schema.DB_PATHS.FEEDBACK).toBe('feedback');
     expect(schema.DB_PATHS.FINE_TUNE_METRICS).toBe('fineTuneMetrics');
+    expect(schema.DB_PATHS.USER_SYNC).toBe('userSync');
   });
 
   test('COLLECTIONS is an alias for DB_PATHS', () => {
