@@ -1,7 +1,7 @@
 {
   "name": "ai-powered-aac-app",
   "license": "0BSD",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "index.js",
   "scripts": {
     "start": "npx expo start",
@@ -10,6 +10,9 @@
     "ios": "npx expo start --ios",
     "web": "npx expo start --web",
     "eas:build:android": "npx eas build --profile development --platform android",
+    "eas:build:android:preview": "npx eas build --profile preview --platform android",
+    "eas:build:android:production": "npx eas build --profile production --platform android",
+    "eas:submit:android": "npx eas submit --platform android",
     "eas:build:ios": "npx eas build --profile development --platform ios",
     "test": "jest",
     "test:watch": "jest --watchAll"

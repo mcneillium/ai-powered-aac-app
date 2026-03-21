@@ -1,5 +1,55 @@
 # Mobile Change Log
 
+## v1.1.0-rc1 — 2026-03-21 (Release Candidate)
+
+### Android Release Signing
+- Production signing config added to build.gradle (env-driven via gradle properties)
+- Release builds auto-detect keystore; fall back to debug when not configured
+- EAS production build scripts added to package.json
+- `keystore.properties` added to .gitignore
+
+### Play Store Readiness
+- App name changed to "CommAI" (strings.xml, app.json)
+- Removed `WRITE_EXTERNAL_STORAGE` permission (deprecated, unnecessary)
+- Scoped `READ_EXTERNAL_STORAGE` to maxSdkVersion=32
+- `SYSTEM_ALERT_WINDOW` removed from release builds (dev-only)
+- Removed duplicate permissions from app.json
+- Brand colors updated in Android resources (colorPrimary → #4CAF50)
+- `userInterfaceStyle` set to "automatic" for system theme support
+- iOS permission descriptions improved
+- Version synchronized: 1.1.0 across package.json, app.json, build.gradle
+
+### AI Personalisation Controls
+- Added `aiPersonalisationEnabled` setting (default: true)
+- Added "Learn from my usage" toggle in Settings with explanation text
+- Added "Reset AI Data" button with destructive confirmation dialog
+- `resetAIProfile()` clears all learned data while preserving session count
+- `hasLearnedData()` helper for conditional UI display
+- All recording calls in AACBoardScreen gated on `aiEnabled`
+- Suggestion re-ranking now uses `scoreByFrequencyAndRecency()` for personalised ordering
+- Neural model suggestions still shown when personalisation is off (not personalised, just raw)
+
+### UX Polish
+- EmotionScreen: all hardcoded #4CAF50 replaced with palette.primary
+- Removed unused `AccessibilityInfo` import from AACBoardScreen
+- Removed unused `Slider` import from SettingsScreen
+- Cleaned duplicate `Alert` import from SettingsScreen
+
+### Testing
+- 4 new tests for `resetAIProfile`, `hasLearnedData`, session count preservation
+- Total: **36 tests, all passing**
+
+### Documentation
+- `/docs/release/android-signing.md` — signing guide
+- `/docs/release/google-play-submission-checklist.md` — submission checklist
+- `/docs/release/play-store-listing-draft.md` — store listing text
+- `/docs/release/data-safety-draft.md` — data safety form answers
+- `/docs/ai/learning-from-user-input.md` — how the AI learns
+- `/docs/ai/personalisation-controls.md` — user-facing controls
+- `/docs/audit/final-mobile-release-audit.md` — full release audit
+
+---
+
 ## v1.1.0 — 2026-03-21
 
 ### Architecture

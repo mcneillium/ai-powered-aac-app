@@ -16,6 +16,7 @@ const defaultSettings = {
   speechRate: 1.0,
   speechPitch: 1.0,
   speechVoice: null, // null = system default
+  aiPersonalisationEnabled: true, // learn from user input to improve suggestions
 };
 
 export const SettingsContext = createContext({

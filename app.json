@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "ai-powered-aac-app",
+    "name": "CommAI",
     "slug": "ai-powered-aac-app",
     "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "plugins": [
       "expo-camera",
@@ -23,7 +23,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "This app needs access to the camera to capture images for AAC purposes.",
+        "NSCameraUsageDescription": "CommAI uses the camera to identify objects and generate communication suggestions.",
+        "NSMicrophoneUsageDescription": "CommAI uses the microphone for audio-based communication features.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.elpabloawakens.aipoweredaacapp"
@@ -35,12 +36,10 @@
       },
       "permissions": [
         "CAMERA",
-        "RECORD_AUDIO",
-        "READ_EXTERNAL_STORAGE",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "RECORD_AUDIO"
       ],
-      "package": "com.elpabloawakens.aipoweredaacapp"
+      "package": "com.elpabloawakens.aipoweredaacapp",
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -11,6 +11,8 @@ import {
   getFrequentFailedSearches,
   scoreByFrequencyAndRecency,
   getPrivacySafeSummary,
+  resetAIProfile,
+  hasLearnedData,
 } from '../services/aiProfileStore';
 
 // Mock AsyncStorage
@@ -82,5 +84,35 @@ describe('aiProfileStore', () => {
     expect(summary.vocabularySize).toBeDefined();
     // Should NOT expose raw word data
     expect(summary.wordFrequencies).toBeUndefined();
+  });
+
+  test('hasLearnedData returns false for fresh profile', async () => {
+    expect(hasLearnedData()).toBe(false);
+  });
+
+  test('hasLearnedData returns true after word selection', async () => {
+    await recordWordSelection('hello', []);
+    expect(hasLearnedData()).toBe(true);
+  });
+
+  test('resetAIProfile clears learned data', async () => {
+    await recordWordSelection('hello', []);
+    await recordWordSelection('world', ['hello']);
+    expect(hasLearnedData()).toBe(true);
+
+    await resetAIProfile();
+    expect(hasLearnedData()).toBe(false);
+    expect(getTopWords(5)).toEqual([]);
+    expect(getBigramPredictions('hello', 5)).toEqual([]);
+  });
+
+  test('resetAIProfile preserves session count', async () => {
+    // recordSessionStart was called in loadAIProfile setUp
+    const summaryBefore = getPrivacySafeSummary();
+    const sessionsBefore = summaryBefore.totalSessions;
+
+    await resetAIProfile();
+    const summaryAfter = getPrivacySafeSummary();
+    expect(summaryAfter.totalSessions).toBe(sessionsBefore);
   });
 });

@@ -16,7 +16,6 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  AccessibilityInfo,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +30,7 @@ import {
   recordSuggestionsShown,
   getBigramPredictions,
   getTopWords,
+  scoreByFrequencyAndRecency,
 } from '../services/aiProfileStore';
 
 // Sentence history stored in memory (survives navigation but not app restart)
@@ -50,20 +50,26 @@ export default function AACBoardScreen() {
 
   const currentPage = getPage(currentPageId) || getHomePage();
 
+  const aiEnabled = settings.aiPersonalisationEnabled !== false;
+
   // Fetch AI suggestions when sentence changes
   useEffect(() => {
     let cancelled = false;
     (async () => {
       if (sentenceWords.length === 0) {
-        // Show user's top words when sentence is empty
-        const top = getTopWords(6);
-        if (!cancelled) setSuggestions(top.length > 0 ? top : []);
+        if (aiEnabled) {
+          // Show user's most frequent/recent words when sentence is empty
+          const top = getTopWords(6);
+          if (!cancelled) setSuggestions(top.length > 0 ? top : []);
+        } else {
+          setSuggestions([]);
+        }
         return;
       }
 
-      // Try bigram predictions first (instant, local)
+      // Try bigram predictions first (instant, local, personalised)
       const lastWord = sentenceWords[sentenceWords.length - 1];
-      const bigramResults = getBigramPredictions(lastWord, 4);
+      const bigramResults = aiEnabled ? getBigramPredictions(lastWord, 4) : [];
       if (bigramResults.length > 0 && !cancelled) {
         setSuggestions(bigramResults);
       }
@@ -75,15 +81,19 @@ export default function AACBoardScreen() {
         if (!cancelled && aiResults.length > 0) {
           // Merge: bigram results first (user-personalized), then AI model results
           const merged = [...new Set([...bigramResults, ...aiResults])].slice(0, 6);
-          setSuggestions(merged);
-          recordSuggestionsShown(merged.length).catch(() => {});
+          // Re-rank by user frequency + recency if personalisation is on
+          const ranked = aiEnabled
+            ? scoreByFrequencyAndRecency(merged).map(s => s.word)
+            : merged;
+          setSuggestions(ranked);
+          if (aiEnabled) recordSuggestionsShown(ranked.length).catch(() => {});
         }
       } catch {
         // Bigram results are already showing — this is fine
       }
     })();
     return () => { cancelled = true; };
-  }, [sentenceWords]);
+  }, [sentenceWords, aiEnabled]);
 
   // Navigate to a sub-page (e.g., Food, People)
   const navigateToPage = useCallback((pageId) => {
@@ -110,8 +120,10 @@ export default function AACBoardScreen() {
   const addWord = useCallback((label, wasSuggestion = false) => {
     setSentenceWords(prev => {
       const next = [...prev, label];
-      // Record for AI profile learning
-      recordWordSelection(label, prev, wasSuggestion).catch(() => {});
+      // Record for AI profile learning (only if personalisation is enabled)
+      if (aiEnabled) {
+        recordWordSelection(label, prev, wasSuggestion).catch(() => {});
+      }
       return next;
     });
     // Speak the individual word immediately for feedback
@@ -145,8 +157,8 @@ export default function AACBoardScreen() {
         pitch: settings.speechPitch,
         voice: settings.speechVoice,
       });
-      // Record in profile and save to history
-      recordSentenceSpoken(sentenceWords).catch(() => {});
+      // Record in profile (if personalisation on) and save to history
+      if (aiEnabled) recordSentenceSpoken(sentenceWords).catch(() => {});
       sentenceHistory.unshift({ text, timestamp: Date.now() });
       if (sentenceHistory.length > MAX_HISTORY) sentenceHistory.pop();
     }

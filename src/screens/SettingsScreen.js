@@ -11,13 +11,14 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
-import Slider from '@react-native-picker/picker'; // Using Picker for theme/grid
 import { Picker } from '@react-native-picker/picker';
 import { useNavigation } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette } from '../theme';
 import { speak, getAvailableVoices } from '../services/speechService';
+import { resetAIProfile, hasLearnedData } from '../services/aiProfileStore';
 
 export default function SettingsScreen() {
   const { settings, loading: settingsLoading, updateSettings } = useSettings();
@@ -228,9 +229,55 @@ export default function SettingsScreen() {
         />
       </View>
 
+      {/* AI Personalisation */}
+      <Text style={[styles.sectionTitle, { color: palette.text, borderBottomColor: palette.border }]}>
+        AI Personalisation
+      </Text>
+      <View style={styles.switchContainer}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.label, { color: palette.text, marginTop: 0 }]}>Learn from my usage</Text>
+          <Text style={[styles.helperText, { color: palette.textSecondary }]}>
+            Improves suggestions based on your communication patterns. All data stays on-device.
+          </Text>
+        </View>
+        <Switch
+          value={settings.aiPersonalisationEnabled !== false}
+          onValueChange={(val) => updateSettings({ aiPersonalisationEnabled: val })}
+          accessibilityLabel="Toggle AI personalisation"
+        />
+      </View>
+
+      {hasLearnedData() && (
+        <TouchableOpacity
+          style={[styles.testButton, { backgroundColor: palette.danger, marginTop: 8 }]}
+          onPress={() => {
+            Alert.alert(
+              'Reset AI Data',
+              'This will clear all learned communication patterns and suggestions will start fresh. This cannot be undone.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Reset',
+                  style: 'destructive',
+                  onPress: () => {
+                    resetAIProfile().then(() => {
+                      Alert.alert('Done', 'AI personalisation data has been reset.');
+                    });
+                  },
+                },
+              ]
+            );
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Reset AI personalisation data"
+        >
+          <Text style={styles.testButtonText}>Reset AI Data</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Send Feedback */}
       <TouchableOpacity
-        style={[styles.testButton, { backgroundColor: palette.info, marginTop: 12 }]}
+        style={[styles.testButton, { backgroundColor: palette.info, marginTop: 24 }]}
         onPress={() => navigation.navigate('Feedback')}
         accessibilityRole="button"
         accessibilityLabel="Send feedback"
@@ -309,6 +356,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginVertical: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginTop: 28,
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+  },
+  helperText: {
+    fontSize: 13,
+    marginTop: 2,
+    lineHeight: 18,
   },
   testButton: {
     marginTop: 20,

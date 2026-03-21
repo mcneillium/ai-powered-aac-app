@@ -107,6 +107,26 @@ export async function flushAIProfile() {
 }
 
 /**
+ * Reset the AI profile to defaults (user-initiated).
+ * Clears all learned data while preserving the session count.
+ */
+export async function resetAIProfile() {
+  const sessions = profile?.totalSessions || 0;
+  profile = createDefaultProfile();
+  profile.totalSessions = sessions; // preserve session count for analytics
+  await saveProfile();
+  return profile;
+}
+
+/**
+ * Check if the profile has any learned data.
+ */
+export function hasLearnedData() {
+  if (!profile) return false;
+  return profile.totalWordSelections > 0 || Object.keys(profile.bigrams).length > 0;
+}
+
+/**
  * Record a word selection by the user.
  * @param {string} word - The word selected
  * @param {string[]} contextWords - Previous words in the sentence

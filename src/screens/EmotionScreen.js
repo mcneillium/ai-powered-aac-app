@@ -94,7 +94,7 @@ export default function EmotionScreen() {
   if (settingsLoading) {
     return (
       <View style={[styles.center, { backgroundColor: palette.background }]}>  
-        <ActivityIndicator size="large" color="#4CAF50" />
+        <ActivityIndicator size="large" color={palette.primary} />
       </View>
     );
   }
@@ -103,7 +103,7 @@ export default function EmotionScreen() {
     <View style={[styles.container, { backgroundColor: palette.background }]}>  
       <Text style={[styles.heading, { color: palette.text }]}>How are you feeling?</Text>
       {selectedEmotion && (
-        <View style={[styles.preview, { borderColor: '#4CAF50' }]}>  
+        <View style={[styles.preview, { borderColor: palette.primary }]}>  
           <Text style={[styles.previewEmoji, { color: palette.text }]}>{selectedEmotion.emoji}</Text>
           <Text style={[styles.previewLabel, { color: palette.text }]}>{selectedEmotion.label}</Text>
         </View>
@@ -121,7 +121,7 @@ export default function EmotionScreen() {
               onPress={() => selectEmotion(item)}
               onPressIn={() => onPressIn(item.label)}
               onPressOut={() => onPressOut(item.label)}
-              style={[styles.card, { backgroundColor: palette.cardBg }, isSel && styles.cardSelected]}
+              style={[styles.card, { backgroundColor: palette.cardBg }, isSel && [styles.cardSelected, { borderColor: palette.primary }]]}
               accessibilityRole="button"
               accessibilityLabel={`I feel ${item.label}`}
               accessibilityState={{ selected: isSel }}
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   grid:          { paddingVertical: 8 },
   row:           { justifyContent: 'space-between' },
   card:          { flex: 1, margin: 8, backgroundColor: '#fff', borderRadius: 12, elevation: 3, alignItems: 'center', padding: 16 },
-  cardSelected:  { borderWidth: 2, borderColor: '#4CAF50' },
+  cardSelected:  { borderWidth: 2 },
   emoji:         { fontSize: 32, marginBottom: 8 },
   label:         { fontSize: 16 },
   preview:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16, padding: 12, borderWidth: 2, borderRadius: 12 },
