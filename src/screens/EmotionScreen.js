@@ -14,6 +14,7 @@ import { speak } from '../services/speechService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
+import { getPalette } from '../theme';
 import { logEvent } from '../utils/logger';
 import { StatusBar } from 'expo-status-bar';
 
@@ -33,25 +34,26 @@ export default function EmotionScreen() {
   const [selectedEmotion, setSelectedEmotion] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  const palettes = {
-    light:       { background: '#eef2f3', text: '#000' },
-    dark:        { background: '#000', text: '#fff' },
-    highContrast:{ background: '#000', text: '#FFD600' }
-  };
-  const palette = palettes[settings.theme];
+  const palette = getPalette(settings.theme);
 
-  const scaleAnim = useState(new Animated.Value(1))[0];
+  // Each emotion card gets its own scale animation ref
+  const scaleAnims = useState(() =>
+    emotions.reduce((acc, emo) => {
+      acc[emo.label] = new Animated.Value(1);
+      return acc;
+    }, {})
+  )[0];
 
-  const onPressIn = () => {
-    Animated.timing(scaleAnim, {
+  const onPressIn = (label) => {
+    Animated.timing(scaleAnims[label], {
       toValue: 0.9,
       duration: 100,
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
     }).start();
   };
-  const onPressOut = () => {
-    Animated.timing(scaleAnim, {
+  const onPressOut = (label) => {
+    Animated.timing(scaleAnims[label], {
       toValue: 1,
       duration: 100,
       easing: Easing.out(Easing.ease),
@@ -117,14 +119,14 @@ export default function EmotionScreen() {
           return (
             <Pressable
               onPress={() => selectEmotion(item)}
-              onPressIn={onPressIn}
-              onPressOut={onPressOut}
-              style={[styles.card, isSel && styles.cardSelected]}
+              onPressIn={() => onPressIn(item.label)}
+              onPressOut={() => onPressOut(item.label)}
+              style={[styles.card, { backgroundColor: palette.cardBg }, isSel && styles.cardSelected]}
               accessibilityRole="button"
               accessibilityLabel={`I feel ${item.label}`}
               accessibilityState={{ selected: isSel }}
             >
-              <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+              <Animated.View style={{ transform: [{ scale: scaleAnims[item.label] }] }}>
                 <Text style={[styles.emoji, { color: palette.text }]}>{item.emoji}</Text>
                 <Text style={[styles.label, { color: palette.text }]}>{item.label}</Text>
               </Animated.View>
@@ -134,17 +136,23 @@ export default function EmotionScreen() {
       />
       <View style={styles.footer}>
         <Pressable
-          style={[styles.action, { backgroundColor: '#4CAF50' }]}
+          style={[styles.action, { backgroundColor: palette.primary, opacity: selectedEmotion ? 1 : 0.5 }]}
           onPress={speakEmotion}
           disabled={!selectedEmotion}
+          accessibilityRole="button"
+          accessibilityLabel={selectedEmotion ? `Speak: I am ${selectedEmotion.label}` : 'Select an emotion first'}
+          accessibilityState={{ disabled: !selectedEmotion }}
         >
           <MaterialIcons name="volume-up" size={24} color="#fff" />
           <Text style={styles.actionText}>Speak</Text>
         </Pressable>
         <Pressable
-          style={[styles.action, { backgroundColor: '#2196F3' }]}
+          style={[styles.action, { backgroundColor: palette.info, opacity: selectedEmotion && !saving ? 1 : 0.5 }]}
           onPress={saveEmotion}
           disabled={!selectedEmotion || saving}
+          accessibilityRole="button"
+          accessibilityLabel="Save selected emotion"
+          accessibilityState={{ disabled: !selectedEmotion || saving }}
         >
           {saving ? (
             <ActivityIndicator color="#fff" />

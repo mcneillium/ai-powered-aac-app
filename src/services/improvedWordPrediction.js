@@ -4,11 +4,14 @@ import '@tensorflow/tfjs-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logEvent } from '../utils/logger';
 
-// Cache for storing frequently predicted sequences
+// LRU-style prediction cache with bounded size
+const CACHE_MAX = 80;
 let predictionCache = {};
+let cacheOrder = []; // track insertion order for eviction
 
 // Local frequency-based model for fallback when TensorFlow model isn't working
 let frequencyModel = null;
+let frequencyUpdateCount = 0;
 
 /**
  * Initializes the word prediction system
@@ -180,13 +183,11 @@ export async function updateFrequencyModel(prefix, nextWord) {
       }
     }
     
-    // Every 20 updates, save the model to storage
-    const updateCount = parseInt(await AsyncStorage.getItem('frequencyUpdateCount') || '0');
-    if (updateCount % 20 === 0) {
+    // Every 20 updates, save the model to storage (in-memory counter avoids extra I/O)
+    frequencyUpdateCount++;
+    if (frequencyUpdateCount % 20 === 0) {
       await AsyncStorage.setItem('wordFrequencyModel', JSON.stringify(frequencyModel));
-      console.log("✓ Frequency model saved to storage");
     }
-    await AsyncStorage.setItem('frequencyUpdateCount', (updateCount + 1).toString());
     
   } catch (error) {
     console.error("Error updating frequency model:", error);
@@ -374,13 +375,12 @@ async function getTensorFlowPredictions(inputText, numPredictions = 5, temperatu
     inputTensor.dispose();
     predictions.dispose();
     
-    // Cache the results
+    // Cache the results with LRU eviction
     predictionCache[cacheKey] = predictedWords;
-    
-    // Limit cache size
-    const cacheKeys = Object.keys(predictionCache);
-    if (cacheKeys.length > 100) {
-      delete predictionCache[cacheKeys[0]];
+    cacheOrder.push(cacheKey);
+    while (cacheOrder.length > CACHE_MAX) {
+      const evict = cacheOrder.shift();
+      delete predictionCache[evict];
     }
     
     return predictedWords;
@@ -454,7 +454,7 @@ export async function learnFromUserInput(context, selectedWord) {
  */
 export function clearPredictionCache() {
   predictionCache = {};
-  console.log("Prediction cache cleared");
+  cacheOrder = [];
 }
 
 /**

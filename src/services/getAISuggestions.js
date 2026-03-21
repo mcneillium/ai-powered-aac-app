@@ -1,24 +1,24 @@
-import { predictTopKWordsWithImprovedModel } from './improvedModelLoader';
+import { predictTopKWordsWithImprovedModel, modelReady } from './improvedModelLoader';
 
+/**
+ * Get AI word suggestions for the current sentence.
+ * Awaits model readiness via Promise (no polling) with a timeout.
+ */
 export async function getAISuggestions(currentSentence) {
   if (!currentSentence.trim()) return [];
-  console.log(`🚀 Fetching AI suggestions for: "${currentSentence}"`);
 
-  let attempts = 0;
-  const maxAttempts = 10;
-  while ((!global.betterWordPredictionModel || !global.tokenizer) && attempts < maxAttempts) {
-    console.warn("⏳ Model or tokenizer not loaded yet. Waiting 500ms...");
-    await new Promise(resolve => setTimeout(resolve, 500));
-    attempts++;
-  }
-  if (!global.betterWordPredictionModel || !global.tokenizer) {
-    console.error("❌ Model or tokenizer still not loaded after waiting.");
+  // Wait for model to be ready (max 3s), but don't block indefinitely
+  const ready = await Promise.race([
+    modelReady,
+    new Promise(resolve => setTimeout(() => resolve(false), 3000)),
+  ]);
+
+  if (!ready || !global.betterWordPredictionModel || !global.tokenizer) {
     return [];
   }
 
   try {
-    // Return the top 4 predictions
-    const suggestions = await predictTopKWordsWithImprovedModel(
+    return await predictTopKWordsWithImprovedModel(
       global.betterWordPredictionModel,
       global.tokenizer,
       currentSentence,
@@ -26,9 +26,8 @@ export async function getAISuggestions(currentSentence) {
       4,    // sequenceLength
       4     // topK
     );
-    return suggestions;
   } catch (error) {
-    console.error("❌ Error during improved model prediction:", error);
+    console.warn('AI suggestion error:', error.message);
     return [];
   }
 }

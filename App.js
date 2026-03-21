@@ -6,27 +6,28 @@
 // 2. Auth is optional — enables sync, logging, and caregiver features
 // 3. Error boundary wraps the entire app to prevent total crash
 // 4. Model loading is non-blocking — app renders immediately
-// 5. Shared theme from src/theme.js
+// 5. Shared theme from src/theme.js — no inline palette objects
 
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { SettingsProvider, useSettings } from './src/contexts/SettingsContext';
+import { NetworkProvider } from './src/contexts/NetworkContext';
 import { getPalette } from './src/theme';
 import ErrorBoundary from './src/components/ErrorBoundary';
+import OfflineBanner from './src/components/OfflineBanner';
 
 // Screens
 import AACBoardScreen from './src/screens/AACBoardScreen';
 import CommunicationStackScreen from './src/screens/CommunicationScreen';
 import EasySentenceBuilderScreen from './src/screens/EasySentenceBuilderScreen';
-import CameraScreen from './src/screens/CameraScreen';
 import EmotionScreen from './src/screens/EmotionScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -51,6 +52,28 @@ loadAIProfile()
   .then(() => recordSessionStart())
   .catch(err => console.warn('AI profile load failed (non-blocking):', err));
 
+const TAB_ICONS = {
+  'AAC Board': 'grid-outline',
+  'Communication': 'chatbubble-ellipses-outline',
+  'Sentence': 'text-outline',
+  'Emotion': 'happy-outline',
+  'Profile': 'person-outline',
+};
+
+function SettingsHeaderButton({ tintColor, navigation }) {
+  return (
+    <TouchableOpacity
+      onPress={() => navigation.navigate('Settings')}
+      style={styles.headerBtn}
+      accessibilityRole="button"
+      accessibilityLabel="Open settings"
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+    >
+      <Ionicons name="settings-outline" size={22} color={tintColor} />
+    </TouchableOpacity>
+  );
+}
+
 function MainApp() {
   const insets = useSafeAreaInsets();
   const { settings } = useSettings();
@@ -58,10 +81,13 @@ function MainApp() {
 
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
+      screenOptions={({ route, navigation }) => ({
         headerStyle: { backgroundColor: palette.tabBarBg },
         headerTintColor: palette.text,
-        headerTitleStyle: { color: palette.text },
+        headerTitleStyle: { color: palette.text, fontWeight: '600' },
+        headerRight: () => (
+          <SettingsHeaderButton tintColor={palette.text} navigation={navigation} />
+        ),
         tabBarActiveTintColor: palette.tabBarActive,
         tabBarInactiveTintColor: palette.tabBarInactive,
         tabBarStyle: {
@@ -78,16 +104,10 @@ function MainApp() {
           height: 60 + insets.bottom,
           paddingBottom: insets.bottom,
         },
-        tabBarIcon: ({ color, size }) => {
-          const icons = {
-            'AAC Board': 'grid-outline',
-            'Communication': 'chatbubble-ellipses-outline',
-            'Sentence': 'text-outline',
-            'Emotion': 'happy-outline',
-            'Profile': 'person-outline',
-          };
-          return <Ionicons name={icons[route.name] || 'help-outline'} size={size} color={color} />;
-        },
+        tabBarIcon: ({ color, size }) => (
+          <Ionicons name={TAB_ICONS[route.name] || 'help-outline'} size={size} color={color} />
+        ),
+        tabBarAccessibilityLabel: `${route.name} tab`,
       })}
     >
       <Tab.Screen
@@ -140,8 +160,16 @@ function AppNavigator() {
 }
 
 function RootNavigator() {
+  const { settings } = useSettings();
+  const palette = getPalette(settings.theme);
+
   return (
-    <RootStack.Navigator>
+    <RootStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: palette.tabBarBg },
+        headerTintColor: palette.text,
+      }}
+    >
       <RootStack.Screen
         name="App"
         component={AppNavigator}
@@ -171,11 +199,14 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <SettingsProvider>
-          <SafeAreaProvider>
-            <NavigationContainer>
-              <RootNavigator />
-            </NavigationContainer>
-          </SafeAreaProvider>
+          <NetworkProvider>
+            <SafeAreaProvider>
+              <OfflineBanner />
+              <NavigationContainer>
+                <RootNavigator />
+              </NavigationContainer>
+            </SafeAreaProvider>
+          </NetworkProvider>
         </SettingsProvider>
       </AuthProvider>
     </ErrorBoundary>
@@ -188,5 +219,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
+  },
+  headerBtn: {
+    marginRight: Platform.OS === 'ios' ? 16 : 12,
+    padding: 4,
   },
 });

@@ -14,6 +14,7 @@ import { StatusBar } from 'expo-status-bar';
 import { searchPictograms } from '../services/arasaacService';
 import { logEvent } from '../utils/logger';
 import { useSettings } from '../contexts/SettingsContext';
+import { getPalette } from '../theme';
 
 export default function CommunicationScreen() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -22,13 +23,7 @@ export default function CommunicationScreen() {
   const [selected, setSelected] = useState(null);
   const [categoryImages, setCategoryImages] = useState({});
   const categories = ['Everyday', 'Food', 'Drinks', 'People', 'Places'];
-
-  const palettes = {
-    light:       { background: '#fff', text: '#000' },
-    dark:        { background: '#000', text: '#fff' },
-    highContrast:{ background: '#000', text: '#FFD600' },
-  };
-  const palette = palettes[settings.theme];
+  const palette = getPalette(settings.theme);
 
   useEffect(() => {
     (async () => {
@@ -72,13 +67,13 @@ export default function CommunicationScreen() {
   if (settingsLoading) {
     return (
       <View style={[styles.center, { backgroundColor: palette.background }]}>  
-        <ActivityIndicator size="large" color="#4CAF50" />
+        <ActivityIndicator size="large" color={palette.primary} />
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: palette.background }]}>  
+    <View style={[styles.container, { backgroundColor: palette.background }]}>
       {/* Category picker */}
       <FlatList
         data={categories}
@@ -93,8 +88,14 @@ export default function CommunicationScreen() {
             ? `https://static.arasaac.org/pictograms/${rep._id}/${rep._id}_500.png`
             : `https://via.placeholder.com/80?text=${item}`;
           return (
-            <TouchableOpacity style={styles.categoryCard} onPress={() => loadCategory(item)}>
-              <Image source={{ uri }} style={styles.categoryImage} />
+            <TouchableOpacity
+              style={styles.categoryCard}
+              onPress={() => loadCategory(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`${item} category`}
+              accessibilityHint="Loads pictograms for this category"
+            >
+              <Image source={{ uri }} style={styles.categoryImage} accessibilityElementsHidden />
               <Text style={[styles.categoryLabel, { color: palette.text }]}>{item}</Text>
             </TouchableOpacity>
           );
@@ -103,7 +104,7 @@ export default function CommunicationScreen() {
 
       {/* Grid of pictograms */}
       {loading ? (
-        <ActivityIndicator style={styles.loader} size="large" color="#4CAF50" />
+        <ActivityIndicator style={styles.loader} size="large" color={palette.primary} />
       ) : (
         <FlatList
           data={pictograms}
@@ -153,6 +154,6 @@ const styles = StyleSheet.create({
   grid:            { padding: 4 },
   picItem:         { aspectRatio: 1, margin: 4, backgroundColor: '#eee', borderRadius: 8 },
   picImage:        { width: '100%', height: '100%', borderRadius: 8 },
-  selectedItem:    { borderWidth: 2, borderColor: '#4CAF50' },
+  selectedItem:    { borderWidth: 2, borderColor: '#4CAF50' }, // kept as semantic constant
   emptyText:       { textAlign: 'center', marginTop: 20, fontSize: 16 }
 });

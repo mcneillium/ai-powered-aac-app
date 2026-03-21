@@ -1,6 +1,14 @@
 // src/theme.js
 // Single source of truth for theming across the AAC app.
-// Every screen imports from here instead of defining its own palettes.
+// Every screen MUST import from here — no inline palette objects.
+
+// ── Branding constants ──
+export const brand = {
+  name: 'CommAI',
+  tagline: 'Communication for everyone',
+  primaryColor: '#4CAF50',
+  accentColor: '#2196F3',
+};
 
 export const palettes = {
   light: {
@@ -16,6 +24,12 @@ export const palettes = {
     primary: '#4CAF50',
     danger: '#F44336',
     info: '#2196F3',
+    success: '#4CAF50',
+    warning: '#FF9800',
+    inputBg: '#FFFFFF',
+    inputBorder: '#CCCCCC',
+    chipBg: '#E0E0E0',
+    overlay: 'rgba(0,0,0,0.5)',
   },
   dark: {
     background: '#000000',
@@ -30,6 +44,12 @@ export const palettes = {
     primary: '#4CAF50',
     danger: '#F44336',
     info: '#2196F3',
+    success: '#4CAF50',
+    warning: '#FF9800',
+    inputBg: '#1E1E1E',
+    inputBorder: '#444444',
+    chipBg: '#333333',
+    overlay: 'rgba(0,0,0,0.7)',
   },
   highContrast: {
     background: '#000000',
@@ -44,6 +64,12 @@ export const palettes = {
     primary: '#FFD600',
     danger: '#FF6666',
     info: '#66BBFF',
+    success: '#66FF66',
+    warning: '#FFB74D',
+    inputBg: '#1A1A00',
+    inputBorder: '#FFD600',
+    chipBg: '#333300',
+    overlay: 'rgba(0,0,0,0.8)',
   },
 };
 

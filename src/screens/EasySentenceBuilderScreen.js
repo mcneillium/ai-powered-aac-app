@@ -7,6 +7,7 @@ import { searchPictograms } from '../services/arasaacService';
 import { getAISuggestions } from '../services/getAISuggestions';
 import { updateLastActivity } from '../utils/syncStatus';
 import { useSettings } from '../contexts/SettingsContext';
+import { getPalette } from '../theme';
 import { useOnDevicePrediction } from '../hooks/useOnDevicePrediction';
 import { recordWordSelection, recordSentenceSpoken, recordSuggestionsShown, recordFailedSearch } from '../services/aiProfileStore';
 
@@ -23,8 +24,7 @@ export default function EasySentenceBuilderScreen() {
   const { predictNext, recordTap } = useOnDevicePrediction();
 
   const categories = ['Everyday', 'Food', 'Drinks', 'People', 'Places'];
-  const palettes = { light: { background: '#fff', text: '#000' }, dark: { background: '#000', text: '#fff' }, highContrast: { background: '#000', text: '#FFD600' } };
-  const palette = palettes[settings.theme];
+  const palette = getPalette(settings.theme);
 
   useEffect(() => {
     (async () => {

@@ -13,6 +13,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Speech from 'expo-speech';
 import { getImageCaption } from '../services/hfImageCaption';
 import { useSettings } from '../contexts/SettingsContext';
+import { getPalette } from '../theme';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -24,12 +25,7 @@ export default function CombinedImageScreen() {
   const [processing, setProcessing] = useState(false);
   const cameraRef = useRef(null);
 
-  const palettes = {
-    light: { background: '#fff', text: '#000' },
-    dark:  { background: '#000', text: '#fff' },
-    highContrast: { background: '#000', text: '#FFD600' },
-  };
-  const palette = palettes[settings.theme];
+  const palette = getPalette(settings.theme);
 
   useEffect(() => {
     (async () => {

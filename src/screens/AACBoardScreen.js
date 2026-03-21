@@ -7,8 +7,9 @@
 // 3. ACCESSIBLE: Every button has proper accessibility labels and roles
 // 4. LOW-LATENCY: Speech fires immediately on tap with no network dependency
 // 5. Fitzgerald Key color coding for part-of-speech awareness
+// 6. AI suggestions strip shows contextual next-word predictions
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,12 +17,25 @@ import {
   TouchableOpacity,
   StyleSheet,
   AccessibilityInfo,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette } from '../theme';
 import { speak, stop } from '../services/speechService';
 import { getHomePage, getPage } from '../data/coreVocabulary';
+import { getAISuggestions } from '../services/getAISuggestions';
+import {
+  recordWordSelection,
+  recordSentenceSpoken,
+  recordSuggestionsShown,
+  getBigramPredictions,
+  getTopWords,
+} from '../services/aiProfileStore';
+
+// Sentence history stored in memory (survives navigation but not app restart)
+let sentenceHistory = [];
+const MAX_HISTORY = 20;
 
 export default function AACBoardScreen() {
   const { settings } = useSettings();
@@ -30,8 +44,46 @@ export default function AACBoardScreen() {
   const [sentenceWords, setSentenceWords] = useState([]);
   const [currentPageId, setCurrentPageId] = useState('home');
   const [pageHistory, setPageHistory] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const sentenceBarRef = useRef(null);
 
   const currentPage = getPage(currentPageId) || getHomePage();
+
+  // Fetch AI suggestions when sentence changes
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (sentenceWords.length === 0) {
+        // Show user's top words when sentence is empty
+        const top = getTopWords(6);
+        if (!cancelled) setSuggestions(top.length > 0 ? top : []);
+        return;
+      }
+
+      // Try bigram predictions first (instant, local)
+      const lastWord = sentenceWords[sentenceWords.length - 1];
+      const bigramResults = getBigramPredictions(lastWord, 4);
+      if (bigramResults.length > 0 && !cancelled) {
+        setSuggestions(bigramResults);
+      }
+
+      // Then try the neural model (async)
+      try {
+        const text = sentenceWords.join(' ');
+        const aiResults = await getAISuggestions(text);
+        if (!cancelled && aiResults.length > 0) {
+          // Merge: bigram results first (user-personalized), then AI model results
+          const merged = [...new Set([...bigramResults, ...aiResults])].slice(0, 6);
+          setSuggestions(merged);
+          recordSuggestionsShown(merged.length).catch(() => {});
+        }
+      } catch {
+        // Bigram results are already showing — this is fine
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sentenceWords]);
 
   // Navigate to a sub-page (e.g., Food, People)
   const navigateToPage = useCallback((pageId) => {
@@ -55,10 +107,15 @@ export default function AACBoardScreen() {
   }, []);
 
   // Add word to sentence bar
-  const addWord = useCallback((button) => {
-    setSentenceWords(prev => [...prev, button.label]);
+  const addWord = useCallback((label, wasSuggestion = false) => {
+    setSentenceWords(prev => {
+      const next = [...prev, label];
+      // Record for AI profile learning
+      recordWordSelection(label, prev, wasSuggestion).catch(() => {});
+      return next;
+    });
     // Speak the individual word immediately for feedback
-    speak(button.label, {
+    speak(label, {
       rate: settings.speechRate,
       pitch: settings.speechPitch,
       voice: settings.speechVoice,
@@ -70,9 +127,14 @@ export default function AACBoardScreen() {
     if (button.navigateTo) {
       navigateToPage(button.navigateTo);
     } else {
-      addWord(button);
+      addWord(button.label);
     }
   }, [navigateToPage, addWord]);
+
+  // Handle AI suggestion tap
+  const handleSuggestionPress = useCallback((word) => {
+    addWord(word, true);
+  }, [addWord]);
 
   // Speak the full sentence
   const speakSentence = useCallback(() => {
@@ -83,6 +145,10 @@ export default function AACBoardScreen() {
         pitch: settings.speechPitch,
         voice: settings.speechVoice,
       });
+      // Record in profile and save to history
+      recordSentenceSpoken(sentenceWords).catch(() => {});
+      sentenceHistory.unshift({ text, timestamp: Date.now() });
+      if (sentenceHistory.length > MAX_HISTORY) sentenceHistory.pop();
     }
   }, [sentenceWords, settings]);
 
@@ -96,6 +162,18 @@ export default function AACBoardScreen() {
     setSentenceWords([]);
     stop();
   }, []);
+
+  // Repeat a sentence from history
+  const repeatFromHistory = useCallback((text) => {
+    const words = text.split(' ');
+    setSentenceWords(words);
+    speak(text, {
+      rate: settings.speechRate,
+      pitch: settings.speechPitch,
+      voice: settings.speechVoice,
+    });
+    setShowHistory(false);
+  }, [settings]);
 
   const numColumns = settings.gridSize || 4;
 
@@ -119,6 +197,7 @@ export default function AACBoardScreen() {
           },
         ]}
         onPress={() => handleButtonPress(item)}
+        activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityLabel={
           isNavButton
@@ -158,6 +237,7 @@ export default function AACBoardScreen() {
     <View style={[styles.container, { backgroundColor: palette.background }]}>
       {/* Sentence bar — shows accumulated words */}
       <View
+        ref={sentenceBarRef}
         style={[styles.sentenceBar, { backgroundColor: palette.surface, borderColor: palette.border }]}
         accessible
         accessibilityRole="text"
@@ -166,6 +246,7 @@ export default function AACBoardScreen() {
             ? `Sentence: ${sentenceWords.join(' ')}`
             : 'Sentence bar is empty. Tap words below to build a sentence.'
         }
+        accessibilityLiveRegion="polite"
       >
         <View style={styles.sentenceWords}>
           {sentenceWords.length === 0 ? (
@@ -183,11 +264,21 @@ export default function AACBoardScreen() {
 
         <View style={styles.sentenceActions}>
           <TouchableOpacity
+            onPress={() => setShowHistory(h => !h)}
+            style={[styles.sentenceActionBtn, { backgroundColor: palette.info }]}
+            accessibilityRole="button"
+            accessibilityLabel={showHistory ? 'Hide sentence history' : 'Show sentence history'}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="time-outline" size={20} color="#FFF" />
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={removeLastWord}
             style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }]}
             accessibilityRole="button"
             accessibilityLabel="Delete last word"
             disabled={sentenceWords.length === 0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="backspace-outline" size={22} color="#FFF" />
           </TouchableOpacity>
@@ -197,6 +288,7 @@ export default function AACBoardScreen() {
             accessibilityRole="button"
             accessibilityLabel="Clear sentence"
             disabled={sentenceWords.length === 0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="trash-outline" size={22} color="#FFF" />
           </TouchableOpacity>
@@ -204,7 +296,11 @@ export default function AACBoardScreen() {
             onPress={speakSentence}
             style={[styles.speakBtn, { backgroundColor: palette.primary }]}
             accessibilityRole="button"
-            accessibilityLabel={`Speak sentence: ${sentenceWords.join(' ')}`}
+            accessibilityLabel={
+              sentenceWords.length > 0
+                ? `Speak sentence: ${sentenceWords.join(' ')}`
+                : 'Speak button. Build a sentence first.'
+            }
             accessibilityHint="Reads your sentence aloud"
             disabled={sentenceWords.length === 0}
           >
@@ -212,6 +308,51 @@ export default function AACBoardScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Sentence history dropdown */}
+      {showHistory && sentenceHistory.length > 0 && (
+        <View style={[styles.historyPanel, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+          <Text style={[styles.historyTitle, { color: palette.textSecondary }]}>Recent Sentences</Text>
+          {sentenceHistory.slice(0, 5).map((item, i) => (
+            <TouchableOpacity
+              key={`${i}-${item.timestamp}`}
+              style={[styles.historyItem, { borderBottomColor: palette.border }]}
+              onPress={() => repeatFromHistory(item.text)}
+              accessibilityRole="button"
+              accessibilityLabel={`Repeat: ${item.text}`}
+            >
+              <Ionicons name="refresh-outline" size={16} color={palette.primary} />
+              <Text style={[styles.historyText, { color: palette.text }]} numberOfLines={1}>
+                {item.text}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* AI Suggestions strip */}
+      {suggestions.length > 0 && (
+        <View style={[styles.suggestionsBar, { backgroundColor: palette.surface }]}>
+          <Ionicons name="sparkles-outline" size={16} color={palette.textSecondary} style={{ marginRight: 4 }} />
+          <FlatList
+            data={suggestions}
+            horizontal
+            keyExtractor={(item, i) => `${item}-${i}`}
+            showsHorizontalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[styles.suggestionChip, { backgroundColor: palette.chipBg, borderColor: palette.border }]}
+                onPress={() => handleSuggestionPress(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`Suggestion: ${item}`}
+                accessibilityHint="Add this word to your sentence"
+              >
+                <Text style={[styles.suggestionText, { color: palette.text }]}>{item}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      )}
 
       {/* Navigation breadcrumb */}
       {currentPageId !== 'home' && (
@@ -253,6 +394,7 @@ export default function AACBoardScreen() {
           offset: 90 * Math.floor(index / numColumns),
           index,
         })}
+        removeClippedSubviews={Platform.OS === 'android'}
       />
     </View>
   );
@@ -306,6 +448,46 @@ const styles = StyleSheet.create({
     minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  historyPanel: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+  },
+  historyTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  historyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+  },
+  historyText: {
+    fontSize: 15,
+    flex: 1,
+  },
+  suggestionsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  suggestionChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    borderWidth: 1,
+  },
+  suggestionText: {
+    fontSize: 15,
+    fontWeight: '500',
   },
   breadcrumb: {
     flexDirection: 'row',

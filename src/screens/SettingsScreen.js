@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import Slider from '@react-native-picker/picker'; // Using Picker for theme/grid
 import { Picker } from '@react-native-picker/picker';
+import { useNavigation } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette } from '../theme';
 import { speak, getAvailableVoices } from '../services/speechService';
@@ -21,6 +22,7 @@ import { speak, getAvailableVoices } from '../services/speechService';
 export default function SettingsScreen() {
   const { settings, loading: settingsLoading, updateSettings } = useSettings();
   const palette = getPalette(settings.theme);
+  const navigation = useNavigation();
 
   const [voices, setVoices] = useState([]);
   const [loadingVoices, setLoadingVoices] = useState(true);
@@ -225,6 +227,16 @@ export default function SettingsScreen() {
           accessibilityLabel="Toggle high contrast mode"
         />
       </View>
+
+      {/* Send Feedback */}
+      <TouchableOpacity
+        style={[styles.testButton, { backgroundColor: palette.info, marginTop: 12 }]}
+        onPress={() => navigation.navigate('Feedback')}
+        accessibilityRole="button"
+        accessibilityLabel="Send feedback"
+      >
+        <Text style={styles.testButtonText}>Send Feedback</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }

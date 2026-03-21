@@ -8,6 +8,21 @@ const modelWeights = [require('../../assets/tf_model/word_prediction_tfjs/group1
 // Load the tokenizer JSON file
 const tokenizer = require('../../assets/tf_model/word_prediction_tfjs/tokenizer.json');
 
+// Pre-compute reverse tokenizer once at module level
+let _indexToWord = null;
+function getIndexToWord() {
+  if (!_indexToWord) {
+    _indexToWord = Object.fromEntries(
+      Object.entries(tokenizer).map(([word, idx]) => [idx, word])
+    );
+  }
+  return _indexToWord;
+}
+
+// Model readiness promise — consumers can await this instead of polling
+let _modelReadyResolve = null;
+export const modelReady = new Promise(resolve => { _modelReadyResolve = resolve; });
+
 /**
  * Loads the improved model and tokenizer, and stores them globally.
  */
@@ -15,119 +30,76 @@ export async function loadImprovedModel() {
   await tf.ready();
   try {
     const model = await tf.loadLayersModel(bundleResourceIO(modelJson, modelWeights));
-    console.log("✅ Improved model loaded successfully!");
+
+    // Warm up with a dummy prediction to eliminate first-inference latency
+    const dummy = tf.tensor2d([[1, 2, 3, 4]], [1, 4], 'int32');
+    model.predict(dummy);
+    dummy.dispose();
+
     // Store globally for use in prediction functions
     global.betterWordPredictionModel = model;
     global.tokenizer = tokenizer;
+
+    // Signal readiness
+    if (_modelReadyResolve) _modelReadyResolve(true);
+
     return model;
   } catch (error) {
-    console.error("❌ Error loading improved model:", error);
+    console.error('Error loading improved model:', error);
+    if (_modelReadyResolve) _modelReadyResolve(false);
     throw error;
   }
 }
 
 /**
- * Predicts the next word using the improved model with temperature sampling.
- *
- * @param {tf.LayersModel} model - The loaded improved model.
- * @param {Object} tokenizer - The tokenizer mapping (word -> index).
- * @param {string} sentence - The input sentence.
- * @param {number} temperature - Temperature parameter for sampling (default 1.0).
- * @param {number} sequenceLength - The number of tokens expected by the model.
- * @returns {Promise<string>} - The predicted next word.
- */
-export async function predictNextWordWithImprovedModel(model, tokenizer, sentence, temperature = 1.0, sequenceLength = 4) {
-  const tokens = sentence.toLowerCase().split(" ");
-  let inputTokens = tokens.slice(-sequenceLength);
-  while (inputTokens.length < sequenceLength) {
-    inputTokens.unshift("0");
-  }
-  const inputIndices = inputTokens.map(token => tokenizer[token] || 0);
-  const inputTensor = tf.tensor2d([inputIndices], [1, sequenceLength], "int32");
-
-  const logitsTensor = model.predict(inputTensor);
-  const logits = Array.from(logitsTensor.dataSync());
-
-  // Dispose tensors to free memory
-  inputTensor.dispose();
-  logitsTensor.dispose();
-
-  const scaledLogits = logits.map(logit => logit / temperature);
-  const expLogits = scaledLogits.map(Math.exp);
-  const sumExp = expLogits.reduce((a, b) => a + b, 0);
-  const probs = expLogits.map(expVal => expVal / sumExp);
-  const predictedIndex = probs.indexOf(Math.max(...probs));
-
-  const indexToWord = Object.fromEntries(
-    Object.entries(tokenizer).map(([word, idx]) => [idx, word])
-  );
-  return indexToWord[predictedIndex] || "[UNKNOWN]";
-}
-
-/**
  * Predicts the top K words using the improved model with temperature sampling.
- *
- * @param {tf.LayersModel} model - The loaded improved model.
- * @param {Object} tokenizer - The tokenizer mapping (word -> index).
- * @param {string} sentence - The input sentence.
- * @param {number} temperature - Temperature parameter for sampling (default 1.0).
- * @param {number} sequenceLength - The number of tokens expected by the model.
- * @param {number} topK - Number of top predictions to return (default 4).
- * @returns {Promise<string[]>} - An array of the top K predicted words, sorted by descending probability.
+ * Uses pre-computed reverse tokenizer for O(1) lookups instead of rebuilding each call.
  */
 export async function predictTopKWordsWithImprovedModel(
   model,
-  tokenizer,
+  tok,
   sentence,
-  temperature = 1.5, // Increased temperature for more randomness
+  temperature = 1.0,
   sequenceLength = 4,
   topK = 4
 ) {
-  const tokens = sentence.toLowerCase().split(" ");
+  const tokens = sentence.toLowerCase().split(' ');
   let inputTokens = tokens.slice(-sequenceLength);
   while (inputTokens.length < sequenceLength) {
-    inputTokens.unshift("0");
+    inputTokens.unshift('0');
   }
-  const inputIndices = inputTokens.map(token => tokenizer[token] || 0);
-  const inputTensor = tf.tensor2d([inputIndices], [1, sequenceLength], "int32");
+  const inputIndices = inputTokens.map(token => tok[token] || 0);
+  const inputTensor = tf.tensor2d([inputIndices], [1, sequenceLength], 'int32');
 
   const logitsTensor = model.predict(inputTensor);
   const logits = Array.from(logitsTensor.dataSync());
 
-  // Dispose tensors to free memory
+  // Dispose tensors immediately to free memory
   inputTensor.dispose();
   logitsTensor.dispose();
 
+  // Temperature scaling + softmax
   const scaledLogits = logits.map(logit => logit / temperature);
-  const expLogits = scaledLogits.map(Math.exp);
+  const maxLogit = Math.max(...scaledLogits);
+  const expLogits = scaledLogits.map(l => Math.exp(l - maxLogit)); // numerical stability
   const sumExp = expLogits.reduce((a, b) => a + b, 0);
   const probs = expLogits.map(expVal => expVal / sumExp);
 
-  // Get indices and probabilities sorted in descending order
+  // Get top K indices by probability
   const probIndices = probs.map((prob, index) => ({ index, prob }));
   const sorted = probIndices.sort((a, b) => b.prob - a.prob);
   const topKIndices = sorted.slice(0, topK).map(item => item.index);
 
-  const indexToWord = Object.fromEntries(
-    Object.entries(tokenizer).map(([word, idx]) => [idx, word])
-  );
-  return topKIndices.map(idx => indexToWord[idx] || "[UNKNOWN]");
+  const idxToWord = getIndexToWord();
+  return topKIndices
+    .map(idx => idxToWord[idx])
+    .filter(word => word && word !== '[UNKNOWN]');
 }
 
 /**
- * Helper function to sample an index from a probability distribution.
- *
- * @param {number[]} probs - Array of probabilities.
- * @returns {number} - The sampled index.
+ * Predicts the next word using the improved model.
  */
-function sampleFromDistribution(probs) {
-  const threshold = Math.random();
-  let cumulative = 0;
-  for (let i = 0; i < probs.length; i++) {
-    cumulative += probs[i];
-    if (cumulative >= threshold) {
-      return i;
-    }
-  }
-  return probs.length - 1; // fallback
+export async function predictNextWordWithImprovedModel(model, tok, sentence, temperature = 1.0, sequenceLength = 4) {
+  const results = await predictTopKWordsWithImprovedModel(model, tok, sentence, temperature, sequenceLength, 1);
+  return results[0] || '[UNKNOWN]';
 }
