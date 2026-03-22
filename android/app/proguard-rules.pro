@@ -11,24 +11,4 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
-# TensorFlow Lite / TF.js native bindings
--keep class org.tensorflow.** { *; }
--dontwarn org.tensorflow.**
-
-# Firebase
--keep class com.google.firebase.** { *; }
--dontwarn com.google.firebase.**
-
-# Expo modules
--keep class expo.modules.** { *; }
--dontwarn expo.modules.**
-
-# Keep React Native JS interface
--keep class com.facebook.react.bridge.** { *; }
--keep class com.facebook.hermes.** { *; }
--dontwarn com.facebook.hermes.**
-
-# Don't strip annotations used by libraries
--keepattributes *Annotation*
--keepattributes Signature
--keepattributes Exceptions
+# Add any project specific keep options here:
