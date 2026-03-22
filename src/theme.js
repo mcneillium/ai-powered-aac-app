@@ -3,15 +3,17 @@
 // Every screen MUST import from here — no inline palette objects.
 
 // ── Branding constants ──
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ RELEASE BLOCKERS — replace these two values before Play Store upload.  │
+// │ See docs/release/mobile-release-runbook.md step 5.                    │
+// └─────────────────────────────────────────────────────────────────────────┘
 export const brand = {
   name: 'CommAI',
   tagline: 'Communication for everyone',
   primaryColor: '#4CAF50',
   accentColor: '#2196F3',
-  // RELEASE BLOCKER: Replace with actual hosted URL before Play Store submission.
-  // Google Play requires a working privacy policy link.
-  privacyPolicyUrl: 'https://REPLACE-ME.example.com/privacy-policy',
-  supportEmail: 'REPLACE-ME@example.com',
+  privacyPolicyUrl: 'https://REPLACE-ME.example.com/privacy-policy', // ← REPLACE before release
+  supportEmail: 'REPLACE-ME@example.com',                            // ← REPLACE before release
 };
 
 export const palettes = {

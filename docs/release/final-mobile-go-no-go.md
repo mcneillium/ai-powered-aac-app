@@ -1,57 +1,85 @@
-# Final Mobile Go / No-Go
+# Final Mobile Go / No-Go — CommAI v1.1.0
 
-**App:** CommAI v1.1.0
 **Date:** 2026-03-22
-**Decision:** **CONDITIONAL GO** — code is release-ready; 4 external actions remain.
+**Decision:** **CONDITIONAL GO** — code is release-ready; 7 execution items remain.
 
 ---
 
 ## GO criteria (all met)
 
-| Criterion | Status |
-|-----------|--------|
-| Core AAC communication works offline | GO |
-| AI suggestions working and personalised | GO |
-| User can disable/reset AI personalisation | GO |
-| Accessibility: screen reader, contrast, touch targets | GO |
-| Release builds hard-fail without production signing | GO |
-| EAS production config with remote credentials and AAB | GO |
-| Permissions minimal and justified | GO |
-| Error handling: ErrorBoundary, offline banner | GO |
-| 36 tests passing, no regressions | GO |
-| Play Store listing text drafted | GO |
-| Data safety responses drafted | GO |
-| Privacy policy link wired in Settings | GO |
-| Version consistent (1.1.0 / versionCode 2) | GO |
-| No secrets in repository | GO |
-| Unused dependencies removed | GO |
+| Criterion | Evidence | Status |
+|-----------|----------|--------|
+| Core AAC communication works offline | All core screens functional, no network dependency | GO |
+| AI suggestions working and personalised | `aiProfileStore.js`, 13 tests passing | GO |
+| User can disable/reset AI personalisation | `SettingsScreen.js` toggle + reset button | GO |
+| Accessibility: screen reader, contrast, touch targets | High-contrast palette, `accessibilityLabel` throughout | GO |
+| No third-party API secrets in mobile app | `grep -rn "hf_\|AIzaSyD\|Bearer" src/` → 0 results | GO |
+| Backend proxy for billable APIs | `functions/index.js` — HF token server-side only | GO |
+| Safe failure states for backend | `hfImageCaption.js:50,58,61` — fallback strings | GO |
+| Release builds hard-fail without production signing | `build.gradle:123-128` — null signingConfig path | GO |
+| EAS production config: AAB + remote credentials | `eas.json:22-24` | GO |
+| Permissions minimal and justified | `app.json:37-40` — CAMERA, RECORD_AUDIO only | GO |
+| Error handling: ErrorBoundary, offline banner | Present in app shell | GO |
+| 36 tests passing, no regressions | 6 suites, 36 tests | GO |
+| Play Store listing text drafted | `docs/release/play-store-listing-draft.md` | GO |
+| Data safety responses drafted | `docs/release/data-safety-draft.md` | GO |
+| Privacy policy link wired in Settings UI | `SettingsScreen.js:294` → `Linking.openURL(brand.privacyPolicyUrl)` | GO |
+| Version consistent (1.1.0 / versionCode 2) | `package.json:4`, `app.json:5`, `build.gradle:95-96` | GO |
+
+---
 
 ## NO-GO conditions (must clear before upload)
 
-| # | Action | Estimated effort | Who |
-|---|--------|-----------------|-----|
-| 1 | Run `npm run eas:build:android:production` to generate credentials + AAB | 10 min | Developer |
-| 2 | Host privacy policy at a URL and replace `brand.privacyPolicyUrl` in `src/theme.js` | 30 min | Developer |
-| 3 | Replace `brand.supportEmail` in `src/theme.js` | 1 min | Developer |
-| 4 | Create 1024x500 feature graphic + capture 2+ phone screenshots | 30 min | Developer |
+| # | Blocker | What to do | Runbook step | Est. |
+|---|---------|-----------|-------------|------|
+| 1 | Deploy Cloud Function | `cd functions && npm install && firebase deploy --only functions` | Step 1 | 15 min |
+| 2 | Set new HF token server-side | `firebase functions:config:set hf.token="hf_NEW"` | Step 2 | 5 min |
+| 3 | Revoke compromised HF + Vision tokens | huggingface.co/settings/tokens + Google Cloud Console | Step 3 | 10 min |
+| 4 | Resize `assets/icon.png` to 512x512 | Currently 180x180; use `adaptive-icon.png` as source | Step 4 | 5 min |
+| 5 | Replace privacy URL + support email in `src/theme.js` | Host privacy policy page, update two strings | Step 5 | 30 min |
+| 6 | Run EAS production build | `npm run eas:build:android:production` | Step 7 | 10 min |
+| 7 | Create feature graphic + phone screenshots | 1024x500 graphic + min 2 screenshots at 1080x1920 | — | 30 min |
 
-After clearing these 4 items:
-1. Commit the URL/email changes
-2. Build production AAB via EAS
-3. Upload AAB to Play Console
-4. Fill in content rating (IARC) and data safety form
-5. Submit for review
+All blockers are external execution items. **Zero further code architecture changes needed.**
 
-## Risk Assessment
+---
+
+## Build path verification
+
+| Path | Command | Signing | Output |
+|------|---------|---------|--------|
+| EAS production (recommended) | `npm run eas:build:android:production` | Remote upload keystore managed by EAS | `.aab` |
+| Local production | `./gradlew bundleRelease -PRELEASE_STORE_FILE=... -PRELEASE_STORE_PASSWORD=... -PRELEASE_KEY_ALIAS=... -PRELEASE_KEY_PASSWORD=...` | Local keystore | `.aab` |
+| Local debug-signed (testing only) | `./gradlew assembleRelease -PALLOW_DEBUG_SIGNING=true` | Debug keystore | `.apk` |
+| Local bare (no flags) | `./gradlew assembleRelease` | **Fails** — no signingConfig | — |
+
+**EAS submit path:** `npm run eas:submit:android` → uses `eas.json:29-34` → requires `google-play-service-account.json` (gitignored).
+
+---
+
+## After clearing blockers 1–7
+
+1. Commit icon + `theme.js` changes
+2. Build production AAB via EAS (step 7)
+3. Validate AAB signing (step 8)
+4. Upload to Play Console
+5. Complete IARC content rating questionnaire
+6. Enter data safety responses
+7. Paste privacy policy URL in Play Console store listing
+8. Submit for review
+
+---
+
+## Risk assessment
 
 | Risk | Likelihood | Mitigation |
 |------|-----------|------------|
 | Play Store rejection for privacy policy content | Low | Draft covers all data types accurately |
-| Crash on specific Android version | Low | Error boundary + offline-first design |
+| Crash on specific Android version | Low | Error boundary + offline-first |
 | IARC rating higher than expected | Very low | No violence, gambling, or social features |
-| Model performance on low-end devices | Medium | Frequency model provides instant fallback |
-| Large APK size due to TF model | Medium | Model is ~2MB; acceptable for AAC app |
+| TF model performance on low-end devices | Medium | Frequency model provides instant fallback |
+| HF model cold-start latency | Medium | Cloud Function returns 502; app shows fallback |
 
 ---
 
-**Bottom line:** The codebase is production-ready. The remaining 4 items are external actions (credential setup, hosting, asset creation) that require no further code changes.
+**Bottom line:** The codebase is production-ready and security-clean. The 7 remaining items are deploy/config/asset tasks that require no further code changes beyond two string replacements and an icon resize.
