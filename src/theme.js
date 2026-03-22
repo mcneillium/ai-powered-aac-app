@@ -12,8 +12,8 @@ export const brand = {
   tagline: 'Communication for everyone',
   primaryColor: '#4CAF50',
   accentColor: '#2196F3',
-  privacyPolicyUrl: 'https://REPLACE-ME.example.com/privacy-policy', // ← REPLACE before release
-  supportEmail: 'REPLACE-ME@example.com',                            // ← REPLACE before release
+  privacyPolicyUrl: 'https://paulmartinmcneill.com/commai/privacy-policy',
+  supportEmail: 'support@paulmartinmcneill.com',
 };
 
 export const palettes = {
