@@ -1,7 +1,7 @@
 # Final Mobile Go / No-Go — CommAI v1.1.0
 
 **Date:** 2026-03-22
-**Decision:** **CONDITIONAL GO** — code is release-ready; 7 execution items remain.
+**Decision:** **CONDITIONAL GO** — code is release-ready; 6 execution items remain.
 
 ---
 
@@ -35,10 +35,9 @@
 | 1 | Deploy Cloud Function | `cd functions && npm install && firebase deploy --only functions` | Step 1 | 15 min |
 | 2 | Set new HF token server-side | `firebase functions:config:set hf.token="hf_NEW"` | Step 2 | 5 min |
 | 3 | Revoke compromised HF + Vision tokens | huggingface.co/settings/tokens + Google Cloud Console | Step 3 | 10 min |
-| 4 | Resize `assets/icon.png` to 512x512 | Currently 180x180; use `adaptive-icon.png` as source | Step 4 | 5 min |
-| 5 | Replace privacy URL + support email in `src/theme.js` | Host privacy policy page, update two strings | Step 5 | 30 min |
-| 6 | Run EAS production build | `npm run eas:build:android:production` | Step 7 | 10 min |
-| 7 | Create feature graphic + phone screenshots | 1024x500 graphic + min 2 screenshots at 1080x1920 | — | 30 min |
+| 4 | Replace privacy URL + support email in `src/theme.js` | Host privacy policy page, update two strings | Step 5 | 30 min |
+| 5 | Run EAS production build | `npm run eas:build:android:production` | Step 7 | 10 min |
+| 6 | Create feature graphic + phone screenshots | 1024x500 graphic + min 2 screenshots at 1080x1920 | — | 30 min |
 
 All blockers are external execution items. **Zero further code architecture changes needed.**
 
@@ -82,4 +81,4 @@ All blockers are external execution items. **Zero further code architecture chan
 
 ---
 
-**Bottom line:** The codebase is production-ready and security-clean. The 7 remaining items are deploy/config/asset tasks that require no further code changes beyond two string replacements and an icon resize.
+**Bottom line:** The codebase is production-ready and security-clean. The 6 remaining items are deploy/config/asset tasks that require no further code changes beyond two string replacements in `src/theme.js`.

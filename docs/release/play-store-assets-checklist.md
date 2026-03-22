@@ -8,12 +8,11 @@ All assets required for Google Play Store submission.
 
 | Requirement | Current state | Status |
 |-------------|--------------|--------|
-| 512 x 512 px, 32-bit PNG with alpha | `assets/icon.png` is **180 x 180** | **BLOCKER** |
+| 512 x 512 px, 32-bit PNG with alpha | `assets/icon.png` is **512 x 512**, RGBA | **OK** |
 | Adaptive icon foreground | `assets/adaptive-icon.png` is 1024 x 1024 | OK |
 | Adaptive icon background | `app.json:35` → `"backgroundColor": "#ffffff"` | OK |
 
-**Action:** Export or resize `assets/icon.png` to 512x512 before upload.
-`assets/adaptive-icon.png` (1024x1024) can be used as source artwork.
+Resized from `assets/adaptive-icon.png` (1024x1024) using Lanczos resampling.
 
 ---
 
@@ -95,8 +94,7 @@ adb shell screencap -p /sdcard/screen.png && adb pull /sdcard/screen.png ./scree
 
 | # | Blocker | Action | Runbook step |
 |---|---------|--------|-------------|
-| 1 | `assets/icon.png` is 180x180, need 512x512 | Resize/export from adaptive-icon source | Step 4 |
-| 2 | Feature graphic missing | Create 1024x500 graphic | — |
-| 3 | Phone screenshots missing | Capture min 2 at 1080x1920 | — |
-| 4 | Privacy policy URL placeholder | Host page, replace in `src/theme.js` | Step 5 |
-| 5 | Support email placeholder | Replace in `src/theme.js` | Step 5 |
+| 1 | Feature graphic missing | Create 1024x500 graphic | — |
+| 2 | Phone screenshots missing | Capture min 2 at 1080x1920 | — |
+| 3 | Privacy policy URL placeholder | Host page, replace in `src/theme.js` | Step 5 |
+| 4 | Support email placeholder | Replace in `src/theme.js` | Step 5 |

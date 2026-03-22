@@ -53,7 +53,7 @@
 | Privacy link wired in Settings UI | `SettingsScreen.js:294` → `Linking.openURL(brand.privacyPolicyUrl)` | **PASS** |
 | Privacy URL placeholder | `src/theme.js:15` → `REPLACE-ME` | **BLOCKER** |
 | Support email placeholder | `src/theme.js:16` → `REPLACE-ME` | **BLOCKER** |
-| High-res icon 512x512 | `assets/icon.png` is **180x180** | **BLOCKER** |
+| High-res icon 512x512 | `assets/icon.png` is 512x512 RGBA PNG (resized from `adaptive-icon.png`) | **PASS** |
 | Adaptive icon | `assets/adaptive-icon.png` is 1024x1024 | **PASS** |
 | Feature graphic 1024x500 | Does not exist | **BLOCKER** |
 | Phone screenshots (min 2) | None captured | **BLOCKER** |
@@ -92,12 +92,11 @@
 |---|---------|------|--------|
 | B1 | Deploy Cloud Function + set HF token | Infra | `firebase deploy --only functions` + `firebase functions:config:set` |
 | B2 | Revoke compromised HF + Vision tokens | Security | External: huggingface.co + Google Cloud Console |
-| B3 | Resize `assets/icon.png` to 512x512 | Asset | Export from `adaptive-icon.png` source |
-| B4 | Replace privacy policy URL placeholder | Config | Host page, update `src/theme.js:15` |
-| B5 | Replace support email placeholder | Config | Update `src/theme.js:16` |
-| B6 | Run EAS production build | Infra | `npm run eas:build:android:production` |
-| B7 | Create feature graphic + phone screenshots | Asset | 1024x500 graphic + min 2 screenshots at 1080x1920 |
+| B3 | Replace privacy policy URL placeholder | Config | Host page, update `src/theme.js:15` |
+| B4 | Replace support email placeholder | Config | Update `src/theme.js:16` |
+| B5 | Run EAS production build | Infra | `npm run eas:build:android:production` |
+| B6 | Create feature graphic + phone screenshots | Asset | 1024x500 graphic + min 2 screenshots at 1080x1920 |
 
-**Total: 7 blockers. All are external execution items. Zero code architecture changes needed.**
+**Total: 6 blockers. All are external execution items. Zero code architecture changes needed.**
 
 Full execution steps documented in `docs/release/mobile-release-runbook.md`.

@@ -65,18 +65,9 @@ Both of these were previously hardcoded in source and must be treated as comprom
 
 ---
 
-## Step 4 — Set app icon to 512x512
+## Step 4 — ~~Set app icon to 512x512~~ DONE
 
-The current `assets/icon.png` is **180x180**. Google Play requires **512x512**.
-
-Option A: Export a 512x512 PNG from the source artwork and overwrite `assets/icon.png`.
-Option B: Resize `assets/adaptive-icon.png` (currently 1024x1024) to 512x512 and save as `assets/icon.png`.
-
-```bash
-# Verify after replacing:
-file assets/icon.png
-# Must show: PNG image data, 512 x 512
-```
+`assets/icon.png` has been resized to **512 x 512**, 32-bit RGBA PNG (Lanczos resampled from `adaptive-icon.png`). No action needed.
 
 ---
 
