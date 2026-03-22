@@ -58,7 +58,10 @@ export default function CombinedImageScreen() {
       setSelected({ uri, name: desc });
       Speech.speak(desc);
     } catch (e) {
-      Alert.alert('Error', 'Failed to caption image');
+      // getImageCaption already returns safe strings on failure,
+      // so this catch is only for truly unexpected errors.
+      setSelected({ uri, name: 'Could not describe this image' });
+      Speech.speak('Could not describe this image');
     } finally {
       setProcessing(false);
     }

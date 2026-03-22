@@ -7,76 +7,53 @@
 
 ---
 
+## Secret Remediation
+
+| Item | Evidence | Status |
+|------|----------|--------|
+| HF token removed from mobile app | `grep -rn "hf_[A-Za-z]" src/` → 0 results | **PASS** |
+| Google Cloud Vision key removed | `grep -rn "AIzaSyD" src/` → 0 results | **PASS** |
+| No Bearer tokens in mobile code | `grep -rn "Bearer" src/` → 0 results | **PASS** |
+| Dead code files deleted | `src/utils/autoDescribe.js`, `archive/unused/`, `Old_models/` — all removed | **PASS** |
+| Image captioning uses backend proxy | `hfImageCaption.js:17` → calls Cloud Function, no token | **PASS** |
+| Cloud Function holds HF token server-side | `functions/index.js:50` → reads `functions.config().hf.token` | **PASS** |
+| Firebase API key (public by design) | `firebaseConfig.js:12` → standard client-side Firebase key | **PASS** (not a secret) |
+
+**Key rotation required (external action):**
+1. Revoke HF token `hf_NHyUO...` at huggingface.co/settings/tokens
+2. Revoke Vision key `AIzaSyD4W...` in Google Cloud Console
+3. Set new HF token: `firebase functions:config:set hf.token="hf_NEW"`
+
 ## Release Signing
 
 | Item | Evidence | Status |
 |------|----------|--------|
-| Release builds fail without production keystore | `build.gradle:118-128` — signingConfig is null when neither `RELEASE_STORE_FILE` nor `ALLOW_DEBUG_SIGNING` set | **PASS** |
-| No silent debug fallback | `build.gradle:119` — comment: "Production release builds MUST have a production keystore" | **PASS** |
-| Debug escape hatch is explicit | `build.gradle:125` — requires `-PALLOW_DEBUG_SIGNING=true` CLI flag | **PASS** |
+| Release builds fail without production keystore | `build.gradle:118-128` — signingConfig null when neither `RELEASE_STORE_FILE` nor `ALLOW_DEBUG_SIGNING` set | **PASS** |
+| No silent debug fallback | `build.gradle:119` — explicit comment + null path | **PASS** |
+| Debug escape is explicit opt-in | `build.gradle:125` — requires `-PALLOW_DEBUG_SIGNING=true` | **PASS** |
 | EAS uses remote credentials | `eas.json:23` — `"credentialsSource": "remote"` | **PASS** |
 | EAS produces AAB | `eas.json:22` — `"buildType": "app-bundle"` | **PASS** |
-| versionCode auto-increments | `eas.json:15` — `"autoIncrement": true` | **PASS** |
-| Keystore/secrets gitignored | `.gitignore:21,22,27,45` — `*.jks`, `*.keystore`, `keystore.properties`, `google-play-service-account.json` | **PASS** |
-| Version consistent | `package.json:4` + `app.json:5` + `build.gradle:95-96` — all 1.1.0/versionCode 2 | **PASS** |
-
-## Hardcoded Keys Audit
-
-| File | Key | Classification | Status |
-|------|-----|---------------|--------|
-| `firebaseConfig.js:12` | Firebase Web API key (`AIzaSyBZS...`) | **Public by design** — Firebase web keys are client-side identifiers, not secrets. Security is enforced by Firebase Security Rules and App Check. Google's documentation explicitly states these are safe to embed. | **PASS** |
-| `src/utils/autoDescribe.js:7` | Google Cloud Vision key (`AIzaSyD4W...`) | **Leaked secret in dead code** — file is never imported (zero references). Key should be rotated. | **ADVISORY** — delete file |
+| Secrets gitignored | `.gitignore:21,22,27,45` — `*.jks`, `*.keystore`, `keystore.properties`, `google-play-service-account.json` | **PASS** |
+| Version consistent | `package.json:4` + `app.json:5` + `build.gradle:95-96` — all 1.1.0 | **PASS** |
 
 ## Play Store Readiness
 
 | Item | Evidence | Status |
 |------|----------|--------|
-| App name | `app.json:3` → `"name": "CommAI"`, `strings.xml:2` → `CommAI` | **PASS** |
-| Package name | `app.json:41` → `com.elpabloawakens.aipoweredaacapp` | **PASS** |
-| Permissions minimal | `AndroidManifest.xml` — 5 permissions, WRITE_EXTERNAL_STORAGE removed, SYSTEM_ALERT_WINDOW has `tools:node="removeInRelease"` | **PASS** |
-| Adaptive icons | `app.json:33-35` — foreground + background configured | **PASS** |
-| Splash screen | `app.json:18-22` — configured | **PASS** |
-| Brand colors | `colors.xml:4-5` — `#4CAF50` / `#388E3C` | **PASS** |
-| Privacy link in UI | `SettingsScreen.js:291-298` — `Linking.openURL(brand.privacyPolicyUrl)` | **PASS** |
-| Privacy URL value | `theme.js:13` — `REPLACE-ME` placeholder | **BLOCKER** |
-| Support email | `theme.js:14` — `REPLACE-ME` placeholder | **BLOCKER** |
-| Listing draft | `docs/release/play-store-listing-draft.md` — exists | **PASS** |
-| Data safety draft | `docs/release/data-safety-draft.md` — exists | **PASS** |
+| App name | `app.json:3` → "CommAI", `strings.xml:2` → "CommAI" | **PASS** |
+| Permissions minimal | `AndroidManifest.xml` — 5 permissions, WRITE removed, SYSTEM_ALERT_WINDOW removed in release | **PASS** |
+| Privacy link in UI | `SettingsScreen.js:291-298` — Linking.openURL | **PASS** |
+| Privacy URL placeholder | `theme.js:13` — REPLACE-ME | **BLOCKER** |
+| Support email placeholder | `theme.js:14` — REPLACE-ME | **BLOCKER** |
 
 ## AI Personalisation
 
-| Item | Evidence | Status |
-|------|----------|--------|
-| Learns from word selections | `aiProfileStore.js:135-153` — wordFrequencies, wordRecency, bigrams, phrases | **PASS** |
-| Suggestion acceptance tracking | `aiProfileStore.js:148-150` — `suggestionsAccepted++` | **PASS** |
-| Recency + frequency re-ranking | `AACBoardScreen.js:85-86` — `scoreByFrequencyAndRecency(merged)` | **PASS** |
-| User can disable | `SettingsScreen.js:242-246` — toggle for `aiPersonalisationEnabled` | **PASS** |
-| User can reset data | `SettingsScreen.js:249-274` — destructive confirmation dialog → `resetAIProfile()` | **PASS** |
-| Recording gated on setting | `AACBoardScreen.js:53,72,89,114,149` — all check `aiEnabled` | **PASS** |
-| Privacy-safe summary | `aiProfileStore.js:304-319` — aggregate counts only | **PASS** |
-
-## Accessibility
-
 | Item | Status |
 |------|--------|
-| Screen reader labels on all interactives | **PASS** |
-| accessibilityRole on buttons/links | **PASS** |
-| accessibilityState for selected/disabled | **PASS** |
-| accessibilityLiveRegion on sentence bar | **PASS** |
-| High contrast theme | **PASS** |
-| Touch targets ≥ 40px with hitSlop | **PASS** |
-| EmotionScreen per-card animation | **PASS** |
-
-## Offline Resilience
-
-| Item | Status |
-|------|--------|
-| Core vocabulary offline | **PASS** |
-| Speech offline | **PASS** |
-| AI predictions offline | **PASS** |
-| Network context + banner | **PASS** |
-| Feedback queued offline | **PASS** |
-| Settings persist offline | **PASS** |
+| Learns from word selections, bigrams, phrases | **PASS** |
+| User can disable personalisation | **PASS** |
+| User can reset learned data | **PASS** |
+| All recording gated on `aiEnabled` | **PASS** |
 
 ## Testing
 
@@ -92,11 +69,17 @@
 
 ## Exact Remaining Blockers
 
-| # | Blocker | Type |
-|---|---------|------|
-| M1 | Run EAS production build to generate credentials + AAB | Infra |
-| M2 | Host privacy policy URL → replace placeholder in `theme.js:13` | Legal |
-| M3 | Replace support email placeholder in `theme.js:14` | Config |
-| M4 | Create feature graphic (1024x500) + capture phone screenshots (min 2) | Design |
+| # | Blocker | Type | Resolved this session? |
+|---|---------|------|----------------------|
+| ~~S1~~ | ~~HF token hardcoded in mobile app~~ | ~~Security~~ | **YES — removed, proxied via Cloud Function** |
+| ~~S2~~ | ~~Vision key in dead code~~ | ~~Security~~ | **YES — file deleted** |
+| ~~S3~~ | ~~HF tokens in archive copies~~ | ~~Security~~ | **YES — files deleted** |
+| ~~S4~~ | ~~No secure API architecture~~ | ~~Architecture~~ | **YES — Cloud Function proxy created** |
+| M1 | Deploy Cloud Function + set HF token | Infra | No — requires `firebase deploy` |
+| M2 | Rotate compromised HF + Vision tokens | Security | No — external action |
+| M3 | Run EAS production build | Infra | No — requires `eas build` |
+| M4 | Host privacy policy URL → replace placeholder | Legal | No — external action |
+| M5 | Replace support email placeholder | Config | No — 1 min |
+| M6 | Create feature graphic + screenshots | Design | No — external action |
 
-**Total: 4 blockers. All external. Zero require code changes beyond two string replacements (M2, M3).**
+**Total blockers: 6 remaining (down from 10). All are external actions. Zero code changes needed.**
