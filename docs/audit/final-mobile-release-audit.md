@@ -19,6 +19,7 @@
 | Old model files deleted | `src/services/Old_models/` — does not exist | **PASS** |
 | Image captioning uses backend proxy | `src/services/hfImageCaption.js:17` → Cloud Function URL, no token | **PASS** |
 | Cloud Function holds HF token server-side | `functions/index.js:49` → `functions.config().hf?.token` | **PASS** |
+| Firebase deploy config present | `firebase.json` → functions source; `.firebaserc` → project `commai-b98fe` | **PASS** |
 | Firebase API key (public by design) | `firebaseConfig.js:12` → standard client-side Firebase key | **PASS** (not a secret) |
 
 **Key rotation required (external action):**
@@ -39,6 +40,7 @@
 | EAS produces AAB | `eas.json:23` → `"buildType": "app-bundle"` | **PASS** |
 | Keystore files gitignored | `.gitignore` → `*.jks`, `*.keystore`, `keystore.properties` | **PASS** |
 | Service account key gitignored | `.gitignore` → `google-play-service-account.json` | **PASS** |
+| Firebase debug logs gitignored | `.gitignore` → `firebase-debug.log`, `firebase-debug.*.log` | **PASS** |
 | Version consistent | `package.json:4` = 1.1.0, `app.json:5` = 1.1.0, `build.gradle:96` = 1.1.0, `app.json:42` versionCode = 2, `build.gradle:95` versionCode = 2 | **PASS** |
 
 ---

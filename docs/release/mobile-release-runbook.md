@@ -1,144 +1,139 @@
 # Mobile Release Runbook — CommAI v1.1.0
 
-Complete these steps in order. Each step depends on the one before it.
+Complete these steps in order.
 
 ---
 
-## Step 1 — Deploy Cloud Function
+## Step 1 — Replace placeholder strings
 
-The Cloud Function proxy in `functions/index.js` holds the Hugging Face token server-side. Until deployed, camera captioning in the app will show a graceful fallback ("Caption unavailable").
+Edit `src/theme.js` lines 15–16:
+
+```javascript
+privacyPolicyUrl: 'https://YOUR-ACTUAL-URL/privacy-policy',
+supportEmail: 'your-real-email@example.com',
+```
 
 ```bash
-cd functions
-npm install
+# Verify:
+grep "REPLACE-ME" src/theme.js   # must return nothing
+```
+
+Commit:
+```bash
+git add src/theme.js
+git commit -m "Set privacy policy URL and support email for release"
+```
+
+---
+
+## Step 2 — Deploy Cloud Function
+
+Prerequisites:
+- Firebase CLI installed (`npm install -g firebase-tools`)
+- Authenticated (`firebase login`)
+- Project `commai-b98fe` accessible to your account
+
+```bash
+cd functions && npm install && cd ..
 firebase deploy --only functions
 ```
 
-**Verify:** The CLI prints the deployed URL. It should match the endpoint in `src/services/hfImageCaption.js:17`:
+The CLI will print the deployed URL. Confirm it matches `src/services/hfImageCaption.js:17`:
 ```
 https://us-central1-commai-b98fe.cloudfunctions.net/imageCaptionProxy
 ```
 
-If the project ID or region differs, update line 17 of `hfImageCaption.js` to match, commit, and rebuild.
+If the region or project differs, update `hfImageCaption.js:17`, commit, and rebuild.
 
 ---
 
-## Step 2 — Set new Hugging Face token server-side
+## Step 3 — Set Hugging Face token server-side
 
 1. Go to https://huggingface.co/settings/tokens
-2. Create a new **read** token (do NOT reuse the old one)
-3. Set it in Firebase Functions config:
+2. Create a new **read** token (do NOT reuse the compromised one)
+3. Set it:
 
 ```bash
 firebase functions:config:set hf.token="hf_YOUR_NEW_TOKEN"
 firebase deploy --only functions
 ```
 
-4. Test the endpoint:
+4. Smoke test:
 
 ```bash
-# Minimal smoke test — should return a JSON object, not an error
-curl -X POST \
+curl -s -X POST \
   https://us-central1-commai-b98fe.cloudfunctions.net/imageCaptionProxy \
   -H "Content-Type: application/json" \
-  -d '{"image":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAAlwSFlzAAAWJQAAFiUBSVIk8AAAAA0lEQVQI12P4z8BQDwAEgAF/QualEQAAAABJRU5ErkJggg=="}'
+  -d '{"image":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="}' | python3 -m json.tool
 ```
 
-Expected: `{"caption":"...some text..."}` or `{"error":"..."}` if the model is cold-starting (retry in 30s).
+Expected: `{"caption": "..."}` or `{"error": "..."}` on model cold-start (retry in 30s).
 
 ---
 
-## Step 3 — Revoke compromised tokens
+## Step 4 — Revoke compromised tokens
 
-Both of these were previously hardcoded in source and must be treated as compromised.
+### Hugging Face
+1. https://huggingface.co/settings/tokens
+2. Revoke token `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`
 
-### Hugging Face token
-1. Go to https://huggingface.co/settings/tokens
-2. Find token starting with `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`
-3. Click **Revoke**
-
-### Google Cloud Vision key
-1. Go to https://console.cloud.google.com/apis/credentials
-2. Select project `ai-powered-aac-app`
-3. Find key starting with `AIzaSyD4WZGLy8Zt5VsF6v2LmnikM4j7hcWoo9g`
-4. Click **Delete** (this key is no longer used by the app)
+### Google Cloud Vision
+1. https://console.cloud.google.com/apis/credentials (project `ai-powered-aac-app`)
+2. Delete key `AIzaSyD4WZGLy8Zt5VsF6v2LmnikM4j7hcWoo9g`
 
 ---
 
-## Step 4 — ~~Set app icon to 512x512~~ DONE
-
-`assets/icon.png` has been resized to **512 x 512**, 32-bit RGBA PNG (Lanczos resampled from `adaptive-icon.png`). No action needed.
-
----
-
-## Step 5 — Replace placeholder strings
-
-Edit `src/theme.js` (lines 15–16 of the `brand` object):
-
-```javascript
-privacyPolicyUrl: 'https://YOUR-ACTUAL-DOMAIN.com/privacy-policy',
-supportEmail: 'your-actual-email@example.com',
-```
-
-Both values are marked with `← REPLACE before release` comments. The privacy policy URL must point to a live, publicly accessible page before Play Store submission.
-
-```bash
-# Verify no placeholders remain:
-grep "REPLACE-ME" src/theme.js
-# Must return: no output
-```
-
----
-
-## Step 6 — Commit placeholder + icon changes
-
-```bash
-git add src/theme.js assets/icon.png
-git commit -m "Set privacy policy URL, support email, and 512x512 icon for release"
-```
-
----
-
-## Step 7 — Run EAS production build
+## Step 5 — Run EAS production build
 
 ```bash
 npm run eas:build:android:production
 ```
 
-This runs `eas build --profile production --platform android` which:
-- Uses `eas.json` → `build.production.android`:
-  - `buildType: "app-bundle"` → produces AAB (not APK)
-  - `credentialsSource: "remote"` → EAS manages the upload keystore
-  - `autoIncrement: true` → bumps versionCode automatically
-- On first run, EAS prompts to generate a new upload keystore (stored in EAS servers)
-- Build runs on EAS cloud infrastructure
+What this does (from `eas.json` production profile):
+- `buildType: "app-bundle"` → AAB output
+- `credentialsSource: "remote"` → EAS manages upload keystore
+- `autoIncrement: true` → bumps versionCode
 
-**Output:** An `.aab` file URL printed to the terminal. Download it.
+On first run, EAS will prompt to generate an upload keystore. The build runs on EAS cloud. Output: a download URL for the `.aab`.
 
 ---
 
-## Step 8 — Validate the AAB
+## Step 6 — Validate the AAB
 
 ```bash
-# 1. Download the AAB from the URL printed by EAS
-# 2. Check it with bundletool:
-java -jar bundletool.jar validate --bundle=commai.aab
-
-# 3. Check signing:
-jarsigner -verify -verbose commai.aab | head -20
-# Must NOT say "debug" or "androiddebugkey"
-
-# 4. Install on a test device via bundletool:
-java -jar bundletool.jar build-apks --bundle=commai.aab --output=commai.apks
-java -jar bundletool.jar install-apks --apks=commai.apks
+# Download AAB from the URL printed by EAS, then:
+jarsigner -verify -verbose commai.aab 2>&1 | head -5
+# Must NOT contain "androiddebugkey" or "debug"
 ```
 
-Quick smoke test on device:
-- App launches without crash
-- AAC board loads, words are tappable, speech works
-- Camera captioning returns a result (if Cloud Function is deployed) or shows "Caption unavailable" (graceful)
-- Settings → Privacy Policy opens a browser to the correct URL
-- Offline mode works (toggle airplane mode)
+---
+
+## Step 7 — Smoke test on device
+
+Install via bundletool or internal distribution, then verify:
+
+| Test | Expected |
+|------|----------|
+| App launches | No crash, AAC board visible |
+| Tap words → sentence bar | Words appear, TTS speaks on tap |
+| Camera → take photo | Caption returned from Cloud Function (or "Caption unavailable" if offline) |
+| Settings → Privacy Policy | Opens browser to correct URL |
+| Settings → theme toggle | Light/dark/high-contrast switch works |
+| Toggle airplane mode | Offline banner appears; core AAC still works |
+| Sign in / sign up | Firebase auth flow completes |
+| Sign out | Returns to login screen |
+
+---
+
+## Step 8 — Create Play Store assets
+
+- **Feature graphic:** 1024 x 500 px, JPEG or 24-bit PNG, no alpha
+- **Phone screenshots:** min 2, recommended 1080x1920
+
+Capture method:
+```bash
+adb shell screencap -p /sdcard/screen.png && adb pull /sdcard/screen.png
+```
 
 ---
 
@@ -146,23 +141,23 @@ Quick smoke test on device:
 
 1. Go to https://play.google.com/console
 2. Select app → **Production** → **Create new release**
-3. Upload the `.aab` file
-4. Paste release notes from `docs/release/play-store-listing-draft.md` → "Release Notes (v1.1.0)"
-5. Complete:
-   - **Store listing** — title, descriptions, screenshots, feature graphic
+3. Upload the `.aab`
+4. Fill in:
+   - **Store listing** — text from `docs/release/play-store-listing-draft.md`
+   - **Screenshots + feature graphic** from step 8
    - **Content rating** — IARC questionnaire (expected: Everyone)
-   - **Data safety** — use responses from `docs/release/data-safety-draft.md`
-   - **Privacy policy URL** — paste the same URL from `brand.privacyPolicyUrl`
-6. **Review and roll out**
+   - **Data safety** — from `docs/release/data-safety-draft.md`
+   - **Privacy policy URL** — same as `brand.privacyPolicyUrl` in `src/theme.js`
+5. Submit for review
 
 ---
 
-## Step 10 — Post-submission verification
+## Step 10 — Post-submission checklist
 
-- [ ] Cloud Function responding (step 2 curl test)
-- [ ] Old tokens revoked (step 3)
-- [ ] AAB is production-signed, not debug-signed (step 8)
-- [ ] Privacy policy URL loads in a browser
-- [ ] Play Store listing preview looks correct
+- [ ] Cloud Function returns captions (step 3 curl test)
+- [ ] Old HF token revoked
+- [ ] Old Vision key deleted
+- [ ] AAB is production-signed (step 6)
+- [ ] Privacy policy URL loads in browser
 - [ ] `grep "REPLACE-ME" src/` returns nothing
 - [ ] `grep "hf_[A-Za-z]" src/` returns nothing
