@@ -1,31 +1,41 @@
 // metro.config.js
-const { getDefaultConfig } = require('@expo/metro-config');
+// Extends @react-native/metro-config (required by RN CLI / Gradle bundling)
+// then layers Expo defaults on top.
+const { getDefaultConfig: getExpoDefault } = require('@expo/metro-config');
+const { mergeConfig, getDefaultConfig: getRNDefault } = require('@react-native/metro-config');
 
-const defaultConfig = getDefaultConfig(__dirname);
+// Start from the RN base (satisfies the RN CLI check)
+const rnDefault = getRNDefault(__dirname);
+
+// Layer Expo defaults on top
+const expoDefault = getExpoDefault(__dirname);
+
+const config = mergeConfig(rnDefault, expoDefault);
 
 // Disable the new package-exports resolution
-defaultConfig.resolver.unstable_enablePackageExports = false;
+config.resolver.unstable_enablePackageExports = false;
 
-// Add "mjs" (and your other custom) extensions
-defaultConfig.resolver.sourceExts = [
-  ...defaultConfig.resolver.sourceExts,
-  'mjs',
-  'jsx',
-  'js',
-  'ts',
-  'tsx',
-  'json',
-];
+// Ensure all needed source extensions are present
+const extraSourceExts = ['mjs', 'jsx', 'js', 'ts', 'tsx', 'json'];
+const currentSourceExts = config.resolver.sourceExts || [];
+for (const ext of extraSourceExts) {
+  if (!currentSourceExts.includes(ext)) {
+    currentSourceExts.push(ext);
+  }
+}
+config.resolver.sourceExts = currentSourceExts;
 
-// Keep your existing asset extensions
-defaultConfig.resolver.assetExts.push('bin');
+// Add .bin to asset extensions
+if (!config.resolver.assetExts.includes('bin')) {
+  config.resolver.assetExts.push('bin');
+}
 
-// Map problematic modules to an empty module if needed
-defaultConfig.resolver.extraNodeModules = {
-  ...defaultConfig.resolver.extraNodeModules,
+// Map problematic modules to an empty module
+config.resolver.extraNodeModules = {
+  ...config.resolver.extraNodeModules,
   idb: require.resolve('./empty-module.js'),
   './postinstall.mjs': require.resolve('./empty-module.js'),
   'react-native-fs': require.resolve('./empty-module.js'),
 };
 
-module.exports = defaultConfig;
+module.exports = config;
