@@ -82,7 +82,7 @@ file assets/icon.png
 
 ## Step 5 — Replace placeholder strings
 
-Edit `src/theme.js` (lines 11–12 of the `brand` object):
+Edit `src/theme.js` (lines 15–16 of the `brand` object):
 
 ```javascript
 privacyPolicyUrl: 'https://YOUR-ACTUAL-DOMAIN.com/privacy-policy',

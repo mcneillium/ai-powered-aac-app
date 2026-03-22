@@ -74,8 +74,8 @@ adb shell screencap -p /sdcard/screen.png && adb pull /sdcard/screen.png ./scree
 
 | Item | Current state | Status |
 |------|--------------|--------|
-| Privacy policy URL | `src/theme.js:11` → `REPLACE-ME` placeholder | **BLOCKER** |
-| Support email | `src/theme.js:12` → `REPLACE-ME` placeholder | **BLOCKER** |
+| Privacy policy URL | `src/theme.js:15` → `REPLACE-ME` placeholder | **BLOCKER** |
+| Support email | `src/theme.js:16` → `REPLACE-ME` placeholder | **BLOCKER** |
 | Developer website | Not set | Optional |
 
 ---
