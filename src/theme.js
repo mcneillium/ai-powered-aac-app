@@ -5,7 +5,7 @@
 // ── Branding constants ──
 // ┌─────────────────────────────────────────────────────────────────────────┐
 // │ RELEASE BLOCKERS — replace these two values before Play Store upload.  │
-// │ See docs/release/mobile-release-runbook.md step 5.                    │
+// │ See docs/release/mobile-release-runbook.md step 1.                    │
 // └─────────────────────────────────────────────────────────────────────────┘
 export const brand = {
   name: 'CommAI',

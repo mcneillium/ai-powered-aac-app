@@ -96,5 +96,5 @@ adb shell screencap -p /sdcard/screen.png && adb pull /sdcard/screen.png ./scree
 |---|---------|--------|-------------|
 | 1 | Feature graphic missing | Create 1024x500 graphic | — |
 | 2 | Phone screenshots missing | Capture min 2 at 1080x1920 | — |
-| 3 | Privacy policy URL placeholder | Host page, replace in `src/theme.js` | Step 5 |
-| 4 | Support email placeholder | Replace in `src/theme.js` | Step 5 |
+| 3 | Privacy policy URL placeholder | Host page, replace in `src/theme.js` | Step 1 |
+| 4 | Support email placeholder | Replace in `src/theme.js` | Step 1 |
