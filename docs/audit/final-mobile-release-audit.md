@@ -1,86 +1,84 @@
 # Final Mobile Release Audit — CommAI v1.1.0
 
 **Date:** 2026-03-21
-**Status:** Release Candidate
+**Status:** Release Candidate (pending asset creation)
 **Branch:** `claude/mobile-architecture-ux-Q1Mvb`
 
 ---
 
 ## Release Signing
 
-| Item | Status | Notes |
-|------|--------|-------|
-| Debug keystore for debug builds | Pass | Standard Android debug credentials |
-| Release signing config in build.gradle | Pass | Environment-driven via gradle properties |
-| No hardcoded release credentials | Pass | Uses `project.hasProperty()` guard |
-| Keystore files in .gitignore | Pass | `*.jks`, `*.keystore` (except debug) |
-| `keystore.properties` in .gitignore | Pass | Added |
-| EAS production profile configured | Pass | `autoIncrement: true` for versionCode |
-| Version consistency | Pass | 1.1.0 across package.json, app.json, build.gradle |
-
-**Remaining action:** Generate production keystore or configure EAS credentials before first Play Store upload.
+| Item | Status | Detail |
+|------|--------|--------|
+| Debug keystore for debug builds | Pass | Standard `debug.keystore` committed |
+| Release builds fail without production keystore | **Pass** | `signingConfig` is null when neither `RELEASE_STORE_FILE` nor `ALLOW_DEBUG_SIGNING` is set → Gradle refuses to sign |
+| No silent debug fallback for release | **Pass** | Previous `signingConfigs.debug` fallback removed |
+| `ALLOW_DEBUG_SIGNING` escape hatch | Pass | Only for explicit local testing |
+| EAS production config | Pass | `credentialsSource: "remote"`, `buildType: "app-bundle"`, `autoIncrement: true` |
+| EAS submit config | Pass | Service account key path + internal track |
+| Keystore files in .gitignore | Pass | `*.jks`, `*.keystore` (except debug), `keystore.properties`, `google-play-service-account.json` |
+| No hardcoded credentials | Pass | Properties loaded from Gradle CLI or EAS |
+| Version consistency | Pass | 1.1.0 / versionCode 2 across package.json, app.json, build.gradle |
 
 ## Play Store Readiness
 
-| Item | Status | Notes |
-|------|--------|-------|
-| App name | Pass | "CommAI" in strings.xml and app.json |
+| Item | Status | Detail |
+|------|--------|--------|
+| App name | Pass | "CommAI" in strings.xml, app.json |
 | Package name | Pass | `com.elpabloawakens.aipoweredaacapp` |
-| Permissions minimal | Pass | Removed WRITE_EXTERNAL_STORAGE, scoped READ_EXTERNAL_STORAGE, dev-only SYSTEM_ALERT_WINDOW |
-| Duplicate permissions removed | Pass | app.json cleaned |
-| Adaptive icons | Pass | Configured in multiple densities |
+| Permissions minimal | Pass | 5 permissions, no unnecessary ones |
+| Adaptive icons | Pass | All densities |
 | Splash screen | Pass | Configured |
-| Brand colors | Pass | colorPrimary set to #4CAF50 |
-| Listing draft | Pass | `/docs/release/play-store-listing-draft.md` |
-| Data safety draft | Pass | `/docs/release/data-safety-draft.md` |
-| Submission checklist | Pass | `/docs/release/google-play-submission-checklist.md` |
-
-**Remaining actions:** Feature graphic, screenshots, privacy policy URL, content rating questionnaire.
+| Brand colors | Pass | #4CAF50 / #388E3C |
+| Listing draft | Pass | `play-store-listing-draft.md` |
+| Data safety draft | Pass | `data-safety-draft.md` |
+| Asset checklist | Pass | `play-store-assets-checklist.md` |
+| Privacy policy link in app | Pass | Settings → About → Privacy Policy |
+| Privacy policy URL placeholder | **Action needed** | `brand.privacyPolicyUrl` is a placeholder; must be replaced |
+| Feature graphic | **Action needed** | Must create 1024x500 PNG |
+| Screenshots | **Action needed** | Must capture min 2 phone screenshots |
+| Support email | **Action needed** | `brand.supportEmail` is a placeholder |
 
 ## AI Personalisation
 
-| Item | Status | Notes |
-|------|--------|-------|
-| Learns from word selections | Pass | wordFrequencies, wordRecency, bigrams |
-| Learns from spoken sentences | Pass | phraseFrequencies |
-| Suggestion acceptance tracking | Pass | suggestionsAccepted counter |
-| Recency + frequency re-ranking | Pass | `scoreByFrequencyAndRecency()` applied to suggestions |
-| Bigram predictions (instant, local) | Pass | Shown before neural model responds |
-| User can disable personalisation | Pass | Settings → "Learn from my usage" toggle |
-| User can reset learned data | Pass | Settings → "Reset AI Data" button with confirmation |
-| Privacy-safe summary for caregivers | Pass | `getPrivacySafeSummary()` returns only aggregates |
-| All data local by default | Pass | AsyncStorage only; no cloud sync of communication content |
-| Personalisation respects disabled state | Pass | All recording and ranking gated on `aiEnabled` |
-| Failed search tracking | Pass | For vocabulary gap detection |
-
-**Documentation:** `/docs/ai/learning-from-user-input.md`, `/docs/ai/personalisation-controls.md`
+| Item | Status |
+|------|--------|
+| Learns from word selections | Pass |
+| Learns from spoken sentences | Pass |
+| Suggestion acceptance tracking | Pass |
+| Recency + frequency re-ranking | Pass |
+| Bigram predictions (instant, local) | Pass |
+| User can disable personalisation | Pass |
+| User can reset learned data | Pass |
+| Privacy-safe summary for caregivers | Pass |
+| All data local by default | Pass |
+| Personalisation gated on setting | Pass |
 
 ## Accessibility
 
-| Item | Status | Notes |
-|------|--------|-------|
-| Screen reader labels on all interactive elements | Pass | Audited across all 12 screens |
-| `accessibilityRole` on buttons/links | Pass | |
-| `accessibilityState` for selected/disabled | Pass | |
-| `accessibilityHint` where non-obvious | Pass | |
-| `accessibilityLiveRegion` on sentence bar | Pass | polite |
-| High contrast theme | Pass | Yellow on black with proper tokens |
-| Large touch targets (min 44x44) | Pass | Buttons min 40x40 with hitSlop |
-| EmotionScreen animation bug fixed | Pass | Individual Animated.Value per card |
-| Disabled button opacity feedback | Pass | opacity: 0.5 when disabled |
-| autoComplete/textContentType on auth inputs | Pass | |
+| Item | Status |
+|------|--------|
+| Screen reader labels | Pass |
+| accessibilityRole on all interactives | Pass |
+| accessibilityState for selected/disabled | Pass |
+| accessibilityHint where needed | Pass |
+| accessibilityLiveRegion on sentence bar | Pass |
+| High contrast theme | Pass |
+| Large touch targets | Pass |
+| EmotionScreen animation bug fixed | Pass |
+| Disabled button opacity feedback | Pass |
+| autoComplete/textContentType on inputs | Pass |
 
 ## Offline Resilience
 
-| Item | Status | Notes |
-|------|--------|-------|
-| Core vocabulary works offline | Pass | Local coreVocabulary.js |
-| Speech works offline | Pass | expo-speech uses device TTS |
-| AI predictions work offline | Pass | TF model bundled, frequency model local |
-| Network state context | Pass | NetworkContext + useNetwork() |
-| Offline banner | Pass | "Offline — communication still works" |
-| Feedback queued offline | Pass | AsyncStorage queue, syncs on reconnect |
-| Settings persist offline | Pass | AsyncStorage primary, Firebase secondary |
+| Item | Status |
+|------|--------|
+| Core vocabulary offline | Pass |
+| Speech offline | Pass |
+| AI predictions offline | Pass |
+| Network context + banner | Pass |
+| Feedback queued offline | Pass |
+| Settings persist offline | Pass |
 
 ## Testing
 
@@ -96,26 +94,37 @@
 
 ## Performance
 
-| Item | Status | Notes |
-|------|--------|-------|
-| Model loads non-blocking | Pass | Promise-based, app renders immediately |
-| Model warm-up on load | Pass | Dummy prediction eliminates cold start |
-| Pre-computed reverse tokenizer | Pass | O(1) lookups |
-| LRU prediction cache (80 entries) | Pass | FIFO eviction |
-| In-memory frequency counter | Pass | No AsyncStorage I/O per update |
-| FlatList removeClippedSubviews | Pass | Android optimisation |
-| Numerically stable softmax | Pass | Max subtraction before exp |
+| Item | Status |
+|------|--------|
+| Non-blocking model load | Pass |
+| Model warm-up | Pass |
+| Pre-computed reverse tokenizer | Pass |
+| LRU prediction cache | Pass |
+| In-memory frequency counter | Pass |
+| FlatList removeClippedSubviews | Pass |
+| Numerically stable softmax | Pass |
 
-## Known Issues / Future Work
+## Codebase Hygiene
 
-1. **Release keystore not yet generated** — Must be done before Play Store upload
-2. **Screenshots/feature graphic needed** — Design assets for listing
-3. **Privacy policy URL needed** — Must be hosted publicly
-4. **Neural model is static** — Weights don't update from user input (frequency model compensates)
-5. **Night mode colors.xml is empty** — Android system dark theme falls back to app theme
-6. **`archive/unused/` and `Old_models/` directories** — Dead code, safe to remove in a future cleanup
-7. **`an-array-of-english-words` dependency** — Large package, check if still used
+| Item | Status | Detail |
+|------|--------|--------|
+| `an-array-of-english-words` removed | Pass | Unused dependency |
+| No inline palette objects | Pass | All screens use `getPalette()` |
+| No unused imports | Pass | Cleaned AccessibilityInfo, Slider |
+| `archive/unused/` directory | Low priority | Dead code, safe to remove later |
+| `Old_models/` directory | Low priority | Legacy, not imported anywhere |
 
-## Conclusion
+## Remaining Blockers
 
-The app is at release-candidate quality. Core AAC communication flows are tested, accessible, and work offline. AI personalisation is implemented with user controls. Android signing is configured for production. Play Store materials are drafted. The only hard blockers are generating the production keystore and providing the required Play Store assets (screenshots, privacy policy URL).
+| # | Blocker | Type | Owner |
+|---|---------|------|-------|
+| 1 | Generate production keystore or run first EAS build | Infra | Developer |
+| 2 | Host privacy policy at a public URL | Legal | Developer |
+| 3 | Replace `brand.privacyPolicyUrl` placeholder | Code | Developer |
+| 4 | Replace `brand.supportEmail` placeholder | Code | Developer |
+| 5 | Create feature graphic (1024x500) | Design | Developer |
+| 6 | Capture phone screenshots (min 2) | Design | Developer |
+| 7 | Complete IARC content rating in Play Console | Admin | Developer |
+| 8 | Enter data safety form in Play Console | Admin | Developer |
+
+**None of these require code changes.** Items 1-4 require external actions. Items 5-6 require device screenshots. Items 7-8 are Play Console forms.

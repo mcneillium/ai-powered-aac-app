@@ -8,6 +8,10 @@ export const brand = {
   tagline: 'Communication for everyone',
   primaryColor: '#4CAF50',
   accentColor: '#2196F3',
+  // RELEASE BLOCKER: Replace with actual hosted URL before Play Store submission.
+  // Google Play requires a working privacy policy link.
+  privacyPolicyUrl: 'https://REPLACE-ME.example.com/privacy-policy',
+  supportEmail: 'REPLACE-ME@example.com',
 };
 
 export const palettes = {

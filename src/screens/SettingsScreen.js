@@ -14,9 +14,10 @@ import {
   Alert,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import { Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
-import { getPalette } from '../theme';
+import { getPalette, brand } from '../theme';
 import { speak, getAvailableVoices } from '../services/speechService';
 import { resetAIProfile, hasLearnedData } from '../services/aiProfileStore';
 
@@ -284,6 +285,22 @@ export default function SettingsScreen() {
       >
         <Text style={styles.testButtonText}>Send Feedback</Text>
       </TouchableOpacity>
+
+      {/* About & Legal */}
+      <Text style={[styles.sectionTitle, { color: palette.text, borderBottomColor: palette.border }]}>
+        About
+      </Text>
+      <TouchableOpacity
+        onPress={() => Linking.openURL(brand.privacyPolicyUrl)}
+        accessibilityRole="link"
+        accessibilityLabel="Open privacy policy"
+        style={styles.linkRow}
+      >
+        <Text style={[styles.linkText, { color: palette.primary }]}>Privacy Policy</Text>
+      </TouchableOpacity>
+      <Text style={[styles.versionText, { color: palette.textSecondary }]}>
+        {brand.name} v1.1.0
+      </Text>
     </ScrollView>
   );
 }
@@ -380,5 +397,18 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 18,
     fontWeight: '600',
+  },
+  linkRow: {
+    paddingVertical: 12,
+  },
+  linkText: {
+    fontSize: 16,
+    textDecorationLine: 'underline',
+  },
+  versionText: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 8,
   },
 });

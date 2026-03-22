@@ -102,8 +102,8 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
-        release {
-            if (project.hasProperty('RELEASE_STORE_FILE')) {
+        if (project.hasProperty('RELEASE_STORE_FILE')) {
+            release {
                 storeFile file(RELEASE_STORE_FILE)
                 storePassword RELEASE_STORE_PASSWORD
                 keyAlias RELEASE_KEY_ALIAS
@@ -116,7 +116,16 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            signingConfig project.hasProperty('RELEASE_STORE_FILE') ? signingConfigs.release : signingConfigs.debug
+            // Production release builds MUST have a production keystore.
+            // If RELEASE_STORE_FILE is not set, this build type has no signingConfig
+            // and Gradle will fail at assemble time — which is the correct behaviour.
+            // For local debug-signed release testing, use: ./gradlew assembleRelease -PALLOW_DEBUG_SIGNING=true
+            if (project.hasProperty('RELEASE_STORE_FILE')) {
+                signingConfig signingConfigs.release
+            } else if (project.hasProperty('ALLOW_DEBUG_SIGNING')) {
+                signingConfig signingConfigs.debug
+            }
+            // else: signingConfig is null → Gradle will refuse to build a signed APK/AAB
             shrinkResources (findProperty('android.enableShrinkResourcesInReleaseBuilds')?.toBoolean() ?: false)
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"

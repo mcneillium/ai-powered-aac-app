@@ -1,5 +1,36 @@
 # Mobile Change Log
 
+## v1.1.0-rc2 — 2026-03-22 (Final Release Candidate)
+
+### Release Signing — Hard Failure Guard
+- Release builds now **fail** when no production keystore is configured (previously fell back to debug silently)
+- `ALLOW_DEBUG_SIGNING` flag added for explicit local testing only
+- `signingConfig` is null for release builds without credentials → Gradle refuses to produce signed output
+
+### EAS Production Config
+- `credentialsSource: "remote"` — credentials managed by EAS, not local files
+- `buildType: "app-bundle"` — produces AAB (required for Play Store)
+- `submit.production.android.track: "internal"` — submits to internal test track
+- `google-play-service-account.json` added to .gitignore
+
+### Privacy Policy Integration
+- `brand.privacyPolicyUrl` and `brand.supportEmail` added to `src/theme.js` (placeholders to be replaced before submission)
+- Settings screen: new "About" section with Privacy Policy link and app version
+- `Linking.openURL()` wired to privacy policy URL
+
+### Dependency Cleanup
+- Removed unused `an-array-of-english-words` package (was not imported anywhere)
+
+### Documentation
+- `docs/release/android-signing.md` — rewritten with hard-failure semantics
+- `docs/release/release-build-verification.md` — step-by-step verification guide
+- `docs/release/play-store-assets-checklist.md` — full asset requirements
+- `docs/release/google-play-submission-checklist.md` — updated with exact blocker list
+- `docs/release/final-mobile-go-no-go.md` — go/no-go decision document
+- `docs/audit/final-mobile-release-audit.md` — updated with all findings
+
+---
+
 ## v1.1.0-rc1 — 2026-03-21 (Release Candidate)
 
 ### Android Release Signing
