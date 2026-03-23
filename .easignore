@@ -1,0 +1,42 @@
+# Inherit .gitignore rules
+# (EAS uses .easignore instead of .gitignore when .easignore exists,
+#  so we must repeat the essentials)
+
+node_modules/
+.expo/
+dist/
+web-build/
+android/
+ios/
+
+# Firebase Cloud Functions (not needed for mobile build)
+functions/
+
+# Test coverage, docs, patches
+coverage/
+docs/
+*.patch
+train_aac_model.py
+
+# Credentials and secrets
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+.env*.local
+google-play-service-account.json
+keystore.properties
+
+# Debug logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+firebase-debug.log
+firebase-debug.*.log
+ui-debug.log
+
+# OS files
+.DS_Store
