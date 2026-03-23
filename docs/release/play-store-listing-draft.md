@@ -1,67 +1,100 @@
-# Play Store Listing Draft
+# Play Store Listing — Voice v1.1.0
 
 ## App Name
-CommAI
+Voice
 
 ## Short Description (80 chars max)
-AAC communication app with AI-powered word predictions. Works offline.
+Calm, friendly AAC communication app with smart predictions. Works offline.
 
 ## Full Description (4000 chars max)
 
-CommAI is an Augmentative and Alternative Communication (AAC) app designed for people who benefit from symbol-based or text-based communication support. Whether you're a child learning to communicate, an adult with speech difficulties, or a caregiver supporting someone, CommAI makes communication accessible, personal, and private.
+Voice is an Augmentative and Alternative Communication (AAC) app designed for children, adults, and families who benefit from supported communication. Whether you're learning to communicate, supporting someone who is, or looking for a reliable AAC tool — Voice makes everyday communication calmer, clearer, and more personal.
 
-**Core Communication**
-Tap words from a colour-coded vocabulary grid to build sentences, then speak them aloud. The grid uses Fitzgerald Key colour coding so users can quickly identify word types: verbs (green), nouns (orange), pronouns (yellow), adjectives (blue), and social phrases (pink).
+**Simple Communication**
+Tap colour-coded words to build sentences, then speak them aloud. The vocabulary grid uses Fitzgerald Key colours so word types are easy to spot: verbs in green, nouns in orange, pronouns in yellow, adjectives in blue, and social phrases in pink. Buttons stay in the same place so motor plans are never disrupted.
 
-**AI-Powered Suggestions**
-CommAI learns from your communication patterns — completely on-device. The more you use it, the smarter your suggestions become. No data leaves your device unless you choose to sync.
+**Smart, Private Suggestions**
+Voice learns from communication patterns — completely on your device. The more you use it, the better your word suggestions become. No personal data leaves your device unless you choose to sync. You can turn learning off or reset it at any time in Settings.
 
 **Works Offline**
-Every core feature works without an internet connection. Your vocabulary, speech output, and AI predictions are all stored locally. Communicate anywhere, anytime.
+Every core feature works without the internet. Vocabulary, speech output, sentence history, and word predictions are all available offline. Communicate anywhere, any time.
 
-**Key Features**
-- Core vocabulary grid with Fitzgerald Key colour coding
-- AI word prediction that learns from your usage
-- Text-to-speech with adjustable speed, pitch, and voice
+**Multiple Ways to Communicate**
+- Core vocabulary board with colour-coded word categories
+- Visual sentence builder with pictogram search
+- Emotion expression screen — tap how you feel and speak it
+- Camera mode for describing objects and scenes
 - Sentence history — quickly repeat recent messages
-- Object recognition camera mode
-- Emotion expression screen
-- Sentence builder with pictogram search
+
+**Fully Accessible**
+Designed with accessibility at its heart: screen reader support, large touch targets, high-contrast mode, adjustable grid sizes, customisable speech rate, pitch, and voice. Buttons never move unexpectedly.
+
+**Personalise Everything**
 - Light, dark, and high-contrast themes
-- Adjustable grid sizes (2, 3, or 4 columns)
-- Full offline support
-- Privacy-first: all learning data stays on-device
-- Optional cloud sync for settings and analytics
-- Caregiver/user role system
+- 2, 3, or 4-column grid layouts
+- Adjustable speech speed and pitch
+- Choose from available system voices
+- Optional AI suggestions that learn from your usage
 
-**Accessibility**
-Designed with accessibility at its core: screen reader support, large touch targets, high-contrast mode, proper labelling throughout, and motor-plan stable layouts (buttons don't move).
-
-**Privacy**
-Communication is personal. CommAI keeps all learning data on your device by default. Cloud sync is optional and only available when signed in. No communication content is ever shared without explicit consent.
+**Safe and Calm**
+Voice is built to be a trustworthy, everyday tool. There are no ads, no tracking, and no surprises. Communication data stays on your device. Cloud sync is optional and only available when signed in.
 
 ## Category
-Medical (or Education, depending on target audience)
+Education (or Medical)
 
 ## Tags
-AAC, communication, speech, accessibility, augmentative communication, nonverbal, assistive technology, text to speech, AI predictions
+AAC, communication, speech, accessibility, augmentative communication, nonverbal, assistive technology, text to speech, word predictions, special needs
 
 ## Release Notes (v1.1.0)
 
 **What's New**
-- AI suggestions now appear on the main communication board
-- New multi-step onboarding experience
+- Smart word suggestions on the main communication board
+- New guided onboarding experience
 - Sentence history — tap to repeat recent messages
-- Offline indicator shows when you're disconnected
-- Improved accessibility labels and screen reader support
+- Offline indicator when disconnected
+- Improved screen reader labels and accessibility
 - AI personalisation controls in Settings
-- Better performance for word predictions
-- Bug fixes and UI polish
+- Performance improvements
+- Bug fixes and visual polish
 
 ## Content Rating
 Everyone
 
 ## Contact Details
 - Developer: El Pablo Awakens
-- Email: [developer email]
-- Website: [developer website]
+- Email: support@paulmartinmcneill.com
+- Website: https://paulmartinmcneill.com
+
+---
+
+## Feature Graphic Tagline
+"A calm, friendly AAC communication app"
+
+## Screenshot Headlines & Subheadings
+
+| # | Headline | Subheading |
+|---|----------|-----------|
+| 1 | Tap. Build. Speak. | Colour-coded words make communication simple |
+| 2 | Smart Suggestions | AI learns your patterns — entirely on your device |
+| 3 | Your Way, Your Voice | Themes, grid sizes, speech speed — fully adjustable |
+| 4 | Works Everywhere | Full offline support — no internet needed to communicate |
+
+## Value Propositions
+
+**For caregivers and families:**
+A calm, supportive communication tool designed to be part of everyday life — not a struggle to learn.
+
+**For accessibility:**
+Built from the ground up for accessibility: high contrast, screen reader support, stable button layouts, and adjustable everything.
+
+## Key Feature Bullets (for marketing)
+- Colour-coded AAC vocabulary board
+- On-device AI word predictions
+- Works fully offline
+- Adjustable themes, grid sizes, and speech
+- Sentence history for quick repetition
+- Emotion expression screen
+- Visual sentence builder with pictograms
+- Camera-based object recognition
+- Privacy-first — all learning stays on device
+- Screen reader and high-contrast support

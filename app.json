@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "CommAI",
+    "name": "Voice",
     "slug": "ai-powered-aac-app",
     "version": "1.1.0",
     "orientation": "portrait",
@@ -17,13 +17,13 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#F8F6F3"
     },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "CommAI uses the camera to identify objects and generate communication suggestions.",
-        "NSMicrophoneUsageDescription": "CommAI uses the microphone for audio-based communication features.",
+        "NSCameraUsageDescription": "Voice uses the camera to identify objects and generate communication suggestions.",
+        "NSMicrophoneUsageDescription": "Voice uses the microphone for audio-based communication features.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.elpabloawakens.aipoweredaacapp"
@@ -31,7 +31,8 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundImage": "./assets/adaptive-icon-background.png",
+        "backgroundColor": "#5BB5B5"
       },
       "permissions": [
         "CAMERA",

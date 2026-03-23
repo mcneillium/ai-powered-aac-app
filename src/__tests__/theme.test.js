@@ -5,13 +5,13 @@ describe('theme', () => {
   test('getPalette returns light palette by default', () => {
     const palette = getPalette('light');
     expect(palette.background).toBe('#FFFFFF');
-    expect(palette.text).toBe('#000000');
+    expect(palette.text).toBe('#3A3A4A');
   });
 
   test('getPalette returns dark palette', () => {
     const palette = getPalette('dark');
-    expect(palette.background).toBe('#000000');
-    expect(palette.text).toBe('#FFFFFF');
+    expect(palette.background).toBe('#1A1A2E');
+    expect(palette.text).toBe('#E8E8EC');
   });
 
   test('getPalette returns highContrast palette', () => {
@@ -39,7 +39,7 @@ describe('theme', () => {
   });
 
   test('brand constants are defined', () => {
-    expect(brand.name).toBe('CommAI');
+    expect(brand.name).toBe('Voice');
     expect(brand.tagline).toBeTruthy();
     expect(brand.primaryColor).toBeTruthy();
   });
