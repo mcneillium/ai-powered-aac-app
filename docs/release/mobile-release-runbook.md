@@ -1,15 +1,16 @@
-# Mobile Release Runbook — CommAI v1.1.0
+# Mobile Release Runbook — Voice v1.1.0
 
 **Updated:** 2026-03-23
 
-Complete these steps in order. Steps marked DONE have been verified.
+Complete these steps in order.
 
 ---
 
 ## Step 1 — Replace placeholder strings — DONE
 
-Privacy policy URL and support email set in commit `729a901`:
+Privacy policy URL and support email set. Brand updated to Voice.
 ```
+brand.name: 'Voice'
 privacyPolicyUrl: 'https://paulmartinmcneill.com/commai/privacy-policy'
 supportEmail: 'support@paulmartinmcneill.com'
 ```
@@ -21,35 +22,30 @@ supportEmail: 'support@paulmartinmcneill.com'
 Prerequisites:
 - Firebase CLI installed (`npm install -g firebase-tools`)
 - Authenticated (`firebase login`)
-- Project `commai-b98fe` accessible to your account
+- Project `commai-b98fe` accessible
 
 ```bash
 cd functions && npm install && cd ..
 firebase deploy --only functions
 ```
 
-The CLI will print the deployed URL. Confirm it matches `src/services/hfImageCaption.js:17`:
+Confirm deployed URL matches `src/services/hfImageCaption.js:17`:
 ```
 https://us-central1-commai-b98fe.cloudfunctions.net/imageCaptionProxy
 ```
-
-If the region or project differs, update `hfImageCaption.js:17`, commit, and rebuild.
 
 ---
 
 ## Step 3 — Set Hugging Face token server-side
 
-1. Go to https://huggingface.co/settings/tokens
-2. Create a new **read** token (do NOT reuse the compromised one)
-3. Set it:
-
+1. https://huggingface.co/settings/tokens → create new **read** token
+2. Set it:
 ```bash
 firebase functions:config:set hf.token="hf_YOUR_NEW_TOKEN"
 firebase deploy --only functions
 ```
 
-4. Smoke test:
-
+3. Smoke test:
 ```bash
 curl -s -X POST \
   https://us-central1-commai-b98fe.cloudfunctions.net/imageCaptionProxy \
@@ -57,83 +53,62 @@ curl -s -X POST \
   -d '{"image":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="}' | python3 -m json.tool
 ```
 
-Expected: `{"caption": "..."}` or `{"error": "..."}` on model cold-start (retry in 30s).
-
 ---
 
 ## Step 4 — Revoke compromised tokens
 
-### Hugging Face
-1. https://huggingface.co/settings/tokens
-2. Revoke token `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`
-
-### Google Cloud Vision
-1. https://console.cloud.google.com/apis/credentials (project `ai-powered-aac-app`)
-2. Delete key `AIzaSyD4WZGLy8Zt5VsF6v2LmnikM4j7hcWoo9g`
+- Hugging Face: https://huggingface.co/settings/tokens → revoke `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`
+- Google Cloud Vision: https://console.cloud.google.com/apis/credentials → delete `AIzaSyD4WZGLy8Zt5VsF6v2LmnikM4j7hcWoo9g`
 
 ---
 
-## Step 5 — Run EAS production build — DONE
+## Step 5 — Run Voice-branded EAS production build
 
-Build succeeded. Artifact:
-```
-https://expo.dev/artifacts/eas/b3SUx6vPMMNBFteQjM1scg.aab
+```bash
+npx eas build --profile production --platform android
 ```
 
-EAS managed the upload keystore (remote credentials). `autoIncrement` bumped versionCode.
+This produces a signed `.aab` with Voice branding (icon, name, splash, palette).
 
 ---
 
-## Step 6 — Smoke test on device
+## Step 6 — Capture screenshots and generate Play Store images
 
-Download the AAB from the artifact URL, then install via bundletool or EAS internal distribution.
+See `docs/release/final-screenshot-capture-guide.md` for full details.
+
+```bash
+# After capturing 4 raw screenshots into the raw/ folder:
+python3 scripts/composite-screenshots.py
+```
+
+---
+
+## Step 7 — Smoke test on device
 
 | Test | Expected |
 |------|----------|
-| App launches | No crash, onboarding or AAC board visible |
+| App launches | No crash, shows "Voice" branding, onboarding or AAC board |
 | Tap words → sentence bar | Words appear, TTS speaks on tap |
-| Camera → take photo | Caption returned from Cloud Function (or "Caption unavailable" if offline/function not deployed) |
-| Settings → Privacy Policy | Opens browser to `https://paulmartinmcneill.com/commai/privacy-policy` |
-| Settings → theme toggle | Light/dark/high-contrast switch works |
+| Camera → take photo | Caption returned (or "Caption unavailable" if function not deployed) |
+| Settings → Privacy Policy | Opens `https://paulmartinmcneill.com/commai/privacy-policy` |
+| Settings → theme toggle | Light/dark/high-contrast works |
 | Toggle airplane mode | Offline banner appears; core AAC still works |
-| Sign in / sign up | Firebase auth flow completes |
-| Sign out | Returns to login screen |
-
----
-
-## Step 7 — Create Play Store assets
-
-- **Feature graphic:** 1024 x 500 px, JPEG or 24-bit PNG, no alpha
-- **Phone screenshots:** min 2, recommended 1080x1920
-
-Capture method:
-```bash
-adb shell screencap -p /sdcard/screen.png && adb pull /sdcard/screen.png
-```
+| Sign in / sign out | Firebase auth flow completes |
+| App icon in launcher | Shows Voice teal mic icon |
 
 ---
 
 ## Step 8 — Upload to Google Play Console
 
 1. Go to https://play.google.com/console
-2. Select app → **Production** (or **Internal testing**) → **Create new release**
+2. Select app → **Internal testing** → **Create new release**
 3. Upload the `.aab` from Step 5
 4. Fill in:
    - **Store listing** — text from `docs/release/play-store-listing-draft.md`
-   - **Screenshots + feature graphic** from Step 7
+   - **Screenshots** — `final-1.png` through `final-4.png` from Step 6
+   - **Feature graphic** — `assets/branding/google-play/feature-graphic/feature-graphic-1024x500.png`
    - **Content rating** — IARC questionnaire (expected: Everyone)
    - **Data safety** — from `docs/release/data-safety-draft.md`
    - **Privacy policy URL** — `https://paulmartinmcneill.com/commai/privacy-policy`
    - **Contact email** — `support@paulmartinmcneill.com`
 5. Submit for review
-
----
-
-## Step 9 — Post-submission checklist
-
-- [ ] Cloud Function returns captions (step 3 curl test)
-- [ ] Old HF token revoked
-- [ ] Old Vision key deleted
-- [ ] Privacy policy URL loads in browser
-- [ ] `grep "REPLACE-ME" src/` returns nothing (**verified clean**)
-- [ ] `grep "hf_[A-Za-z]" src/` returns nothing (**verified clean**)

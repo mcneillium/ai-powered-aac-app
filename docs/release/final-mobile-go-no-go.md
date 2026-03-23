@@ -1,7 +1,8 @@
-# Final Mobile Go / No-Go — CommAI v1.1.0
+# Final Mobile Go / No-Go — Voice v1.1.0
 
 **Date:** 2026-03-23
-**Decision:** **GO for internal testing** / **CONDITIONAL GO for Play Console submission**
+**Brand:** Voice (rebranded from CommAI)
+**Decision:** **CONDITIONAL GO** — new Voice-branded EAS build required, then GO for submission
 
 ---
 
@@ -17,58 +18,41 @@
 | Backend proxy for billable APIs | `functions/index.js` — HF token server-side only | GO |
 | Firebase deploy config present | `firebase.json` + `.firebaserc` (project `commai-b98fe`) | GO |
 | Safe failure states for backend | `hfImageCaption.js:50,58,61` — fallback strings | GO |
-| Release builds hard-fail without production signing | `build.gradle:123-128` — null signingConfig path | GO |
-| EAS production config: AAB + remote credentials | `eas.json:22-24` | GO |
+| EAS production config: AAB + remote credentials | `eas.json` production profile | GO |
 | Permissions minimal and justified | `app.json:37-40` — CAMERA, RECORD_AUDIO only | GO |
 | 36 tests passing, no regressions | 6 suites, 36 tests | GO |
-| Play Store listing text drafted | `docs/release/play-store-listing-draft.md` | GO |
+| Play Store listing text drafted | `docs/release/play-store-listing-draft.md` (Voice brand) | GO |
 | Data safety responses drafted | `docs/release/data-safety-draft.md` | GO |
-| Privacy policy link wired in Settings UI | `SettingsScreen.js:294` | GO |
-| Privacy policy URL set | `src/theme.js:15` → `https://paulmartinmcneill.com/commai/privacy-policy` | GO |
-| Support email set | `src/theme.js:16` → `support@paulmartinmcneill.com` | GO |
-| App icon 512x512 | `assets/icon.png` — 512x512 RGBA PNG | GO |
-| Version consistent (1.1.0 / versionCode 2) | `package.json:4`, `app.json:5` | GO |
-| Production AAB built | EAS build succeeded, artifact: `b3SUx6vPMMNBFteQjM1scg.aab` | GO |
-| JS bundle verified in clean sim | 1076 modules bundled, `export:embed` passes | GO |
+| Privacy policy link wired in Settings UI | `SettingsScreen.js:294` → `brand.privacyPolicyUrl` | GO |
+| Privacy policy URL set | `src/theme.js:11` → `https://paulmartinmcneill.com/commai/privacy-policy` | GO |
+| Support email set | `src/theme.js:12` → `support@paulmartinmcneill.com` | GO |
+| Voice brand applied | `app.json:3` → "Voice", `src/theme.js:7` → "Voice", teal palette | GO |
+| App icon 512x512 (Voice branded) | `assets/icon.png` — Voice mic + wordmark | GO |
+| Adaptive icon with background | `assets/adaptive-icon.png` + `adaptive-icon-background.png` | GO |
+| Feature graphic 1024x500 | `assets/branding/google-play/feature-graphic/feature-graphic-1024x500.png` | GO |
+| Screenshot templates ready | 4 templates + compositing script + capture guide | GO |
+| Version consistent (1.1.0) | `package.json:4`, `app.json:5` | GO |
 
 ---
 
-## Resolved since last review (2026-03-22)
+## Remaining items (5 total, all human-only)
 
-| Former blocker | Resolution |
-|----------------|-----------|
-| Replace privacy URL + support email | Set in commit `729a901` — `src/theme.js:15-16` |
-| Run EAS production build | Succeeded — AAB artifact at `expo.dev/artifacts/eas/b3SUx6vPMMNBFteQjM1scg.aab` |
-
----
-
-## Remaining items for internal testing (2 items)
+### Must do before Play Console upload
 
 | # | Item | Type | Action |
 |---|------|------|--------|
-| 1 | Deploy Cloud Function + set HF token | Infra | `firebase deploy --only functions` then `firebase functions:config:set hf.token="hf_NEW"` then redeploy |
-| 2 | Smoke test on device | QA | Install AAB via bundletool or internal distribution, run smoke test checklist |
+| 1 | **Run Voice-branded EAS build** | Build | `npx eas build --profile production --platform android` |
+| 2 | **Capture 4 screenshots** | Design | See `docs/release/final-screenshot-capture-guide.md` |
+| 3 | **Complete Play Console forms** | Admin | IARC + data safety + target audience |
 
-Image captioning will return "Caption unavailable" until item 1 is done. All other features work without it.
-
----
-
-## Additional items for Play Console submission (3 items)
+### Should do (infra + security)
 
 | # | Item | Type | Action |
 |---|------|------|--------|
-| 3 | Create feature graphic + phone screenshots | Design | 1024x500 graphic + min 2 phone screenshots at 1080x1920 |
-| 4 | Complete Play Console forms | Admin | IARC content rating + data safety form + target audience |
-| 5 | Revoke compromised tokens | Security | HF token at huggingface.co + Vision key at Google Cloud Console |
+| 4 | Deploy Cloud Function + set HF token | Infra | `firebase deploy --only functions` + `firebase functions:config:set hf.token="hf_NEW"` |
+| 5 | Revoke compromised tokens | Security | HF token + Vision key in external consoles |
 
----
-
-## Build path verification
-
-| Path | Command | Signing | Output |
-|------|---------|---------|--------|
-| EAS production (used) | `npm run eas:build:android:production` | Remote keystore managed by EAS | `.aab` (**DONE**) |
-| EAS submit | `npm run eas:submit:android` | Requires `google-play-service-account.json` | Play Console upload |
+Image captioning returns "Caption unavailable" until item 4 is done. All other features work without it.
 
 ---
 
@@ -79,8 +63,7 @@ Image captioning will return "Caption unavailable" until item 1 is done. All oth
 | Privacy policy URL returns 404 | Low-Medium | Verify URL loads before submission |
 | Play Store rejection for privacy policy | Low | Draft covers all data types |
 | HF model cold-start latency | Medium | Cloud Function returns 502; app shows fallback |
-| TF model on low-end devices | Medium | Frequency model provides instant fallback |
 
 ---
 
-**Bottom line:** The codebase is production-ready, the AAB is built and signed. Internal testing can begin immediately after Cloud Function deployment. Play Console submission requires 3 additional human-only items (assets, forms, token rotation).
+**Bottom line:** Code, branding, assets, and docs are complete. One EAS build + 4 screenshots + Play Console forms are the only remaining steps.
