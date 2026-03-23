@@ -232,7 +232,18 @@ If the app is listed under Education or Medical, Play Console may ask additional
 
 ## 13. Upload Checklist
 
-### AAB
+### AAB — Automated upload (preferred)
+
+```
+npm install
+node scripts/upload-to-play-internal.js ^
+  --key  "C:\Users\McNei\Secrets\play-service-account.json" ^
+  --aab  "C:\Users\McNei\Downloads\Voice.aab"
+```
+
+This single command authenticates, uploads the AAB, assigns it to the **internal** track, adds release notes, and commits the edit. It prints the version code and status on success, or a diagnostic message on failure.
+
+### AAB — Manual alternative
 
 - [ ] Run `npx eas build --profile production --platform android` from your machine
 - [ ] Download the `.aab` from the EAS artifact URL
@@ -266,13 +277,12 @@ If the app is listed under Education or Medical, Play Console may ask additional
 ## 14. Remaining Human-Only Actions — Summary
 
 ```
-1. Build:     npx eas build --profile production --platform android
-2. Capture:   4 screenshots → raw/ folder → python scripts/composite-screenshots.py
-3. Upload:    AAB + feature graphic + 4 screenshots to Play Console
-4. Forms:     IARC + data safety + target audience + account deletion disclosure
-5. Copy:      Paste short/full description + release notes + contact info
-6. Infra:     firebase deploy --only functions + set HF token (for image captioning)
-7. Security:  Revoke old HF + Vision tokens
+1. Upload AAB:  node scripts/upload-to-play-internal.js --key <key.json> --aab <Voice.aab>
+2. Screenshots: Capture 4 raw PNGs → python scripts/composite-screenshots.py
+3. Store listing: Upload feature graphic + 4 screenshots + paste copy into Play Console
+4. Forms:       IARC + data safety + target audience + account deletion disclosure
+5. Infra:       firebase deploy --only functions + set HF token (for image captioning)
+6. Security:    Revoke old HF + Vision tokens
 ```
 
-Steps 1-5 are required for submission. Steps 6-7 are required for full functionality.
+Steps 1-4 are required for submission. Steps 5-6 are required for full functionality.

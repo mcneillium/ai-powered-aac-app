@@ -45,8 +45,10 @@ ui-debug.log
 # local env files
 .env*.local
 
-# Google Play service account
+# Google Play service account — never commit these
 google-play-service-account.json
+play-service-account.json
+*service-account*.json
 
 # typescript
 *.tsbuildinfo
