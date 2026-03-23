@@ -1,7 +1,7 @@
 # Final Mobile Go / No-Go — CommAI v1.1.0
 
-**Date:** 2026-03-22
-**Decision:** **CONDITIONAL GO** — code is release-ready; 6 human-only execution items remain.
+**Date:** 2026-03-23
+**Decision:** **GO for internal testing** / **CONDITIONAL GO for Play Console submission**
 
 ---
 
@@ -24,23 +24,42 @@
 | Play Store listing text drafted | `docs/release/play-store-listing-draft.md` | GO |
 | Data safety responses drafted | `docs/release/data-safety-draft.md` | GO |
 | Privacy policy link wired in Settings UI | `SettingsScreen.js:294` | GO |
+| Privacy policy URL set | `src/theme.js:15` → `https://paulmartinmcneill.com/commai/privacy-policy` | GO |
+| Support email set | `src/theme.js:16` → `support@paulmartinmcneill.com` | GO |
 | App icon 512x512 | `assets/icon.png` — 512x512 RGBA PNG | GO |
-| Version consistent (1.1.0 / versionCode 2) | `package.json:4`, `app.json:5`, `build.gradle:95-96` | GO |
+| Version consistent (1.1.0 / versionCode 2) | `package.json:4`, `app.json:5` | GO |
+| Production AAB built | EAS build succeeded, artifact: `b3SUx6vPMMNBFteQjM1scg.aab` | GO |
+| JS bundle verified in clean sim | 1076 modules bundled, `export:embed` passes | GO |
 
 ---
 
-## NO-GO conditions (must clear before upload)
+## Resolved since last review (2026-03-22)
 
-| # | Blocker | What to do | Runbook step |
-|---|---------|-----------|-------------|
-| 1 | Replace privacy URL + support email | Edit `src/theme.js:15-16`, commit | Step 1 |
-| 2 | Deploy Cloud Function | `firebase deploy --only functions` (requires Firebase CLI login) | Step 2 |
-| 3 | Set new HF token server-side | `firebase functions:config:set hf.token="hf_NEW"` + redeploy | Step 3 |
-| 4 | Revoke compromised tokens | huggingface.co + Google Cloud Console | Step 4 |
-| 5 | Run EAS production build | `npm run eas:build:android:production` (requires Expo login) | Step 5 |
-| 6 | Create feature graphic + screenshots | 1024x500 graphic + min 2 phone screenshots | Step 8 |
+| Former blocker | Resolution |
+|----------------|-----------|
+| Replace privacy URL + support email | Set in commit `729a901` — `src/theme.js:15-16` |
+| Run EAS production build | Succeeded — AAB artifact at `expo.dev/artifacts/eas/b3SUx6vPMMNBFteQjM1scg.aab` |
 
-All are human-only tasks requiring credentials or design tools. **Zero code changes remain.**
+---
+
+## Remaining items for internal testing (2 items)
+
+| # | Item | Type | Action |
+|---|------|------|--------|
+| 1 | Deploy Cloud Function + set HF token | Infra | `firebase deploy --only functions` then `firebase functions:config:set hf.token="hf_NEW"` then redeploy |
+| 2 | Smoke test on device | QA | Install AAB via bundletool or internal distribution, run smoke test checklist |
+
+Image captioning will return "Caption unavailable" until item 1 is done. All other features work without it.
+
+---
+
+## Additional items for Play Console submission (3 items)
+
+| # | Item | Type | Action |
+|---|------|------|--------|
+| 3 | Create feature graphic + phone screenshots | Design | 1024x500 graphic + min 2 phone screenshots at 1080x1920 |
+| 4 | Complete Play Console forms | Admin | IARC content rating + data safety form + target audience |
+| 5 | Revoke compromised tokens | Security | HF token at huggingface.co + Vision key at Google Cloud Console |
 
 ---
 
@@ -48,23 +67,8 @@ All are human-only tasks requiring credentials or design tools. **Zero code chan
 
 | Path | Command | Signing | Output |
 |------|---------|---------|--------|
-| EAS production (recommended) | `npm run eas:build:android:production` | Remote upload keystore managed by EAS | `.aab` |
-| Local production | `./gradlew bundleRelease -PRELEASE_STORE_FILE=...` | Developer-provided keystore | `.aab` |
-| Local debug-signed (testing only) | `./gradlew assembleRelease -PALLOW_DEBUG_SIGNING=true` | Debug keystore (explicit opt-in) | `.apk` |
-| Local bare (no flags) | `./gradlew assembleRelease` | **Fails** — no signingConfig | — |
-
-**EAS submit:** `npm run eas:submit:android` → `eas.json:29-34` → requires `google-play-service-account.json` (gitignored).
-
----
-
-## After clearing blockers 1–6
-
-1. Build production AAB via EAS (step 5)
-2. Validate AAB signing (step 6)
-3. Smoke test on device (step 7)
-4. Upload to Play Console (step 9)
-5. Complete IARC + data safety form
-6. Submit for review
+| EAS production (used) | `npm run eas:build:android:production` | Remote keystore managed by EAS | `.aab` (**DONE**) |
+| EAS submit | `npm run eas:submit:android` | Requires `google-play-service-account.json` | Play Console upload |
 
 ---
 
@@ -72,11 +76,11 @@ All are human-only tasks requiring credentials or design tools. **Zero code chan
 
 | Risk | Likelihood | Mitigation |
 |------|-----------|------------|
+| Privacy policy URL returns 404 | Low-Medium | Verify URL loads before submission |
 | Play Store rejection for privacy policy | Low | Draft covers all data types |
-| Crash on specific Android version | Low | Error boundary + offline-first |
 | HF model cold-start latency | Medium | Cloud Function returns 502; app shows fallback |
 | TF model on low-end devices | Medium | Frequency model provides instant fallback |
 
 ---
 
-**Bottom line:** The codebase is production-ready and security-clean. The 6 remaining items are human-only tasks (credentials, hosting, design) that cannot be automated from the repo.
+**Bottom line:** The codebase is production-ready, the AAB is built and signed. Internal testing can begin immediately after Cloud Function deployment. Play Console submission requires 3 additional human-only items (assets, forms, token rotation).

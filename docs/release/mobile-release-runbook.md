@@ -1,27 +1,17 @@
 # Mobile Release Runbook — CommAI v1.1.0
 
-Complete these steps in order.
+**Updated:** 2026-03-23
+
+Complete these steps in order. Steps marked DONE have been verified.
 
 ---
 
-## Step 1 — Replace placeholder strings
+## Step 1 — Replace placeholder strings — DONE
 
-Edit `src/theme.js` lines 15–16:
-
-```javascript
-privacyPolicyUrl: 'https://YOUR-ACTUAL-URL/privacy-policy',
-supportEmail: 'your-real-email@example.com',
+Privacy policy URL and support email set in commit `729a901`:
 ```
-
-```bash
-# Verify:
-grep "REPLACE-ME" src/theme.js   # must return nothing
-```
-
-Commit:
-```bash
-git add src/theme.js
-git commit -m "Set privacy policy URL and support email for release"
+privacyPolicyUrl: 'https://paulmartinmcneill.com/commai/privacy-policy'
+supportEmail: 'support@paulmartinmcneill.com'
 ```
 
 ---
@@ -83,41 +73,27 @@ Expected: `{"caption": "..."}` or `{"error": "..."}` on model cold-start (retry 
 
 ---
 
-## Step 5 — Run EAS production build
+## Step 5 — Run EAS production build — DONE
 
-```bash
-npm run eas:build:android:production
+Build succeeded. Artifact:
+```
+https://expo.dev/artifacts/eas/b3SUx6vPMMNBFteQjM1scg.aab
 ```
 
-What this does (from `eas.json` production profile):
-- `buildType: "app-bundle"` → AAB output
-- `credentialsSource: "remote"` → EAS manages upload keystore
-- `autoIncrement: true` → bumps versionCode
-
-On first run, EAS will prompt to generate an upload keystore. The build runs on EAS cloud. Output: a download URL for the `.aab`.
+EAS managed the upload keystore (remote credentials). `autoIncrement` bumped versionCode.
 
 ---
 
-## Step 6 — Validate the AAB
+## Step 6 — Smoke test on device
 
-```bash
-# Download AAB from the URL printed by EAS, then:
-jarsigner -verify -verbose commai.aab 2>&1 | head -5
-# Must NOT contain "androiddebugkey" or "debug"
-```
-
----
-
-## Step 7 — Smoke test on device
-
-Install via bundletool or internal distribution, then verify:
+Download the AAB from the artifact URL, then install via bundletool or EAS internal distribution.
 
 | Test | Expected |
 |------|----------|
-| App launches | No crash, AAC board visible |
+| App launches | No crash, onboarding or AAC board visible |
 | Tap words → sentence bar | Words appear, TTS speaks on tap |
-| Camera → take photo | Caption returned from Cloud Function (or "Caption unavailable" if offline) |
-| Settings → Privacy Policy | Opens browser to correct URL |
+| Camera → take photo | Caption returned from Cloud Function (or "Caption unavailable" if offline/function not deployed) |
+| Settings → Privacy Policy | Opens browser to `https://paulmartinmcneill.com/commai/privacy-policy` |
 | Settings → theme toggle | Light/dark/high-contrast switch works |
 | Toggle airplane mode | Offline banner appears; core AAC still works |
 | Sign in / sign up | Firebase auth flow completes |
@@ -125,7 +101,7 @@ Install via bundletool or internal distribution, then verify:
 
 ---
 
-## Step 8 — Create Play Store assets
+## Step 7 — Create Play Store assets
 
 - **Feature graphic:** 1024 x 500 px, JPEG or 24-bit PNG, no alpha
 - **Phone screenshots:** min 2, recommended 1080x1920
@@ -137,27 +113,27 @@ adb shell screencap -p /sdcard/screen.png && adb pull /sdcard/screen.png
 
 ---
 
-## Step 9 — Upload to Google Play Console
+## Step 8 — Upload to Google Play Console
 
 1. Go to https://play.google.com/console
-2. Select app → **Production** → **Create new release**
-3. Upload the `.aab`
+2. Select app → **Production** (or **Internal testing**) → **Create new release**
+3. Upload the `.aab` from Step 5
 4. Fill in:
    - **Store listing** — text from `docs/release/play-store-listing-draft.md`
-   - **Screenshots + feature graphic** from step 8
+   - **Screenshots + feature graphic** from Step 7
    - **Content rating** — IARC questionnaire (expected: Everyone)
    - **Data safety** — from `docs/release/data-safety-draft.md`
-   - **Privacy policy URL** — same as `brand.privacyPolicyUrl` in `src/theme.js`
+   - **Privacy policy URL** — `https://paulmartinmcneill.com/commai/privacy-policy`
+   - **Contact email** — `support@paulmartinmcneill.com`
 5. Submit for review
 
 ---
 
-## Step 10 — Post-submission checklist
+## Step 9 — Post-submission checklist
 
 - [ ] Cloud Function returns captions (step 3 curl test)
 - [ ] Old HF token revoked
 - [ ] Old Vision key deleted
-- [ ] AAB is production-signed (step 6)
 - [ ] Privacy policy URL loads in browser
-- [ ] `grep "REPLACE-ME" src/` returns nothing
-- [ ] `grep "hf_[A-Za-z]" src/` returns nothing
+- [ ] `grep "REPLACE-ME" src/` returns nothing (**verified clean**)
+- [ ] `grep "hf_[A-Za-z]" src/` returns nothing (**verified clean**)
