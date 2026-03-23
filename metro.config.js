@@ -23,7 +23,7 @@ defaultConfig.resolver.assetExts.push('bin');
 // Map problematic modules to an empty module if needed
 defaultConfig.resolver.extraNodeModules = {
   ...defaultConfig.resolver.extraNodeModules,
-  idb: require.resolve('./empty-module.js'),
+  idb: require.resolve('./src/mocks/idb-mock.js'),
   './postinstall.mjs': require.resolve('./empty-module.js'),
   'react-native-fs': require.resolve('./empty-module.js'),
 };
