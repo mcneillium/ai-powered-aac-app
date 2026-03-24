@@ -4,14 +4,14 @@ import { getPalette, palettes, brand } from '../theme';
 describe('theme', () => {
   test('getPalette returns light palette by default', () => {
     const palette = getPalette('light');
-    expect(palette.background).toBe('#FFFFFF');
-    expect(palette.text).toBe('#3A3A4A');
+    expect(palette.background).toBe('#FAFAF8');
+    expect(palette.text).toBe('#2E2E3A');
   });
 
   test('getPalette returns dark palette', () => {
     const palette = getPalette('dark');
-    expect(palette.background).toBe('#1A1A2E');
-    expect(palette.text).toBe('#E8E8EC');
+    expect(palette.background).toBe('#181828');
+    expect(palette.text).toBe('#EAEAEF');
   });
 
   test('getPalette returns highContrast palette', () => {
