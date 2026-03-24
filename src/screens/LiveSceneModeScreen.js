@@ -72,7 +72,7 @@ export default function LiveSceneModeScreen() {
   if (settingsLoading || !isTfReady || permission?.status !== 'granted') {
     return (
       <View style={[styles.center, { backgroundColor: palette.background }]}>  
-        <ActivityIndicator size="large" color="#4CAF50" />
+        <ActivityIndicator size="large" color={palette.primary} />
       </View>
     );
   }
@@ -81,7 +81,7 @@ export default function LiveSceneModeScreen() {
     <View style={[styles.container, { backgroundColor: palette.background }]}>  
       <CameraView style={styles.camera} ref={cameraRef} />
       <TouchableOpacity
-        style={[styles.toggle, { backgroundColor: '#4CAF50' }]}
+        style={[styles.toggle, { backgroundColor: palette.primary }]}
         onPress={() => setIsDetecting(d => !d)}
       >
         <Text style={{ color: palette.text }}>

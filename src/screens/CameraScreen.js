@@ -70,7 +70,7 @@ export default function CombinedImageScreen() {
   if (settingsLoading) {
     return (
       <View style={[styles.center, { backgroundColor: palette.background }]}>  
-        <ActivityIndicator size="large" color="#4CAF50" />
+        <ActivityIndicator size="large" color={palette.primary} />
       </View>
     );
   }
@@ -82,31 +82,31 @@ export default function CombinedImageScreen() {
           <CameraView style={styles.camera} ref={cameraRef} />
           <TouchableOpacity
             onPress={takePicture}
-            style={[styles.fab, { bottom: 30 }]}
+            style={[styles.fab, { bottom: 30, backgroundColor: palette.primary }]}
           >
-            <MaterialIcons name="camera" size={28} color="#fff" />
+            <MaterialIcons name="camera" size={28} color={palette.buttonText} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setOpenCam(false)}
-            style={[styles.fab, { top: 30, right: 20, bottom: 'auto' }]}
+            style={[styles.fab, { top: 30, right: 20, bottom: 'auto', backgroundColor: palette.primary }]}
           >
-            <MaterialIcons name="close" size={28} color="#fff" />
+            <MaterialIcons name="close" size={28} color={palette.buttonText} />
           </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.actionsContainer}>
           <TouchableOpacity style={styles.actionButton} onPress={() => setOpenCam(true)}>
-            <MaterialIcons name="photo-camera" size={32} color="#4CAF50" />
+            <MaterialIcons name="photo-camera" size={32} color={palette.primary} />
             <Text style={[styles.actionText, { color: palette.text }]}>Camera</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton} onPress={pickImage}>
-            <MaterialIcons name="photo-library" size={32} color="#4CAF50" />
+            <MaterialIcons name="photo-library" size={32} color={palette.primary} />
             <Text style={[styles.actionText, { color: palette.text }]}>Gallery</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {processing && <ActivityIndicator style={{ marginTop: 20 }} size="large" color="#4CAF50" />}
+      {processing && <ActivityIndicator style={{ marginTop: 20 }} size="large" color={palette.primary} />}
       {selected && (
         <View style={styles.previewContainer}>
           <Image source={{ uri: selected.uri }} style={styles.preview} />
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
   center:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
   cameraContainer: { flex: 1 },
   camera:    { flex: 1 },
-  fab: { position: 'absolute', alignSelf: 'center', padding: 16, backgroundColor: '#4CAF50', borderRadius: 32 },
+  fab: { position: 'absolute', alignSelf: 'center', padding: 16, borderRadius: 32 },
   actionsContainer: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 40 },
   actionButton: { alignItems: 'center' },
   actionText: { marginTop: 8, fontSize: 16 },

@@ -55,11 +55,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   button: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#4AADA8',
     paddingVertical: 10,
     paddingHorizontal: 15,
     marginHorizontal: 10,
-    borderRadius: 5,
+    borderRadius: 12,
   },
   buttonText: {
     color: 'white',

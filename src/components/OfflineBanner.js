@@ -19,7 +19,7 @@ export default function OfflineBanner() {
       accessibilityRole="alert"
       accessibilityLabel="You are offline. Communication still works."
     >
-      <Ionicons name="cloud-offline-outline" size={16} color="#FFF" />
+      <Ionicons name="cloud-offline-outline" size={16} color="#FFFFFF" />
       <Text style={styles.text}>Offline — communication still works</Text>
     </View>
   );
@@ -27,7 +27,7 @@ export default function OfflineBanner() {
 
 const styles = StyleSheet.create({
   banner: {
-    backgroundColor: '#FF9800',
+    backgroundColor: '#E8A070',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -36,7 +36,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   text: {
-    color: '#FFF',
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '500',
   },

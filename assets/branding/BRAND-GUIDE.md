@@ -1,41 +1,77 @@
-# Voice — Brand Guide
+# Voice — Brand Guide v2
 
 ## Brand Name
 **Voice** — communication for everyone
 
+## Design Direction
+Calm, soft, child-friendly but not babyish. Rounded shapes, warm colours, accessible contrast. Suitable for AAC users, caregivers, educators, and families.
+
 ## Colour Palette
 
 ### Primary
-| Name | Hex | RGB | Use |
-|------|-----|-----|-----|
-| Teal | `#5BB5B5` | 91, 181, 181 | Icon bg, primary buttons, key accents |
-| Teal Dark | `#3E8E8E` | 62, 142, 142 | Hover states, secondary text accents |
+| Name | Hex | Use |
+|------|-----|-----|
+| Teal | `#4AADA8` | Primary buttons, icon bg, key accents |
+| Teal Dark | `#37827E` | Pressed / hover states |
+| Teal Soft | `#D6EDEC` | Muted teal tint, backgrounds |
 
 ### Secondary Accents
-| Name | Hex | RGB | Use |
-|------|-----|-----|-----|
-| Coral | `#F4A683` | 244, 166, 131 | Warm highlights, decorative pills |
-| Lilac | `#B8A9D4` | 184, 169, 212 | Settings/personalisation accent |
-| Green | `#7DC89E` | 125, 200, 158 | Success, offline/ready states |
-| Sky | `#7CB9E8` | 124, 185, 232 | AI/smart feature accent |
+| Name | Hex | Use |
+|------|-----|-----|
+| Coral | `#E8A070` | Warm highlights, warning, offline banner |
+| Coral Soft | `#F8DECE` | Coral tint |
+| Lilac | `#B0A2CC` | Settings / personalisation accent |
+| Lilac Soft | `#E6E0F2` | Lilac tint |
+| Green | `#6BBF90` | Success, offline/ready states |
+| Green Soft | `#D8F1E3` | Green tint |
+| Sky | `#6BB3D9` | AI / smart feature accent |
+| Sky Soft | `#D6EAF6` | Sky tint |
 
 ### Neutrals
-| Name | Hex | RGB | Use |
-|------|-----|-----|-----|
-| Cream | `#F8F6F3` | 248, 246, 243 | Page backgrounds, feature graphic bg |
-| White | `#FFFFFF` | 255, 255, 255 | Card surfaces, icon text |
-| Text Dark | `#3A3A4A` | 58, 58, 74 | Headings, primary text |
-| Text Mid | `#78788C` | 120, 120, 140 | Subheadings, secondary text |
-| Stroke | `#D4D0CC` | 212, 208, 204 | Borders, frame outlines |
+| Name | Hex | Use |
+|------|-----|-----|
+| Cream | `#FAFAF8` | Page backgrounds |
+| Warm Cream | `#F4F2EF` | Surface / card backgrounds |
+| White | `#FFFFFF` | Card surfaces, button text |
+| Text Dark | `#2E2E3A` | Headings, primary text |
+| Text Mid | `#6E6E82` | Subheadings, secondary text |
+| Stroke | `#DDD9D4` | Borders, frame outlines |
+
+## Design Tokens (in `src/theme.js`)
+
+### Spacing
+| Token | Value |
+|-------|-------|
+| `xs` | 4 |
+| `sm` | 8 |
+| `md` | 12 |
+| `lg` | 16 |
+| `xl` | 20 |
+| `xxl` | 32 |
+
+### Border Radius
+| Token | Value |
+|-------|-------|
+| `sm` | 8 |
+| `md` | 12 |
+| `lg` | 16 |
+| `xl` | 24 |
+| `pill` | 999 |
+
+### Shadows
+| Token | Use |
+|-------|-----|
+| `card` | Cards and surfaces — subtle 2px elevation |
+| `raised` | Buttons and modals — 4px elevation |
 
 ## Visual Style
 
-- **Shapes:** Rounded corners everywhere (radius 16–40dp). Vertical pill/capsule shapes as decorative motifs.
-- **Feel:** Calm, soft, child-friendly but not childish. Approachable and modern.
+- **Shapes:** Rounded corners everywhere (radius 12–24dp). Soft ellipses and organic blobs as decorative motifs.
+- **Feel:** Calm, soft, warm. Approachable and modern. Not clinical, not childish.
 - **Iconography:** Simple microphone + speech wave arcs. Clean, not busy.
-- **Backgrounds:** White or cream. Never dark for promotional materials.
-- **Shadows:** Subtle only (6px offset, 20% opacity black).
-- **Typography:** Bold sans-serif for headings (DejaVu Sans Bold or equivalent). Regular weight for body.
+- **Backgrounds:** Cream (#FAFAF8) or white. Never dark for promotional materials.
+- **Shadows:** Subtle only (2–4px offset, 8–12% opacity).
+- **Typography:** Bold sans-serif for headings (DejaVu Sans Bold or system). Regular weight for body.
 
 ## Icon System
 
@@ -47,6 +83,7 @@
 | Adaptive background | 1024x1024 | `assets/adaptive-icon-background.png` | `app.json` → `adaptiveIcon.backgroundImage` |
 | Splash icon | 1024x1024 | `assets/splash-icon.png` | `app.json` → `splash.image` |
 | Favicon | 48x48 | `assets/favicon.png` | `app.json` → `web.favicon` |
+| Brand mark | 256x256 | `branding/logo/brand-mark-256.png` | Small badge / watermark |
 
 ## Google Play Assets
 
@@ -60,12 +97,18 @@
 
 ## Screenshot Captions
 
-| # | Headline | Subheading | Screen to capture |
-|---|----------|-----------|-------------------|
+| # | Headline | Subheading | Screen |
+|---|----------|-----------|--------|
 | 1 | Tap. Build. Speak. | Colour-coded words make communication simple | AAC Board with words in sentence bar |
 | 2 | Smart Suggestions | AI learns your patterns — entirely on your device | Sentence Builder with AI suggestions visible |
 | 3 | Your Way, Your Voice | Themes, grid sizes, speech speed — fully adjustable | Settings screen |
-| 4 | Works Everywhere | Full offline support — no internet needed to communicate | Emotion screen or AAC Board with offline banner |
+| 4 | Works Everywhere | Full offline support — no internet needed to communicate | Emotion screen |
+
+## Motif Assets
+
+| File | Size | Use |
+|------|------|-----|
+| `branding/motifs/soft-blobs-512.png` | 512x512 | Decorative blob cluster for marketing |
 
 ## Regenerating Assets
 

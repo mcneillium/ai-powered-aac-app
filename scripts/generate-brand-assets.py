@@ -1,22 +1,32 @@
 #!/usr/bin/env python3
-"""Generate Voice brand assets for app + Google Play."""
+"""Generate Voice brand assets for app + Google Play.
+
+Refined Voice visual identity — soft, calm, child-friendly, accessible.
+Run: python3 scripts/generate-brand-assets.py
+"""
 
 from PIL import Image, ImageDraw, ImageFont
 import math, os
 
-# ── Brand palette ──
+# ── Refined Brand Palette ──
 PAL = {
-    "teal":       (91, 181, 181),
-    "teal_dark":  (62, 142, 142),
-    "coral":      (244, 166, 131),
-    "lilac":      (184, 169, 212),
-    "green":      (125, 200, 158),
-    "sky":        (124, 185, 232),
-    "cream":      (248, 246, 243),
-    "white":      (255, 255, 255),
-    "text_dark":  (58, 58, 74),
-    "text_mid":   (120, 120, 140),
-    "stroke":     (212, 208, 204),
+    "teal":        (74, 173, 168),    # #4AADA8 — primary, warmer and softer
+    "teal_soft":   (214, 237, 236),   # #D6EDEC — muted teal tint
+    "teal_dark":   (55, 130, 126),    # #37827E — pressed / hover
+    "coral":       (232, 160, 112),   # #E8A070 — warm accent
+    "coral_soft":  (248, 222, 206),   # #F8DECE — coral tint
+    "lilac":       (176, 162, 204),   # #B0A2CC — personalisation accent
+    "lilac_soft":  (230, 224, 242),   # #E6E0F2 — lilac tint
+    "green":       (107, 191, 144),   # #6BBF90 — success / ready
+    "green_soft":  (216, 241, 227),   # #D8F1E3 — green tint
+    "sky":         (107, 179, 217),   # #6BB3D9 — AI / smart accent
+    "sky_soft":    (214, 234, 246),   # #D6EAF6 — sky tint
+    "cream":       (250, 250, 248),   # #FAFAF8 — page bg
+    "warm_cream":  (244, 242, 239),   # #F4F2EF — surface
+    "white":       (255, 255, 255),
+    "text_dark":   (46, 46, 58),      # #2E2E3A — headings
+    "text_mid":    (110, 110, 130),   # #6E6E82 — subheadings
+    "stroke":      (221, 217, 212),   # #DDD9D4 — borders
 }
 
 OUT = "/home/user/ai-powered-aac-app/assets/branding"
@@ -24,21 +34,23 @@ ASSETS = "/home/user/ai-powered-aac-app/assets"
 os.makedirs(f"{OUT}/logo", exist_ok=True)
 os.makedirs(f"{OUT}/google-play/feature-graphic", exist_ok=True)
 os.makedirs(f"{OUT}/google-play/screenshots", exist_ok=True)
+os.makedirs(f"{OUT}/splash", exist_ok=True)
+os.makedirs(f"{OUT}/motifs", exist_ok=True)
 
 def rounded_rect(draw, bbox, radius, fill, outline=None, width=0):
-    """Draw a rounded rectangle."""
     x0, y0, x1, y1 = bbox
     r = min(radius, (x1-x0)//2, (y1-y0)//2)
     draw.rounded_rectangle(bbox, radius=r, fill=fill, outline=outline, width=width)
 
 def pill(draw, cx, cy, w, h, fill, outline=None, width=0):
-    """Draw a vertical pill (capsule) centered at cx, cy."""
     r = w // 2
     bbox = (cx - w//2, cy - h//2, cx + w//2, cy + h//2)
     draw.rounded_rectangle(bbox, radius=r, fill=fill, outline=outline, width=width)
 
+def soft_ellipse(draw, cx, cy, rx, ry, fill):
+    draw.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), fill=fill)
+
 def gradient_bg(img, color_top, color_bot):
-    """Fill image with a vertical gradient."""
     draw = ImageDraw.Draw(img)
     w, h = img.size
     for y in range(h):
@@ -49,35 +61,32 @@ def gradient_bg(img, color_top, color_bot):
         draw.line([(0, y), (w, y)], fill=(r, g, b))
 
 def draw_mic_icon(draw, cx, cy, scale, color):
-    """Draw a simple microphone icon using basic shapes."""
     s = scale
-    # Mic body (rounded rect / pill)
-    pill(draw, cx, cy - int(6*s), int(14*s), int(28*s), fill=color)
-    # Arc below mic (half circle)
-    arc_bbox = (cx - int(12*s), cy - int(14*s), cx + int(12*s), cy + int(10*s))
-    draw.arc(arc_bbox, start=0, end=180, fill=color, width=max(1, int(2.5*s)))
+    # Mic body — slightly taller, more refined proportions
+    pill(draw, cx, cy - int(5*s), int(13*s), int(30*s), fill=color)
+    # Arc below mic
+    arc_bbox = (cx - int(11*s), cy - int(12*s), cx + int(11*s), cy + int(12*s))
+    draw.arc(arc_bbox, start=0, end=180, fill=color, width=max(1, int(2.8*s)))
     # Stem
-    draw.line([(cx, cy + int(10*s)), (cx, cy + int(18*s))], fill=color, width=max(1, int(2.5*s)))
-    # Base
-    draw.line([(cx - int(6*s), cy + int(18*s)), (cx + int(6*s), cy + int(18*s))], fill=color, width=max(1, int(2.5*s)))
+    draw.line([(cx, cy + int(12*s)), (cx, cy + int(20*s))], fill=color, width=max(1, int(2.8*s)))
+    # Base — rounded ends
+    base_y = cy + int(20*s)
+    draw.line([(cx - int(7*s), base_y), (cx + int(7*s), base_y)], fill=color, width=max(1, int(2.8*s)))
 
 def draw_speech_waves(draw, cx, cy, scale, color):
-    """Draw 2 concentric speech wave arcs to the right of a point."""
     s = scale
-    for i, offset in enumerate([12, 22]):
+    for offset in [13, 24]:
         r = int(offset * s)
         bbox = (cx - r, cy - r, cx + r, cy + r)
-        draw.arc(bbox, start=-40, end=40, fill=color, width=max(1, int(2.5*s)))
+        draw.arc(bbox, start=-45, end=45, fill=color, width=max(1, int(2.8*s)))
 
 def draw_text_centered(draw, text, cx, cy, font, fill):
-    """Draw text centered at cx, cy."""
     bbox = draw.textbbox((0, 0), text, font=font)
     tw = bbox[2] - bbox[0]
     th = bbox[3] - bbox[1]
     draw.text((cx - tw//2, cy - th//2), text, font=font, fill=fill)
 
 def get_font(size):
-    """Get a font, falling back gracefully."""
     paths = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -107,41 +116,44 @@ def create_app_icon():
     img = Image.new("RGBA", (size, size), (0,0,0,0))
     draw = ImageDraw.Draw(img)
 
-    # Background: rounded square with soft teal
-    rounded_rect(draw, (0, 0, size, size), 220, fill=PAL["teal"])
+    # Background: rounded square with refined teal
+    rounded_rect(draw, (0, 0, size, size), 224, fill=PAL["teal"])
 
-    # Decorative: 3 vertical pills at bottom-left, faded
-    pill_color = (255, 255, 255, 50)
-    # Use overlay for semi-transparent pills
+    # Soft decorative blobs (organic circles, not just pills)
     overlay = Image.new("RGBA", (size, size), (0,0,0,0))
     odraw = ImageDraw.Draw(overlay)
-    pill(odraw, 180, 750, 60, 200, fill=(255,255,255,35))
-    pill(odraw, 270, 700, 60, 260, fill=(255,255,255,25))
-    pill(odraw, 360, 770, 60, 180, fill=(255,255,255,20))
-    # Top-right decorative pills
-    pill(odraw, 780, 250, 50, 160, fill=(255,255,255,25))
-    pill(odraw, 860, 200, 50, 200, fill=(255,255,255,20))
+
+    # Bottom-left cluster — soft rounded shapes
+    soft_ellipse(odraw, 160, 780, 55, 90, (255,255,255,28))
+    soft_ellipse(odraw, 270, 720, 50, 110, (255,255,255,22))
+    soft_ellipse(odraw, 370, 800, 45, 75, (255,255,255,18))
+
+    # Top-right cluster
+    soft_ellipse(odraw, 790, 240, 40, 70, (255,255,255,22))
+    soft_ellipse(odraw, 870, 190, 45, 85, (255,255,255,16))
+
+    # Subtle large circle behind icon area for depth
+    soft_ellipse(odraw, 512, 440, 240, 240, (255,255,255,12))
+
     img = Image.alpha_composite(img, overlay)
     draw = ImageDraw.Draw(img)
 
-    # Central: microphone icon
-    draw_mic_icon(draw, 512, 380, 12, PAL["white"])
+    # Central microphone icon — slightly larger
+    draw_mic_icon(draw, 500, 360, 13, PAL["white"])
+    draw_speech_waves(draw, 570, 340, 10, PAL["white"])
 
-    # Speech wave arcs
-    draw_speech_waves(draw, 570, 360, 10, PAL["white"])
-
-    # "Voice" text below
-    font = get_font(140)
+    # "Voice" text
+    font = get_font(148)
     draw_text_centered(draw, "Voice", 512, 600, font, PAL["white"])
 
-    # Small tagline
-    font_sm = get_font_regular(42)
-    draw_text_centered(draw, "communication for everyone", 512, 700, font_sm, (255, 255, 255, 200))
+    # Tagline
+    font_sm = get_font_regular(40)
+    draw_text_centered(draw, "communication for everyone", 512, 710, font_sm, (255,255,255,180))
 
     img.save(f"{OUT}/logo/icon-1024.png", "PNG")
     print("  ✓ icon-1024.png")
 
-    # Also save as the main app icon (512x512 for app.json)
+    # App icon for app.json (512x512)
     icon_512 = img.resize((512, 512), Image.LANCZOS)
     icon_512.save(f"{ASSETS}/icon.png", "PNG")
     print("  ✓ assets/icon.png (512x512)")
@@ -153,28 +165,29 @@ def create_app_icon():
 # 2. ADAPTIVE ICON — foreground + background
 # ════════════════════════════════════════════
 def create_adaptive_icon():
-    # Android adaptive icon: 108dp at xxxhdpi = 432px, but standard source is 1024
-    # Foreground: icon content in center 66% safe zone (on 1024 canvas)
     size = 1024
 
     # BACKGROUND: solid teal
     bg = Image.new("RGBA", (size, size), PAL["teal"])
+    # Add very subtle radial lighter center
+    overlay = Image.new("RGBA", (size, size), (0,0,0,0))
+    odraw = ImageDraw.Draw(overlay)
+    soft_ellipse(odraw, 512, 480, 320, 320, (255,255,255,15))
+    bg = Image.alpha_composite(bg, overlay)
+
     bg.save(f"{OUT}/logo/adaptive-icon-background.png", "PNG")
-    # Also save to assets/ for app.json
     bg.save(f"{ASSETS}/adaptive-icon-background.png", "PNG")
     print("  ✓ adaptive-icon-background.png")
 
-    # FOREGROUND: mic + text on transparent, centered in safe zone
+    # FOREGROUND: mic + text on transparent, in 66% safe zone
     fg = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(fg)
 
-    # Mic icon centered, slightly above middle
-    draw_mic_icon(draw, 512, 400, 10, PAL["white"])
-    draw_speech_waves(draw, 565, 385, 8, PAL["white"])
+    draw_mic_icon(draw, 500, 380, 11, PAL["white"])
+    draw_speech_waves(draw, 565, 365, 8.5, PAL["white"])
 
-    # "Voice" text
-    font = get_font(120)
-    draw_text_centered(draw, "Voice", 512, 580, font, PAL["white"])
+    font = get_font(124)
+    draw_text_centered(draw, "Voice", 512, 570, font, PAL["white"])
 
     fg.save(f"{OUT}/logo/adaptive-icon-foreground.png", "PNG")
     fg.save(f"{ASSETS}/adaptive-icon.png", "PNG")
@@ -190,16 +203,17 @@ def create_splash():
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # Mic icon
-    draw_mic_icon(draw, 512, 380, 12, PAL["teal"])
-    draw_speech_waves(draw, 570, 360, 10, PAL["teal"])
+    # Subtle circle behind the icon
+    soft_ellipse(draw, 512, 420, 180, 180, PAL["teal_soft"] + (80,))
 
-    # "Voice" text
-    font = get_font(140)
+    draw_mic_icon(draw, 500, 370, 12, PAL["teal"])
+    draw_speech_waves(draw, 570, 350, 10, PAL["teal"])
+
+    font = get_font(148)
     draw_text_centered(draw, "Voice", 512, 580, font, PAL["teal"])
 
-    font_sm = get_font_regular(42)
-    draw_text_centered(draw, "communication for everyone", 512, 680, font_sm, PAL["text_mid"])
+    font_sm = get_font_regular(40)
+    draw_text_centered(draw, "communication for everyone", 512, 690, font_sm, PAL["text_mid"])
 
     img.save(f"{ASSETS}/splash-icon.png", "PNG")
     img.save(f"{OUT}/splash/splash-icon.png", "PNG")
@@ -216,68 +230,79 @@ def create_favicon(icon_1024):
 
 
 # ════════════════════════════════════════════
-# 5. FEATURE GRAPHIC — 1024x500
+# 5. BRAND MARK — 256x256 (small badge)
+# ════════════════════════════════════════════
+def create_brand_mark():
+    size = 256
+    img = Image.new("RGBA", (size, size), (0,0,0,0))
+    draw = ImageDraw.Draw(img)
+    rounded_rect(draw, (0, 0, size, size), 56, fill=PAL["teal"])
+    draw_mic_icon(draw, 124, 100, 3.2, PAL["white"])
+    draw_speech_waves(draw, 142, 94, 2.5, PAL["white"])
+    font = get_font(44)
+    draw_text_centered(draw, "Voice", 128, 175, font, PAL["white"])
+    img.save(f"{OUT}/logo/brand-mark-256.png", "PNG")
+    print("  ✓ brand-mark-256.png")
+
+
+# ════════════════════════════════════════════
+# 6. FEATURE GRAPHIC — 1024x500
 # ════════════════════════════════════════════
 def create_feature_graphic():
     w, h = 1024, 500
     img = Image.new("RGB", (w, h), PAL["white"])
 
-    # Soft gradient background: cream to white
-    gradient_bg(img, (235, 245, 245), PAL["cream"])
+    # Soft gradient background
+    gradient_bg(img, (228, 242, 241), PAL["cream"])
     draw = ImageDraw.Draw(img)
 
-    # Decorative vertical pills across the background
+    # Decorative elements via overlay
     overlay = Image.new("RGBA", (w, h), (0,0,0,0))
     odraw = ImageDraw.Draw(overlay)
 
-    # Left cluster of pills
-    pills_left = [
-        (80, 320, 40, 140, PAL["coral"] + (40,)),
-        (140, 280, 40, 180, PAL["lilac"] + (35,)),
-        (200, 340, 40, 120, PAL["green"] + (40,)),
-        (260, 300, 40, 160, PAL["sky"] + (30,)),
-    ]
-    for cx, cy, pw, ph, c in pills_left:
-        pill(odraw, cx, cy, pw, ph, fill=c)
+    # Left organic blobs
+    soft_ellipse(odraw, 70, 340, 40, 65, PAL["coral"] + (35,))
+    soft_ellipse(odraw, 140, 290, 35, 80, PAL["lilac"] + (30,))
+    soft_ellipse(odraw, 210, 350, 35, 55, PAL["green"] + (35,))
+    soft_ellipse(odraw, 280, 310, 35, 70, PAL["sky"] + (28,))
 
-    # Right cluster of pills
-    pills_right = [
-        (w-260, 310, 40, 150, PAL["sky"] + (35,)),
-        (w-200, 280, 40, 180, PAL["green"] + (30,)),
-        (w-140, 330, 40, 130, PAL["coral"] + (35,)),
-        (w-80, 290, 40, 170, PAL["lilac"] + (30,)),
-    ]
-    for cx, cy, pw, ph, c in pills_right:
-        pill(odraw, cx, cy, pw, ph, fill=c)
+    # Right organic blobs
+    soft_ellipse(odraw, w-280, 320, 35, 65, PAL["sky"] + (30,))
+    soft_ellipse(odraw, w-210, 290, 35, 80, PAL["green"] + (28,))
+    soft_ellipse(odraw, w-140, 340, 35, 55, PAL["coral"] + (30,))
+    soft_ellipse(odraw, w-70, 300, 35, 75, PAL["lilac"] + (25,))
 
-    # Subtle circle accents
+    # Subtle large circle behind center
+    soft_ellipse(odraw, 512, 220, 160, 160, PAL["teal_soft"] + (30,))
+
+    # Tiny accent circles
     for (cx, cy, r, c) in [
-        (120, 100, 25, PAL["teal"] + (25,)),
-        (900, 120, 20, PAL["coral"] + (30,)),
-        (180, 430, 15, PAL["lilac"] + (25,)),
-        (850, 400, 18, PAL["green"] + (25,)),
+        (130, 90, 20, PAL["teal"] + (20,)),
+        (890, 100, 16, PAL["coral"] + (25,)),
+        (190, 440, 12, PAL["lilac"] + (20,)),
+        (840, 420, 14, PAL["green"] + (22,)),
     ]:
-        odraw.ellipse((cx-r, cy-r, cx+r, cy+r), fill=c)
+        soft_ellipse(odraw, cx, cy, r, r, c)
 
     img_rgba = img.convert("RGBA")
     img_rgba = Image.alpha_composite(img_rgba, overlay)
     draw = ImageDraw.Draw(img_rgba)
 
-    # Central mic icon
-    draw_mic_icon(draw, 512, 150, 5, PAL["teal"])
-    draw_speech_waves(draw, 540, 142, 4.5, PAL["teal"])
+    # Mic icon
+    draw_mic_icon(draw, 512, 130, 5, PAL["teal"])
+    draw_speech_waves(draw, 540, 124, 4.5, PAL["teal"])
 
-    # "Voice" large text
-    font_big = get_font(96)
-    draw_text_centered(draw, "Voice", 512, 260, font_big, PAL["text_dark"])
+    # "Voice" title
+    font_big = get_font(100)
+    draw_text_centered(draw, "Voice", 512, 250, font_big, PAL["text_dark"])
 
     # Tagline
-    font_tag = get_font_regular(32)
-    draw_text_centered(draw, "A calm, friendly AAC communication app", 512, 340, font_tag, PAL["text_mid"])
+    font_tag = get_font_regular(30)
+    draw_text_centered(draw, "A calm, friendly AAC communication app", 512, 335, font_tag, PAL["text_mid"])
 
     # Sub-tagline
-    font_sub = get_font_regular(24)
-    draw_text_centered(draw, "Works offline  •  Learns on-device  •  Built for accessibility", 512, 400, font_sub, PAL["teal_dark"])
+    font_sub = get_font_regular(22)
+    draw_text_centered(draw, "Works offline  ·  Learns on-device  ·  Built for accessibility", 512, 395, font_sub, PAL["teal_dark"])
 
     final = img_rgba.convert("RGB")
     final.save(f"{OUT}/google-play/feature-graphic/feature-graphic-1024x500.png", "PNG")
@@ -285,7 +310,7 @@ def create_feature_graphic():
 
 
 # ════════════════════════════════════════════
-# 6. SCREENSHOT TEMPLATES — 1080x1920 × 4
+# 7. SCREENSHOT TEMPLATES — 1080x1920 × 4
 # ════════════════════════════════════════════
 SCREENSHOT_DATA = [
     {
@@ -293,6 +318,7 @@ SCREENSHOT_DATA = [
         "headline": "Tap. Build. Speak.",
         "subheading": "Colour-coded words make communication simple",
         "bg_accent": PAL["teal"],
+        "bg_soft": PAL["teal_soft"],
         "screen": "AAC Board",
     },
     {
@@ -300,6 +326,7 @@ SCREENSHOT_DATA = [
         "headline": "Smart Suggestions",
         "subheading": "AI learns your patterns — entirely on your device",
         "bg_accent": PAL["sky"],
+        "bg_soft": PAL["sky_soft"],
         "screen": "Sentence Builder with AI strip",
     },
     {
@@ -307,6 +334,7 @@ SCREENSHOT_DATA = [
         "headline": "Your Way, Your Voice",
         "subheading": "Themes, grid sizes, speech speed — fully adjustable",
         "bg_accent": PAL["lilac"],
+        "bg_soft": PAL["lilac_soft"],
         "screen": "Settings",
     },
     {
@@ -314,6 +342,7 @@ SCREENSHOT_DATA = [
         "headline": "Works Everywhere",
         "subheading": "Full offline support — no internet needed to communicate",
         "bg_accent": PAL["green"],
+        "bg_soft": PAL["green_soft"],
         "screen": "Emotion / Communication",
     },
 ]
@@ -324,72 +353,117 @@ def create_screenshot_template(data):
     draw = ImageDraw.Draw(img)
 
     accent = data["bg_accent"]
-    # Soft accent band at top
-    light_accent = tuple(min(255, c + 160) for c in accent)
-    for y in range(500):
-        t = y / 500
-        r = int(light_accent[0] + (PAL["cream"][0] - light_accent[0]) * t)
-        g = int(light_accent[1] + (PAL["cream"][1] - light_accent[1]) * t)
-        b = int(light_accent[2] + (PAL["cream"][2] - light_accent[2]) * t)
+    accent_soft = data["bg_soft"]
+
+    # Softer gradient band at top
+    for y in range(480):
+        t = y / 480
+        # Ease out curve for smoother transition
+        t = t * t
+        r = int(accent_soft[0] + (PAL["cream"][0] - accent_soft[0]) * t)
+        g = int(accent_soft[1] + (PAL["cream"][1] - accent_soft[1]) * t)
+        b = int(accent_soft[2] + (PAL["cream"][2] - accent_soft[2]) * t)
         draw.line([(0, y), (w, y)], fill=(r, g, b))
+
+    # Subtle decorative circle in header area
+    overlay = Image.new("RGBA", (w, h), (0,0,0,0))
+    odraw = ImageDraw.Draw(overlay)
+    soft_ellipse(odraw, w//2, 180, 200, 200, accent + (12,))
+    img_rgba = img.convert("RGBA")
+    img_rgba = Image.alpha_composite(img_rgba, overlay)
+    draw = ImageDraw.Draw(img_rgba)
 
     # Headline
     font_h = get_font(72)
-    draw_text_centered(draw, data["headline"], w//2, 180, font_h, PAL["text_dark"])
+    draw_text_centered(draw, data["headline"], w//2, 170, font_h, PAL["text_dark"])
 
     # Subheading
-    font_s = get_font_regular(36)
-    draw_text_centered(draw, data["subheading"], w//2, 280, font_s, PAL["text_mid"])
+    font_s = get_font_regular(34)
+    draw_text_centered(draw, data["subheading"], w//2, 268, font_s, PAL["text_mid"])
 
-    # Screenshot placeholder area (phone frame mock)
+    # Screenshot phone frame
     frame_x = 90
-    frame_y = 400
+    frame_y = 380
     frame_w = w - 180
     frame_h = 1400
-    # Shadow
-    rounded_rect(draw, (frame_x+6, frame_y+6, frame_x+frame_w+6, frame_y+frame_h+6),
-                 40, fill=(0,0,0,20))
+
+    # Soft shadow (two layers)
+    for off, alpha in [(8, 12), (4, 18)]:
+        shadow = Image.new("RGBA", (w, h), (0,0,0,0))
+        sdraw = ImageDraw.Draw(shadow)
+        rounded_rect(sdraw, (frame_x+off, frame_y+off, frame_x+frame_w+off, frame_y+frame_h+off),
+                     36, fill=(0,0,0,alpha))
+        img_rgba = Image.alpha_composite(img_rgba, shadow)
+    draw = ImageDraw.Draw(img_rgba)
+
     # Frame
     rounded_rect(draw, (frame_x, frame_y, frame_x+frame_w, frame_y+frame_h),
-                 40, fill=PAL["white"], outline=PAL["stroke"], width=3)
+                 36, fill=PAL["white"], outline=PAL["stroke"], width=2)
 
     # Placeholder text inside frame
-    font_p = get_font_regular(32)
+    font_p = get_font_regular(30)
     draw_text_centered(draw, f"[ {data['screen']} screenshot ]", w//2, frame_y + frame_h//2 - 20, font_p, PAL["stroke"])
-    font_p2 = get_font_regular(24)
-    draw_text_centered(draw, "Capture from device and paste here", w//2, frame_y + frame_h//2 + 30, font_p2, PAL["stroke"])
+    font_p2 = get_font_regular(22)
+    draw_text_centered(draw, "Capture from device and paste here", w//2, frame_y + frame_h//2 + 25, font_p2, PAL["stroke"])
 
     # Small Voice branding at bottom
-    font_b = get_font(28)
-    draw_text_centered(draw, "Voice", w//2, h - 50, font_b, accent)
+    font_b = get_font(26)
+    draw_text_centered(draw, "Voice", w//2, h - 48, font_b, accent)
 
     fname = f"screenshot-{data['id']}-template.png"
-    img.save(f"{OUT}/google-play/screenshots/{fname}", "PNG")
+    final = img_rgba.convert("RGB")
+    final.save(f"{OUT}/google-play/screenshots/{fname}", "PNG")
     print(f"  ✓ {fname}")
+
+
+# ════════════════════════════════════════════
+# 8. MOTIF — soft blob decoration (reusable)
+# ════════════════════════════════════════════
+def create_motif():
+    """A small set of soft blob shapes for in-app or marketing use."""
+    size = 512
+    img = Image.new("RGBA", (size, size), (0,0,0,0))
+    draw = ImageDraw.Draw(img)
+
+    # Cluster of soft blobs
+    soft_ellipse(draw, 160, 260, 60, 100, PAL["teal"] + (40,))
+    soft_ellipse(draw, 260, 200, 55, 110, PAL["lilac"] + (35,))
+    soft_ellipse(draw, 350, 280, 50, 85, PAL["coral"] + (40,))
+    soft_ellipse(draw, 250, 360, 55, 80, PAL["green"] + (35,))
+    soft_ellipse(draw, 150, 380, 40, 60, PAL["sky"] + (30,))
+
+    img.save(f"{OUT}/motifs/soft-blobs-512.png", "PNG")
+    print("  ✓ motifs/soft-blobs-512.png")
 
 
 # ════════════════════════════════════════════
 # RUN ALL
 # ════════════════════════════════════════════
-print("Generating Voice brand assets...\n")
+print("Generating Voice brand assets (v2 — refined)\n")
 
-print("[1/6] App icon")
+print("[1/8] App icon")
 icon = create_app_icon()
 
-print("[2/6] Adaptive icon")
+print("[2/8] Adaptive icon")
 create_adaptive_icon()
 
-print("[3/6] Splash icon")
+print("[3/8] Splash icon")
 create_splash()
 
-print("[4/6] Favicon")
+print("[4/8] Favicon")
 create_favicon(icon)
 
-print("[5/6] Feature graphic")
+print("[5/8] Brand mark")
+create_brand_mark()
+
+print("[6/8] Feature graphic")
 create_feature_graphic()
 
-print("[6/6] Screenshot templates")
+print("[7/8] Screenshot templates")
 for s in SCREENSHOT_DATA:
     create_screenshot_template(s)
 
-print("\nDone. All assets in assets/ and assets/branding/")
+print("[8/8] Motif assets")
+create_motif()
+
+print("\nDone. All assets regenerated in assets/ and assets/branding/")

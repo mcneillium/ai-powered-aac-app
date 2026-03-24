@@ -9,9 +9,10 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { brand } from '../theme';
+import { brand, getPalette, radii, spacing } from '../theme';
 
 const { width } = Dimensions.get('window');
+const p = getPalette('light');
 
 const slides = [
   {
@@ -19,28 +20,28 @@ const slides = [
     title: `Welcome to ${brand.name}`,
     description: 'A powerful communication tool designed for everyone. Tap words to build sentences and speak them aloud.',
     icon: 'chatbubbles',
-    color: '#4CAF50',
+    color: p.primary,
   },
   {
     key: 'offline',
     title: 'Works Offline',
     description: 'Your vocabulary and AI predictions work without the internet. No connection needed to communicate.',
     icon: 'cloud-offline',
-    color: '#2196F3',
+    color: p.info,
   },
   {
     key: 'personalise',
     title: 'Personalise Your Experience',
     description: 'Adjust grid size, themes, speech speed, and voice in Settings. The app learns from your usage over time.',
     icon: 'settings',
-    color: '#FF9800',
+    color: p.warning,
   },
   {
     key: 'ready',
     title: "You're Ready!",
     description: 'Start communicating. Sign in later to sync across devices, or use guest mode — no account required.',
     icon: 'rocket',
-    color: '#9C27B0',
+    color: p.accent,
   },
 ];
 
@@ -121,7 +122,7 @@ export default function OnboardingScreen({ onComplete }) {
           accessibilityLabel={isLast ? 'Get started' : 'Next slide'}
         >
           <Text style={styles.nextText}>{isLast ? 'Get Started' : 'Next'}</Text>
-          <Ionicons name={isLast ? 'checkmark' : 'arrow-forward'} size={20} color="#FFF" />
+          <Ionicons name={isLast ? 'checkmark' : 'arrow-forward'} size={20} color={p.buttonText} />
         </TouchableOpacity>
       </View>
     </View>
@@ -129,17 +130,17 @@ export default function OnboardingScreen({ onComplete }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  skipBtn: { position: 'absolute', top: 56, right: 20, zIndex: 10, padding: 8 },
-  skipText: { fontSize: 16, color: '#999' },
-  slide: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
-  iconCircle: { width: 120, height: 120, borderRadius: 60, justifyContent: 'center', alignItems: 'center', marginBottom: 32 },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#000', textAlign: 'center', marginBottom: 16 },
-  description: { fontSize: 17, color: '#555', textAlign: 'center', lineHeight: 24 },
-  footer: { paddingHorizontal: 24, paddingBottom: 40, alignItems: 'center' },
-  dots: { flexDirection: 'row', marginBottom: 20 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#DDD', marginHorizontal: 4 },
-  dotActive: { backgroundColor: '#4CAF50', width: 24 },
-  nextBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 28, gap: 8 },
-  nextText: { color: '#FFF', fontSize: 18, fontWeight: '600' },
+  container: { flex: 1, backgroundColor: p.background },
+  skipBtn: { position: 'absolute', top: 56, right: spacing.xl, zIndex: 10, padding: spacing.sm },
+  skipText: { fontSize: 16, color: p.textSecondary },
+  slide: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xxl },
+  iconCircle: { width: 120, height: 120, borderRadius: 60, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.xxl },
+  title: { fontSize: 26, fontWeight: 'bold', color: p.text, textAlign: 'center', marginBottom: spacing.lg },
+  description: { fontSize: 17, color: p.textSecondary, textAlign: 'center', lineHeight: 24 },
+  footer: { paddingHorizontal: spacing.xl, paddingBottom: 40, alignItems: 'center' },
+  dots: { flexDirection: 'row', marginBottom: spacing.xl },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: p.border, marginHorizontal: spacing.xs },
+  dotActive: { backgroundColor: p.primary, width: 24 },
+  nextBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.xxl, paddingVertical: 14, borderRadius: radii.xl, gap: spacing.sm },
+  nextText: { color: p.buttonText, fontSize: 18, fontWeight: '600' },
 });
