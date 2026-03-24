@@ -52,7 +52,9 @@ export default function LoginScreen() {
       await signInWithEmailAndPassword(auth, trimmedEmail, password);
       logEvent('User logged in', { email: trimmedEmail });
       // Auth state change triggers context update — navigate back to app
-      navigation.goBack();
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
     } catch (error) {
       logEvent('Login error', { email: trimmedEmail, error: error.code });
       Alert.alert('Login Failed', friendlyAuthError(error.code));

@@ -73,7 +73,9 @@ export default function SignupScreen() {
       }
 
       // Auth state change triggers context — navigate back
-      navigation.goBack();
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
     } catch (error) {
       Alert.alert('Registration Failed', friendlyAuthError(error.code));
     } finally {

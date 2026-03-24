@@ -12,6 +12,7 @@
 const functions = require('firebase-functions');
 const fetch = require('node-fetch');
 const admin = require('firebase-admin');
+const { GoogleAuth } = require('google-auth-library');
 admin.initializeApp();
 
 // ── CORS helper ──
@@ -102,6 +103,14 @@ exports.aacPhraseSuggestions = functions.https.onRequest(async (req, res) => {
 
   const { currentWords, recentPhrases, timeOfDay } = req.body || {};
 
+  // Input validation: limit array sizes to prevent abuse
+  if (Array.isArray(currentWords) && currentWords.length > 50) {
+    return res.status(400).json({ error: 'currentWords too long', suggestions: [] });
+  }
+  if (Array.isArray(recentPhrases) && recentPhrases.length > 10) {
+    return res.status(400).json({ error: 'recentPhrases too long', suggestions: [] });
+  }
+
   const projectId = functions.config().vertex?.project_id || 'commai-b98fe';
   const location = 'europe-west1';
   const model = 'gemini-2.0-flash-lite';
@@ -121,7 +130,6 @@ exports.aacPhraseSuggestions = functions.https.onRequest(async (req, res) => {
 
   try {
     // Use ADC (Application Default Credentials) for Vertex AI
-    const { GoogleAuth } = require('google-auth-library');
     const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
     const client = await auth.getClient();
     const accessToken = await client.getAccessToken();
@@ -203,12 +211,16 @@ exports.imageToAACPhrases = functions.https.onRequest(async (req, res) => {
   const { image } = req.body || {};
   if (!image) return res.status(400).json({ error: 'Missing "image" field (base64)' });
 
+  // Limit image size to ~5MB base64 (~3.75MB raw)
+  if (typeof image !== 'string' || image.length > 7_000_000) {
+    return res.status(400).json({ error: 'Image too large (max ~5MB)', phrases: [] });
+  }
+
   const projectId = functions.config().vertex?.project_id || 'commai-b98fe';
   const location = 'europe-west1';
   const model = 'gemini-2.0-flash-lite';
 
   try {
-    const { GoogleAuth } = require('google-auth-library');
     const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
     const client = await auth.getClient();
     const accessToken = await client.getAccessToken();
