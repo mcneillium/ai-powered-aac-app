@@ -2,7 +2,18 @@
 
 **Version:** 1.1.0
 **Package:** `com.elpabloawakens.aipoweredaacapp`
-**Last updated:** 2026-03-23
+**Last updated:** 2026-03-24
+
+### Latest Build
+
+| Field | Value |
+|-------|-------|
+| Build ID | `07efe71b-a050-4499-b909-7caacd5fe4a0` |
+| AAB artifact | https://expo.dev/artifacts/eas/YR67wutUbbyNiMd7FYq4A.aab |
+| Build logs | https://expo.dev/accounts/elpabloawakens/projects/ai-powered-aac-app/builds/07efe71b-a050-4499-b909-7caacd5fe4a0 |
+| Version code | 9 (auto-incremented, above rejected v8) |
+| Profile | production |
+| Build type | app-bundle (.aab) |
 
 Copy-paste from this document into Google Play Console. All text is final and upload-ready.
 
@@ -232,7 +243,12 @@ If the app is listed under Education or Medical, Play Console may ask additional
 
 ## 13. Upload Checklist
 
-### AAB — Automated upload (preferred)
+### AAB — Download latest build
+
+- [ ] Download AAB from: https://expo.dev/artifacts/eas/YR67wutUbbyNiMd7FYq4A.aab
+- [ ] Save as `Voice.aab` (or use directly)
+
+### AAB — Automated upload to internal testing (preferred)
 
 ```
 npm install
@@ -245,9 +261,7 @@ This single command authenticates, uploads the AAB, assigns it to the **internal
 
 ### AAB — Manual alternative
 
-- [ ] Run `npx eas build --profile production --platform android` from your machine
-- [ ] Download the `.aab` from the EAS artifact URL
-- [ ] Upload to Play Console → Internal testing → Create new release
+- [ ] Upload the downloaded AAB to Play Console → Internal testing → Create new release
 
 ### Store listing
 
