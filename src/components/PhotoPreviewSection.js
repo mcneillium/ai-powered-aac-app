@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   button: {
-    backgroundColor: '#4AADA8',
+    backgroundColor: '#2979FF',
     paddingVertical: 10,
     paddingHorizontal: 15,
     marginHorizontal: 10,

@@ -152,8 +152,8 @@ const styles = StyleSheet.create({
   categoryLabel:   { marginTop: 4, fontSize: 12, fontWeight: 'bold' },
   loader:          { marginTop: 30 },
   grid:            { padding: 4 },
-  picItem:         { aspectRatio: 1, margin: 4, backgroundColor: '#F4F2EF', borderRadius: 8 },
+  picItem:         { aspectRatio: 1, margin: 4, backgroundColor: '#F2F4F7', borderRadius: 8 },
   picImage:        { width: '100%', height: '100%', borderRadius: 8 },
-  selectedItem:    { borderWidth: 2, borderColor: '#4AADA8' },
+  selectedItem:    { borderWidth: 2, borderColor: '#2979FF' },
   emptyText:       { textAlign: 'center', marginTop: 20, fontSize: 16 }
 });

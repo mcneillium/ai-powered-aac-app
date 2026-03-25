@@ -146,7 +146,7 @@ function AppNavigator() {
   if (hasLaunched === null) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#4AADA8" />
+        <ActivityIndicator size="large" color="#2979FF" />
       </View>
     );
   }
