@@ -35,6 +35,7 @@ import FeedbackScreen from './src/screens/FeedbackScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
+import CameraScreen from './src/screens/CameraScreen';
 
 // Non-blocking model load
 import { loadImprovedModel } from './src/services/improvedModelLoader';
@@ -145,7 +146,7 @@ function AppNavigator() {
   if (hasLaunched === null) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#4CAF50" />
+        <ActivityIndicator size="large" color="#4AADA8" />
       </View>
     );
   }
@@ -184,6 +185,11 @@ function RootNavigator() {
         name="Feedback"
         component={FeedbackScreen}
         options={{ title: 'Feedback' }}
+      />
+      <RootStack.Screen
+        name="Camera"
+        component={CameraScreen}
+        options={{ title: 'Camera' }}
       />
       <RootStack.Screen
         name="Login"

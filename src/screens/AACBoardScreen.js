@@ -22,6 +22,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette } from '../theme';
 import { speak, stop } from '../services/speechService';
@@ -53,6 +54,7 @@ import { getAACPhraseSuggestions } from '../services/vertexAISuggestions';
 export default function AACBoardScreen() {
   const { settings } = useSettings();
   const palette = getPalette(settings.theme);
+  const navigation = useNavigation();
 
   const [sentenceWords, setSentenceWords] = useState([]);
   const [currentPageId, setCurrentPageId] = useState('home');
@@ -312,6 +314,16 @@ export default function AACBoardScreen() {
         </View>
 
         <View style={styles.sentenceActions}>
+          {/* Camera */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Camera')}
+            style={[styles.sentenceActionBtn, { backgroundColor: palette.accent }]}
+            accessibilityRole="button"
+            accessibilityLabel="Open camera to describe what you see"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="camera-outline" size={20} color={palette.buttonText} />
+          </TouchableOpacity>
           {/* Favourites toggle */}
           <TouchableOpacity
             onPress={() => { setShowFavourites(f => !f); setShowHistory(false); }}
