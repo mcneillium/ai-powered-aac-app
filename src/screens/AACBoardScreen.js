@@ -34,7 +34,9 @@ import {
   recordSuggestionsShown,
   getBigramPredictions,
   getTopWords,
-  scoreByFrequencyAndRecency,
+  scoreWithExplanation,
+  recordSuggestionAccepted,
+  recordSourceShown,
 } from '../services/aiProfileStore';
 import {
   loadSentenceHistory,
@@ -88,7 +90,7 @@ export default function AACBoardScreen() {
       if (sentenceWords.length === 0) {
         if (aiEnabled) {
           const top = getTopWords(6);
-          if (!cancelled) setSuggestions(top.length > 0 ? top : []);
+          if (!cancelled) setSuggestions(top.length > 0 ? top.map(w => ({ word: w, reason: 'used often' })) : []);
         } else {
           setSuggestions([]);
         }
@@ -99,7 +101,9 @@ export default function AACBoardScreen() {
       const lastWord = sentenceWords[sentenceWords.length - 1];
       const bigramResults = aiEnabled ? getBigramPredictions(lastWord, 4) : [];
       if (bigramResults.length > 0 && !cancelled) {
-        setSuggestions(bigramResults);
+        if (aiEnabled) recordSourceShown('bigram', bigramResults.length);
+        const scored = scoreWithExplanation(bigramResults);
+        setSuggestions(scored.map(s => ({ word: s.word, reason: s.reason })));
       }
 
       // Then try the neural model (async)
@@ -107,12 +111,11 @@ export default function AACBoardScreen() {
         const text = sentenceWords.join(' ');
         const aiResults = await getAISuggestions(text);
         if (!cancelled && aiResults.length > 0) {
+          if (aiEnabled) recordSourceShown('neural', aiResults.length);
           const merged = [...new Set([...bigramResults, ...aiResults])].slice(0, 6);
-          const ranked = aiEnabled
-            ? scoreByFrequencyAndRecency(merged).map(s => s.word)
-            : merged;
-          setSuggestions(ranked);
-          if (aiEnabled) recordSuggestionsShown(ranked.length).catch(() => {});
+          const scored = aiEnabled ? scoreWithExplanation(merged) : merged.map(w => ({ word: w, score: 0, reason: 'suggested' }));
+          setSuggestions(scored.map(s => ({ word: s.word, reason: s.reason })));
+          if (aiEnabled) recordSuggestionsShown(scored.length).catch(() => {});
         }
       } catch {
         // Bigram results are already showing
@@ -124,14 +127,17 @@ export default function AACBoardScreen() {
           const recentTexts = getSentenceHistory().slice(0, 3).map(h => h.text);
           const vertexPhrases = await getAACPhraseSuggestions(sentenceWords, recentTexts);
           if (!cancelled && vertexPhrases.length > 0) {
-            // Append Vertex suggestions after local ones
+            if (aiEnabled) recordSourceShown('vertex', vertexPhrases.length);
             setSuggestions(prev => {
-              const all = [...new Set([...prev, ...vertexPhrases])];
-              return all.slice(0, 8);
+              const existingWords = prev.map(s => typeof s === 'string' ? s : s.word);
+              const newPhrases = vertexPhrases
+                .filter(p => !existingWords.includes(p))
+                .map(p => ({ word: p, reason: 'AI suggested' }));
+              return [...prev, ...newPhrases].slice(0, 8);
             });
           }
         } catch {
-          // Vertex AI is optional — local suggestions still work
+          // Vertex AI is optional
         }
       }
     })();
@@ -496,19 +502,26 @@ export default function AACBoardScreen() {
           <FlatList
             data={suggestions}
             horizontal
-            keyExtractor={(item, i) => `${item}-${i}`}
+            keyExtractor={(item, i) => `${typeof item === 'string' ? item : item.word}-${i}`}
             showsHorizontalScrollIndicator={false}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[styles.suggestionChip, { backgroundColor: palette.chipBg, borderColor: palette.border }]}
-                onPress={() => handleSuggestionPress(item)}
-                accessibilityRole="button"
-                accessibilityLabel={`Suggestion: ${item}`}
-                accessibilityHint="Add this word to your sentence"
-              >
-                <Text style={[styles.suggestionText, { color: palette.text }]}>{item}</Text>
-              </TouchableOpacity>
-            )}
+            renderItem={({ item }) => {
+              const word = typeof item === 'string' ? item : item.word;
+              const reason = typeof item === 'string' ? null : item.reason;
+              return (
+                <TouchableOpacity
+                  style={[styles.suggestionChip, { backgroundColor: palette.chipBg, borderColor: palette.border }]}
+                  onPress={() => handleSuggestionPress(word)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Suggestion: ${word}${reason ? `. ${reason}` : ''}`}
+                  accessibilityHint="Add this word to your sentence"
+                >
+                  <Text style={[styles.suggestionText, { color: palette.text }]}>{word}</Text>
+                  {reason && (
+                    <Text style={[styles.suggestionReason, { color: palette.textSecondary }]}>{reason}</Text>
+                  )}
+                </TouchableOpacity>
+              );
+            }}
           />
         </View>
       )}
@@ -626,6 +639,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   suggestionText: { fontSize: 15, fontWeight: '500' },
+  suggestionReason: { fontSize: 10, marginTop: 1 },
   breadcrumb: {
     flexDirection: 'row',
     alignItems: 'center',

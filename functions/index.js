@@ -276,3 +276,98 @@ exports.imageToAACPhrases = functions.https.onRequest(async (req, res) => {
     return res.status(500).json({ error: 'Internal server error', phrases: [] });
   }
 });
+
+// ════════════════════════════════════════════
+// 4. OCR TO AAC PHRASES (Vertex AI Vision)
+// ════════════════════════════════════════════
+//
+// Reads text from signs, menus, labels, and generates AAC-friendly
+// phrases the user might want to say about what they read.
+// Example: photo of a menu → "I want the pizza", "how much is it?"
+
+const OCR_AAC_PROMPT = `You are helping an AAC user read and respond to text in their environment.
+
+1. First, extract any readable text from this image (signs, menus, labels, screens, notices).
+2. Then generate 4-6 short AAC phrases (2-5 words each) the user might want to say about what they read.
+   Include a mix of: requesting, commenting, asking questions.
+3. Return a JSON object with two fields:
+   - "extractedText": the text you read from the image (string, max 200 chars)
+   - "phrases": array of 4-6 short AAC phrase strings
+
+Example: {"extractedText": "Pizza $8, Pasta $10, Salad $6", "phrases": ["I want pizza", "how much is it", "can I see the menu", "I want something else"]}`;
+
+exports.ocrToAACPhrases = functions.https.onRequest(async (req, res) => {
+  setCors(res);
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { image } = req.body || {};
+  if (!image) return res.status(400).json({ error: 'Missing "image" field (base64)' });
+  if (typeof image !== 'string' || image.length > 7_000_000) {
+    return res.status(400).json({ error: 'Image too large', extractedText: '', phrases: [] });
+  }
+
+  const projectId = functions.config().vertex?.project_id || 'commai-b98fe';
+  const location = 'europe-west1';
+  const model = 'gemini-2.0-flash-lite';
+
+  try {
+    const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+    const client = await auth.getClient();
+    const accessToken = await client.getAccessToken();
+
+    const endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
+
+    const vertexResponse = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: OCR_AAC_PROMPT },
+            { inlineData: { mimeType: 'image/jpeg', data: image } },
+          ],
+        }],
+        generationConfig: { temperature: 0.5, maxOutputTokens: 512, topP: 0.9 },
+      }),
+    });
+
+    if (!vertexResponse.ok) {
+      const errText = await vertexResponse.text().catch(() => '');
+      console.error('OCR Vision error:', vertexResponse.status, errText);
+      return res.status(502).json({ error: 'OCR service error', extractedText: '', phrases: [] });
+    }
+
+    const result = await vertexResponse.json();
+    const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+
+    let parsed = { extractedText: '', phrases: [] };
+    try {
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+    } catch {
+      // Try array-only fallback
+      try {
+        const arrMatch = rawText.match(/\[[\s\S]*\]/);
+        if (arrMatch) parsed = { extractedText: '', phrases: JSON.parse(arrMatch[0]) };
+      } catch { /* give up */ }
+    }
+
+    const extractedText = typeof parsed.extractedText === 'string'
+      ? parsed.extractedText.slice(0, 200)
+      : '';
+
+    const phrases = Array.isArray(parsed.phrases)
+      ? parsed.phrases.filter(s => typeof s === 'string' && s.length > 0 && s.length <= 40).slice(0, 6)
+      : [];
+
+    return res.status(200).json({ extractedText, phrases });
+  } catch (error) {
+    console.error('OCR-to-AAC error:', error.message);
+    return res.status(500).json({ error: 'Internal server error', extractedText: '', phrases: [] });
+  }
+});
