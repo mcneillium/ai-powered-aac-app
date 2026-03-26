@@ -317,27 +317,30 @@ def create_screenshot_template(data):
 # ════════════════════════════════════════════
 # RUN ALL
 # ════════════════════════════════════════════
-print("Generating Voice brand assets (blue pill icon)\n")
+#
+# IMPORTANT: App icon, adaptive icon, splash, and favicon are provided
+# by the designer as real PNGs. This script does NOT overwrite them.
+# It only regenerates Play Store marketing assets.
+#
+# To regenerate the icon programmatically (if needed), uncomment below.
 
-print("[1/7] App icon")
-icon = create_app_icon()
+print("Generating Voice Play Store assets (icon files are designer-provided)\n")
 
-print("[2/7] Adaptive icon")
-create_adaptive_icon()
+# print("[1/7] App icon")
+# icon = create_app_icon()
+# print("[2/7] Adaptive icon")
+# create_adaptive_icon()
+# print("[3/7] Splash icon")
+# create_splash()
+# print("[4/7] Favicon")
+# create_favicon(icon)
+# print("[5/7] Brand mark")
+# create_brand_mark()
 
-print("[3/7] Splash icon")
-create_splash()
-
-print("[4/7] Favicon")
-create_favicon(icon)
-
-print("[5/7] Brand mark")
-create_brand_mark()
-
-print("[6/7] Feature graphic")
+print("[1/2] Feature graphic")
 create_feature_graphic()
 
-print("[7/7] Screenshot templates")
+print("[2/2] Screenshot templates")
 for s in SCREENSHOT_DATA:
     create_screenshot_template(s)
 

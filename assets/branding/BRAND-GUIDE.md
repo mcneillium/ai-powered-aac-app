@@ -53,8 +53,11 @@ A small microphone sits above the centre I pill. White on blue. White background
 | Favicon | 48x48 | `assets/favicon.png` |
 | Brand mark | 256x256 | `branding/logo/brand-mark-256.png` |
 
-## Regenerating Assets
+## Asset Workflow
 
+**Icon, adaptive icon, splash, favicon** — designer-provided PNGs. Do not overwrite with the script. Place the real files directly in `assets/`.
+
+**Feature graphic + screenshot templates** — regenerated with:
 ```bash
 python3 scripts/generate-brand-assets.py
 ```
