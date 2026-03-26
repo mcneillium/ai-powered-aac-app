@@ -50,6 +50,9 @@ import {
   isFavourite,
 } from '../services/favouritesStore';
 import { getAACPhraseSuggestions } from '../services/vertexAISuggestions';
+import DisplayMode from '../components/DisplayMode';
+import VoicePresetPicker from '../components/VoicePresetPicker';
+import { applyPreset } from '../services/speechService';
 
 export default function AACBoardScreen() {
   const { settings } = useSettings();
@@ -64,6 +67,9 @@ export default function AACBoardScreen() {
   const [showFavourites, setShowFavourites] = useState(false);
   const [history, setHistory] = useState([]);
   const [favourites, setFavourites] = useState([]);
+  const [voicePreset, setVoicePreset] = useState('normal');
+  const [displayMode, setDisplayMode] = useState(null); // null | 'display' | 'listener'
+  const [lastSpoken, setLastSpoken] = useState('');
   const sentenceBarRef = useRef(null);
 
   const currentPage = getPage(currentPageId) || getHomePage();
@@ -158,12 +164,12 @@ export default function AACBoardScreen() {
       }
       return next;
     });
-    speak(label, {
+    speak(label, applyPreset(voicePreset, {
       rate: settings.speechRate,
       pitch: settings.speechPitch,
       voice: settings.speechVoice,
-    });
-  }, [settings, aiEnabled]);
+    }));
+  }, [settings, aiEnabled, voicePreset]);
 
   const handleButtonPress = useCallback((button) => {
     if (button.navigateTo) {
@@ -178,7 +184,7 @@ export default function AACBoardScreen() {
     const words = word.split(' ');
     if (words.length > 1) {
       setSentenceWords(prev => [...prev, ...words]);
-      speak(word, { rate: settings.speechRate, pitch: settings.speechPitch, voice: settings.speechVoice });
+      speak(word, applyPreset(voicePreset, { rate: settings.speechRate, pitch: settings.speechPitch, voice: settings.speechVoice }));
     } else {
       addWord(word, true);
     }
@@ -187,18 +193,18 @@ export default function AACBoardScreen() {
   const speakSentence = useCallback(async () => {
     const text = sentenceWords.join(' ');
     if (text.trim()) {
-      speak(text, {
+      speak(text, applyPreset(voicePreset, {
         rate: settings.speechRate,
         pitch: settings.speechPitch,
         voice: settings.speechVoice,
-      });
+      }));
+      setLastSpoken(text);
       if (aiEnabled) recordSentenceSpoken(sentenceWords).catch(() => {});
 
-      // Save to persistent history
       await addSentenceToHistory(text);
       setHistory(getSentenceHistory());
     }
-  }, [sentenceWords, settings, aiEnabled]);
+  }, [sentenceWords, settings, aiEnabled, voicePreset]);
 
   const removeLastWord = useCallback(() => {
     setSentenceWords(prev => prev.slice(0, -1));
@@ -393,8 +399,36 @@ export default function AACBoardScreen() {
           >
             <Ionicons name="volume-high" size={26} color={palette.buttonText} />
           </TouchableOpacity>
+          {/* Display mode: show sentence large for partner */}
+          <TouchableOpacity
+            onPress={() => setDisplayMode('display')}
+            style={[styles.sentenceActionBtn, { backgroundColor: palette.chipBg }]}
+            accessibilityRole="button"
+            accessibilityLabel="Show sentence on full screen for your conversation partner"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            disabled={sentenceWords.length === 0}
+          >
+            <Ionicons name="tv-outline" size={18} color={palette.text} />
+          </TouchableOpacity>
         </View>
       </View>
+
+      {/* Voice preset picker */}
+      <VoicePresetPicker activePreset={voicePreset} onSelect={setVoicePreset} />
+
+      {/* Display mode overlay */}
+      <DisplayMode
+        visible={displayMode === 'display'}
+        onClose={() => setDisplayMode(null)}
+        text={sentenceWords.join(' ')}
+        mode="display"
+      />
+      <DisplayMode
+        visible={displayMode === 'listener'}
+        onClose={() => setDisplayMode(null)}
+        text={lastSpoken}
+        mode="listener"
+      />
 
       {/* Favourites panel */}
       {showFavourites && (
