@@ -1,11 +1,36 @@
 // src/services/speechService.js
 // Centralized speech service for the AAC app.
-// Manages speech queue, cancellation, and voice settings.
+// Manages speech queue, cancellation, voice settings, and expressive presets.
 // All speech output goes through this module.
 
 import * as Speech from 'expo-speech';
 
 let isSpeaking = false;
+
+// ── Expressive Voice Presets ──
+// These adjust rate and pitch to convey different moods/intentions.
+// Users can select a preset from the AAC Board.
+export const voicePresets = {
+  normal:  { label: 'Normal',  rate: 1.0, pitch: 1.0,  icon: 'mic-outline' },
+  calm:    { label: 'Calm',    rate: 0.8, pitch: 0.9,  icon: 'leaf-outline' },
+  excited: { label: 'Excited', rate: 1.3, pitch: 1.2,  icon: 'flash-outline' },
+  serious: { label: 'Serious', rate: 0.9, pitch: 0.8,  icon: 'shield-outline' },
+  gentle:  { label: 'Gentle',  rate: 0.7, pitch: 1.1,  icon: 'heart-outline' },
+  loud:    { label: 'Loud',    rate: 1.1, pitch: 1.0,  icon: 'volume-high-outline' },
+};
+
+/**
+ * Apply a voice preset to user settings, returning merged options.
+ */
+export function applyPreset(presetId, baseOptions = {}) {
+  const preset = voicePresets[presetId];
+  if (!preset) return baseOptions;
+  return {
+    ...baseOptions,
+    rate: preset.rate,
+    pitch: preset.pitch,
+  };
+}
 
 /**
  * Speak text with the user's preferred settings.
@@ -22,7 +47,7 @@ let isSpeaking = false;
 export async function speak(text, options = {}) {
   if (!text || !text.trim()) return;
 
-  // Stop any current speech first — prevents garbled overlapping output
+  // Stop any current speech first
   await stop();
 
   const speechOptions = {

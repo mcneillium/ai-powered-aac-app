@@ -6,7 +6,8 @@
 // 2. Auth is optional — enables sync, logging, and caregiver features
 // 3. Error boundary wraps the entire app to prevent total crash
 // 4. Model loading is non-blocking — app renders immediately
-// 5. Shared theme from src/theme.js — no inline palette objects
+// 5. QuickRepairOverlay floats above all screens for instant phrase access
+// 6. Shared theme from src/theme.js — no inline palette objects
 
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
@@ -23,10 +24,11 @@ import { NetworkProvider } from './src/contexts/NetworkContext';
 import { getPalette } from './src/theme';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import OfflineBanner from './src/components/OfflineBanner';
+import QuickRepairOverlay from './src/components/QuickRepairOverlay';
 
 // Screens
 import AACBoardScreen from './src/screens/AACBoardScreen';
-import CommunicationStackScreen from './src/screens/CommunicationScreen';
+import ContextPackScreen from './src/screens/ContextPackScreen';
 import EasySentenceBuilderScreen from './src/screens/EasySentenceBuilderScreen';
 import EmotionScreen from './src/screens/EmotionScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -55,7 +57,7 @@ loadAIProfile()
 
 const TAB_ICONS = {
   'AAC Board': 'grid-outline',
-  'Communication': 'chatbubble-ellipses-outline',
+  'Contexts': 'apps-outline',
   'Sentence': 'text-outline',
   'Emotion': 'happy-outline',
   'Profile': 'person-outline',
@@ -81,46 +83,53 @@ function MainApp() {
   const palette = getPalette(settings.theme);
 
   return (
-    <Tab.Navigator
-      screenOptions={({ route, navigation }) => ({
-        headerStyle: { backgroundColor: palette.tabBarBg },
-        headerTintColor: palette.text,
-        headerTitleStyle: { color: palette.text, fontWeight: '600' },
-        headerRight: () => (
-          <SettingsHeaderButton tintColor={palette.text} navigation={navigation} />
-        ),
-        tabBarActiveTintColor: palette.tabBarActive,
-        tabBarInactiveTintColor: palette.tabBarInactive,
-        tabBarStyle: {
-          backgroundColor: palette.tabBarBg,
-          borderTopWidth: 0,
-          elevation: 5,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -1 },
-          shadowOpacity: 0.1,
-          shadowRadius: 3,
-          borderTopLeftRadius: 15,
-          borderTopRightRadius: 15,
-          position: 'absolute',
-          height: 60 + insets.bottom,
-          paddingBottom: insets.bottom,
-        },
-        tabBarIcon: ({ color, size }) => (
-          <Ionicons name={TAB_ICONS[route.name] || 'help-outline'} size={size} color={color} />
-        ),
-        tabBarAccessibilityLabel: `${route.name} tab`,
-      })}
-    >
-      <Tab.Screen
-        name="AAC Board"
-        component={AACBoardScreen}
-        options={{ title: 'Communicate' }}
-      />
-      <Tab.Screen name="Communication" component={CommunicationStackScreen} />
-      <Tab.Screen name="Sentence" component={EasySentenceBuilderScreen} />
-      <Tab.Screen name="Emotion" component={EmotionScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
-    </Tab.Navigator>
+    <>
+      <Tab.Navigator
+        screenOptions={({ route, navigation }) => ({
+          headerStyle: { backgroundColor: palette.tabBarBg },
+          headerTintColor: palette.text,
+          headerTitleStyle: { color: palette.text, fontWeight: '600' },
+          headerRight: () => (
+            <SettingsHeaderButton tintColor={palette.text} navigation={navigation} />
+          ),
+          tabBarActiveTintColor: palette.tabBarActive,
+          tabBarInactiveTintColor: palette.tabBarInactive,
+          tabBarStyle: {
+            backgroundColor: palette.tabBarBg,
+            borderTopWidth: 0,
+            elevation: 5,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -1 },
+            shadowOpacity: 0.1,
+            shadowRadius: 3,
+            borderTopLeftRadius: 15,
+            borderTopRightRadius: 15,
+            position: 'absolute',
+            height: 60 + insets.bottom,
+            paddingBottom: insets.bottom,
+          },
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name={TAB_ICONS[route.name] || 'help-outline'} size={size} color={color} />
+          ),
+          tabBarAccessibilityLabel: `${route.name} tab`,
+        })}
+      >
+        <Tab.Screen
+          name="AAC Board"
+          component={AACBoardScreen}
+          options={{ title: 'Communicate' }}
+        />
+        <Tab.Screen
+          name="Contexts"
+          component={ContextPackScreen}
+          options={{ title: 'Situations' }}
+        />
+        <Tab.Screen name="Sentence" component={EasySentenceBuilderScreen} />
+        <Tab.Screen name="Emotion" component={EmotionScreen} />
+        <Tab.Screen name="Profile" component={ProfileScreen} />
+      </Tab.Navigator>
+      <QuickRepairOverlay />
+    </>
   );
 }
 
@@ -151,12 +160,10 @@ function AppNavigator() {
     );
   }
 
-  // Show onboarding for first launch (regardless of auth)
   if (!hasLaunched) {
     return <OnboardingScreen onComplete={() => setHasLaunched(true)} />;
   }
 
-  // Main app is ALWAYS available — auth is not required for communication
   return <MainApp />;
 }
 
