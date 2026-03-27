@@ -38,6 +38,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import CameraScreen from './src/screens/CameraScreen';
+import InsightsScreen from './src/screens/InsightsScreen';
 
 // Non-blocking model load
 import { loadImprovedModel } from './src/services/improvedModelLoader';
@@ -197,6 +198,11 @@ function RootNavigator() {
         name="Camera"
         component={CameraScreen}
         options={{ title: 'Camera' }}
+      />
+      <RootStack.Screen
+        name="Insights"
+        component={InsightsScreen}
+        options={{ title: 'Communication Insights' }}
       />
       <RootStack.Screen
         name="Login"

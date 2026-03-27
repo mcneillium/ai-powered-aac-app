@@ -108,6 +108,16 @@ export default function ProfileScreen() {
           <Text style={[styles.actionText, { color: palette.buttonText }]}>Settings</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: palette.accent }]}
+          onPress={() => navigation.navigate('Insights')}
+          accessibilityRole="button"
+          accessibilityLabel="View communication insights"
+        >
+          <MaterialIcons name="insights" size={20} color={palette.buttonText} />
+          <Text style={[styles.actionText, { color: palette.buttonText }]}>Insights</Text>
+        </TouchableOpacity>
+
         {user ? (
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: palette.danger }]}
