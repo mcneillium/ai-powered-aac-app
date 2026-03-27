@@ -28,6 +28,7 @@ import { getPalette } from '../theme';
 import { speak, stop } from '../services/speechService';
 import { getHomePage, getPage } from '../data/coreVocabulary';
 import { getAISuggestions } from '../services/getAISuggestions';
+import { useOnDevicePrediction } from '../hooks/useOnDevicePrediction';
 import {
   recordWordSelection,
   recordSentenceSpoken,
@@ -65,6 +66,7 @@ export default function AACBoardScreen() {
   const { settings } = useSettings();
   const palette = getPalette(settings.theme);
   const navigation = useNavigation();
+  const { predictNext: personalPredict, recordTap } = useOnDevicePrediction();
 
   const [sentenceWords, setSentenceWords] = useState([]);
   const [currentPageId, setCurrentPageId] = useState('home');
@@ -211,7 +213,7 @@ export default function AACBoardScreen() {
         return;
       }
 
-      // Try bigram predictions first (instant, local, personalised)
+      // Layer 1: Bigram predictions (instant, local, personalised by usage history)
       const lastWord = sentenceWords[sentenceWords.length - 1];
       const bigramResults = aiEnabled ? getBigramPredictions(lastWord, 4) : [];
       if (bigramResults.length > 0 && !cancelled) {
@@ -220,19 +222,39 @@ export default function AACBoardScreen() {
         setSuggestions(scored.map(s => ({ word: s.word, reason: s.reason })));
       }
 
-      // Then try the neural model (async)
+      // Layer 2: On-device personalized model (adapts to this user's patterns during session)
+      let personalResults = [];
+      try {
+        personalResults = await personalPredict(sentenceWords, 4);
+        if (!cancelled && personalResults.length > 0) {
+          // Merge personal predictions with bigram results, label as 'learned'
+          const combined = [...new Set([...bigramResults, ...personalResults])];
+          const scored = scoreWithExplanation(combined);
+          // Override reason for words that came only from the personalized model
+          const bigramSet = new Set(bigramResults);
+          const labeled = scored.map(s => ({
+            word: s.word,
+            reason: !bigramSet.has(s.word) && personalResults.includes(s.word) ? 'learned' : s.reason,
+          }));
+          setSuggestions(labeled.slice(0, 6));
+        }
+      } catch {
+        // Personalized model is optional — bigram results still showing
+      }
+
+      // Layer 3: Static neural model (async, pre-trained, not personalized)
       try {
         const text = sentenceWords.join(' ');
         const aiResults = await getAISuggestions(text);
         if (!cancelled && aiResults.length > 0) {
           if (aiEnabled) recordSourceShown('neural', aiResults.length);
-          const merged = [...new Set([...bigramResults, ...aiResults])].slice(0, 6);
-          const scored = aiEnabled ? scoreWithExplanation(merged) : merged.map(w => ({ word: w, score: 0, reason: 'suggested' }));
+          const allLocal = [...new Set([...bigramResults, ...personalResults, ...aiResults])].slice(0, 6);
+          const scored = aiEnabled ? scoreWithExplanation(allLocal) : allLocal.map(w => ({ word: w, score: 0, reason: 'suggested' }));
           setSuggestions(scored.map(s => ({ word: s.word, reason: s.reason })));
           if (aiEnabled) recordSuggestionsShown(scored.length).catch(() => {});
         }
       } catch {
-        // Bigram results are already showing
+        // Bigram + personal results are already showing
       }
 
       // Also try Vertex AI for richer phrase suggestions (async, non-blocking)
@@ -281,6 +303,9 @@ export default function AACBoardScreen() {
       const next = [...prev, label];
       if (aiEnabled) {
         recordWordSelection(label, prev, wasSuggestion).catch(() => {});
+        // Feed the on-device model: prev words → selected word
+        // This runs async, never blocks speech, and silently fails if model isn't loaded
+        recordTap(prev, label).catch(() => {});
       }
       return next;
     });
@@ -289,7 +314,7 @@ export default function AACBoardScreen() {
       pitch: settings.speechPitch,
       voice: settings.speechVoice,
     }));
-  }, [settings, aiEnabled, voicePreset]);
+  }, [settings, aiEnabled, voicePreset, recordTap]);
 
   const handleButtonPress = useCallback((button) => {
     if (button.navigateTo) {
