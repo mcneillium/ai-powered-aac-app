@@ -1,6 +1,6 @@
 // src/screens/VocabManagerScreen.js
 // Caregiver screen for reviewing vocabulary requests and managing custom words.
-// Requested words come from InsightsScreen. Approved words appear on the AAC Board.
+// Restricted to caregiver role. Guest and regular users see a permission message.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -9,10 +9,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
+import { useAuth } from '../contexts/AuthContext';
 import { getPalette, spacing, radii, shadows } from '../theme';
 import {
   loadCustomVocab, getCustomVocab, addCustomVocabItem,
-  removeCustomVocabItem, getVocabRequests, dismissVocabRequest,
+  removeCustomVocabItem, updateCustomVocabItem,
+  getVocabRequests, dismissVocabRequest,
 } from '../services/customVocabStore';
 import { StatusBar } from 'expo-status-bar';
 
@@ -27,12 +29,16 @@ const CATEGORIES = [
 
 export default function VocabManagerScreen() {
   const { settings } = useSettings();
+  const { user, role } = useAuth();
   const palette = getPalette(settings.theme);
   const [requests, setRequests] = useState({});
   const [vocab, setVocab] = useState([]);
   const [newWord, setNewWord] = useState('');
   const [newCategory, setNewCategory] = useState('noun');
   const [refreshing, setRefreshing] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editWord, setEditWord] = useState('');
+  const [editCategory, setEditCategory] = useState('noun');
 
   const load = useCallback(async () => {
     await loadCustomVocab();
@@ -47,6 +53,22 @@ export default function VocabManagerScreen() {
     await load();
     setRefreshing(false);
   };
+
+  // ── Role gate ──
+  if (!user || role !== 'caregiver') {
+    return (
+      <View style={[styles.container, styles.center, { backgroundColor: palette.background }]}>
+        <Ionicons name="lock-closed-outline" size={48} color={palette.textSecondary} />
+        <Text style={[styles.gateTitle, { color: palette.text }]}>Caregiver access only</Text>
+        <Text style={[styles.gateHint, { color: palette.textSecondary }]}>
+          {!user
+            ? 'Sign in with a caregiver account to manage vocabulary.'
+            : 'This screen is for caregivers. Your account is registered as a regular user. To change your role, contact support.'}
+        </Text>
+        <StatusBar style={settings.theme === 'dark' ? 'light' : 'dark'} />
+      </View>
+    );
+  }
 
   const handleApprove = async (term) => {
     Alert.alert(
@@ -68,29 +90,18 @@ export default function VocabManagerScreen() {
   };
 
   const handleDismiss = async (term) => {
-    Alert.alert(
-      'Dismiss request',
-      `Remove "${term}" from the request list? This won't delete the word if it's already been added.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Dismiss',
-          style: 'destructive',
-          onPress: async () => {
-            await dismissVocabRequest(term);
-            await load();
-          },
-        },
-      ]
-    );
+    Alert.alert('Dismiss request', `Remove "${term}" from the request list?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Dismiss', style: 'destructive',
+        onPress: async () => { await dismissVocabRequest(term); await load(); },
+      },
+    ]);
   };
 
   const handleAddManual = async () => {
     const trimmed = newWord.trim();
-    if (!trimmed) {
-      Alert.alert('Enter a word', 'Type a word or short phrase to add.');
-      return;
-    }
+    if (!trimmed) { Alert.alert('Enter a word', 'Type a word or short phrase to add.'); return; }
     const result = await addCustomVocabItem(trimmed, newCategory, 'manual');
     if (result) {
       setNewWord('');
@@ -102,21 +113,39 @@ export default function VocabManagerScreen() {
   };
 
   const handleRemove = (item) => {
-    Alert.alert(
-      'Remove word',
-      `Remove "${item.word}" from custom vocabulary? The user will no longer see it on the AAC Board.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            await removeCustomVocabItem(item.id);
-            await load();
-          },
-        },
-      ]
-    );
+    Alert.alert('Remove word', `Remove "${item.word}" from custom vocabulary?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove', style: 'destructive',
+        onPress: async () => { await removeCustomVocabItem(item.id); await load(); },
+      },
+    ]);
+  };
+
+  const startEdit = (item) => {
+    setEditingId(item.id);
+    setEditWord(item.word);
+    setEditCategory(item.category);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditWord('');
+  };
+
+  const saveEdit = async () => {
+    if (!editWord.trim()) { Alert.alert('Enter a word'); return; }
+    const result = await updateCustomVocabItem(editingId, {
+      word: editWord,
+      category: editCategory,
+    });
+    if (result) {
+      setEditingId(null);
+      setEditWord('');
+      await load();
+    } else {
+      Alert.alert('Error', 'Could not update. The word may already exist.');
+    }
   };
 
   const requestList = Object.entries(requests).sort((a, b) => b[1] - a[1]);
@@ -142,14 +171,14 @@ export default function VocabManagerScreen() {
             <Text style={[styles.hint, { color: palette.textSecondary }]}>
               These words were searched for but not found. Approve to add them to the AAC Board.
             </Text>
-            {requestList.map(([term, timestamp]) => (
+            {requestList.map(([term]) => (
               <View key={term} style={[styles.requestRow, { borderBottomColor: palette.border }]}>
                 <Text style={[styles.requestWord, { color: palette.text }]}>{term}</Text>
                 <TouchableOpacity
                   onPress={() => handleApprove(term)}
                   style={[styles.actionChip, { backgroundColor: palette.success }]}
                   accessibilityRole="button"
-                  accessibilityLabel={`Approve "${term}" and add to vocabulary`}
+                  accessibilityLabel={`Approve "${term}"`}
                 >
                   <Ionicons name="checkmark" size={16} color="#FFF" />
                   <Text style={styles.actionChipText}>Add</Text>
@@ -158,7 +187,7 @@ export default function VocabManagerScreen() {
                   onPress={() => handleDismiss(term)}
                   style={[styles.actionChip, { backgroundColor: palette.chipBg }]}
                   accessibilityRole="button"
-                  accessibilityLabel={`Dismiss request for "${term}"`}
+                  accessibilityLabel={`Dismiss "${term}"`}
                 >
                   <Ionicons name="close" size={16} color={palette.textSecondary} />
                 </TouchableOpacity>
@@ -174,9 +203,6 @@ export default function VocabManagerScreen() {
           <Ionicons name="add-circle-outline" size={18} color={palette.primary} />
           <Text style={[styles.sectionTitle, { color: palette.text }]}>Add a word</Text>
         </View>
-        <Text style={[styles.hint, { color: palette.textSecondary }]}>
-          Type a word or short phrase to add to the AAC Board.
-        </Text>
         <TextInput
           style={[styles.input, { borderColor: palette.inputBorder, color: palette.text, backgroundColor: palette.inputBg }]}
           placeholder="Word or short phrase"
@@ -192,10 +218,7 @@ export default function VocabManagerScreen() {
           {CATEGORIES.map(cat => (
             <TouchableOpacity
               key={cat.id}
-              style={[
-                styles.catChip,
-                { backgroundColor: newCategory === cat.id ? palette.primary : palette.chipBg },
-              ]}
+              style={[styles.catChip, { backgroundColor: newCategory === cat.id ? palette.primary : palette.chipBg }]}
               onPress={() => setNewCategory(cat.id)}
               accessibilityRole="button"
               accessibilityLabel={`Category: ${cat.label}`}
@@ -232,25 +255,63 @@ export default function VocabManagerScreen() {
         ) : (
           <>
             <Text style={[styles.hint, { color: palette.textSecondary }]}>
-              These words appear on the AAC Board home page. Tap the X to remove.
+              These words appear on the AAC Board. Tap to edit, X to remove.
             </Text>
             {vocab.map(item => (
-              <View key={item.id} style={[styles.vocabRow, { borderBottomColor: palette.border }]}>
-                <View style={styles.vocabInfo}>
-                  <Text style={[styles.vocabWord, { color: palette.text }]}>{item.word}</Text>
-                  <Text style={[styles.vocabMeta, { color: palette.textSecondary }]}>
-                    {item.category} · {item.source}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => handleRemove(item)}
-                  style={styles.removeBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove "${item.word}" from vocabulary`}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Ionicons name="close-circle" size={22} color={palette.danger} />
-                </TouchableOpacity>
+              <View key={item.id}>
+                {editingId === item.id ? (
+                  /* ── Edit mode ── */
+                  <View style={[styles.editRow, { borderBottomColor: palette.border }]}>
+                    <TextInput
+                      style={[styles.editInput, { borderColor: palette.inputBorder, color: palette.text, backgroundColor: palette.inputBg }]}
+                      value={editWord}
+                      onChangeText={setEditWord}
+                      autoCapitalize="none"
+                      autoFocus
+                      accessibilityLabel="Edit word"
+                    />
+                    <View style={styles.editCategories}>
+                      {CATEGORIES.map(cat => (
+                        <TouchableOpacity
+                          key={cat.id}
+                          style={[styles.catChipSmall, { backgroundColor: editCategory === cat.id ? palette.primary : palette.chipBg }]}
+                          onPress={() => setEditCategory(cat.id)}
+                        >
+                          <Text style={[styles.catChipSmallText, { color: editCategory === cat.id ? palette.buttonText : palette.text }]}>
+                            {cat.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <View style={styles.editActions}>
+                      <TouchableOpacity onPress={saveEdit} style={[styles.actionChip, { backgroundColor: palette.success }]}
+                        accessibilityRole="button" accessibilityLabel="Save changes">
+                        <Ionicons name="checkmark" size={16} color="#FFF" />
+                        <Text style={styles.actionChipText}>Save</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={cancelEdit} style={[styles.actionChip, { backgroundColor: palette.chipBg }]}
+                        accessibilityRole="button" accessibilityLabel="Cancel editing">
+                        <Text style={[styles.actionChipText, { color: palette.text }]}>Cancel</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  /* ── Display mode ── */
+                  <View style={[styles.vocabRow, { borderBottomColor: palette.border }]}>
+                    <TouchableOpacity style={styles.vocabInfo} onPress={() => startEdit(item)}
+                      accessibilityRole="button" accessibilityLabel={`Edit "${item.word}"`}>
+                      <Text style={[styles.vocabWord, { color: palette.text }]}>{item.word}</Text>
+                      <Text style={[styles.vocabMeta, { color: palette.textSecondary }]}>
+                        {item.category} · {item.source}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleRemove(item)} style={styles.removeBtn}
+                      accessibilityRole="button" accessibilityLabel={`Remove "${item.word}"`}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={22} color={palette.danger} />
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             ))}
           </>
@@ -266,6 +327,9 @@ export default function VocabManagerScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { paddingBottom: 80 },
+  center: { justifyContent: 'center', alignItems: 'center', padding: spacing.xxl },
+  gateTitle: { fontSize: 20, fontWeight: '600', marginTop: spacing.lg },
+  gateHint: { fontSize: 15, textAlign: 'center', marginTop: spacing.sm, lineHeight: 22, maxWidth: 300 },
   card: { marginHorizontal: spacing.md, marginTop: spacing.lg, borderRadius: radii.md, padding: spacing.lg },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
   sectionTitle: { fontSize: 16, fontWeight: '700', flex: 1 },
@@ -301,4 +365,13 @@ const styles = StyleSheet.create({
   vocabWord: { fontSize: 15, fontWeight: '600' },
   vocabMeta: { fontSize: 12, marginTop: 1 },
   removeBtn: { padding: 4 },
+  editRow: { paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth },
+  editInput: {
+    height: 40, borderWidth: 1, borderRadius: radii.sm,
+    paddingHorizontal: spacing.sm, fontSize: 15, marginBottom: spacing.xs,
+  },
+  editCategories: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: spacing.xs },
+  catChipSmall: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radii.pill },
+  catChipSmallText: { fontSize: 11, fontWeight: '600' },
+  editActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
 });

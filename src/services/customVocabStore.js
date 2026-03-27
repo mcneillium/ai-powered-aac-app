@@ -1,14 +1,20 @@
 // src/services/customVocabStore.js
-// Local store for caregiver-managed custom vocabulary.
+// Local-first store for caregiver-managed custom vocabulary.
 // Custom words appear alongside core vocabulary on the AAC Board.
-// All data stored in AsyncStorage — offline-first.
+//
+// Storage strategy:
+// - AsyncStorage is the primary store (always works offline)
+// - Firebase syncs when a user is logged in (non-blocking)
+// - On load: reads local first, then merges remote if available
+// - On write: saves locally immediately, then pushes to Firebase
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAuth } from 'firebase/auth';
+import { getDatabase, ref, set as fbSet, get as fbGet } from 'firebase/database';
 
 const CUSTOM_VOCAB_KEY = '@aac_custom_vocab';
 const VOCAB_REQUESTS_KEY = '@aac_vocab_requests';
 
-// Fitzgerald Key category → color mapping (matches coreVocabulary.js)
 const CATEGORY_COLORS = {
   pronoun:   { color: '#FFF9C4', textColor: '#000' },
   verb:      { color: '#C8E6C9', textColor: '#000' },
@@ -22,16 +28,44 @@ const CATEGORY_COLORS = {
 let customItems = [];
 let loaded = false;
 
+// ── Load ──
+
 export async function loadCustomVocab() {
   if (loaded) return customItems;
+
+  // 1. Local first (instant, offline-safe)
   try {
     const raw = await AsyncStorage.getItem(CUSTOM_VOCAB_KEY);
     customItems = raw ? JSON.parse(raw) : [];
-    loaded = true;
   } catch {
     customItems = [];
-    loaded = true;
   }
+  loaded = true;
+
+  // 2. Merge remote (non-blocking)
+  try {
+    const uid = getAuth().currentUser?.uid;
+    if (uid) {
+      const db = getDatabase();
+      const snap = await fbGet(ref(db, `customVocab/${uid}`));
+      if (snap.exists()) {
+        const remote = snap.val();
+        if (Array.isArray(remote)) {
+          // Merge: remote items not in local get added
+          const localIds = new Set(customItems.map(i => i.id));
+          for (const item of remote) {
+            if (!localIds.has(item.id)) {
+              customItems.push(item);
+            }
+          }
+          await saveLocal();
+        }
+      }
+    }
+  } catch {
+    // Firebase unavailable — local data is fine
+  }
+
   return customItems;
 }
 
@@ -39,10 +73,6 @@ export function getCustomVocab() {
   return customItems;
 }
 
-/**
- * Get custom vocab items formatted as AAC Board buttons.
- * These can be appended to a page's buttons array.
- */
 export function getCustomButtons() {
   return customItems.map(item => {
     const cat = CATEGORY_COLORS[item.category] || CATEGORY_COLORS.misc;
@@ -56,12 +86,8 @@ export function getCustomButtons() {
   });
 }
 
-/**
- * Add a new custom vocabulary item.
- * @param {string} word - The word or short phrase
- * @param {string} category - Fitzgerald Key category
- * @param {'requested'|'promoted'|'manual'} source - How this item was created
- */
+// ── Add ──
+
 export async function addCustomVocabItem(word, category = 'noun', source = 'manual') {
   if (!word || typeof word !== 'string') return null;
   const trimmed = word.trim().toLowerCase();
@@ -76,44 +102,111 @@ export async function addCustomVocabItem(word, category = 'noun', source = 'manu
     createdAt: Date.now(),
   };
   customItems.push(entry);
-  await save();
+  await saveLocal();
+  syncToFirebase();
   return entry;
 }
 
+// ── Edit ──
+
+export async function updateCustomVocabItem(id, updates) {
+  const item = customItems.find(i => i.id === id);
+  if (!item) return null;
+
+  if (updates.word !== undefined) {
+    const trimmed = updates.word.trim().toLowerCase();
+    if (!trimmed) return null;
+    // Check for duplicate (another item with same word)
+    if (customItems.some(i => i.id !== id && i.word === trimmed)) return null;
+    item.word = trimmed;
+  }
+  if (updates.category !== undefined) {
+    item.category = updates.category;
+  }
+
+  await saveLocal();
+  syncToFirebase();
+  return item;
+}
+
+// ── Remove ──
+
 export async function removeCustomVocabItem(id) {
   customItems = customItems.filter(item => item.id !== id);
-  await save();
+  await saveLocal();
+  syncToFirebase();
 }
 
-/**
- * Get all pending vocabulary requests (from InsightsScreen).
- * Returns { term: timestamp } map.
- */
+// ── Vocabulary requests ──
+
 export async function getVocabRequests() {
+  // Local first
+  let requests = {};
   try {
     const raw = await AsyncStorage.getItem(VOCAB_REQUESTS_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
+    requests = raw ? JSON.parse(raw) : {};
+  } catch { /* */ }
+
+  // Merge remote requests if logged in
+  try {
+    const uid = getAuth().currentUser?.uid;
+    if (uid) {
+      const db = getDatabase();
+      const snap = await fbGet(ref(db, `vocabRequests/${uid}`));
+      if (snap.exists()) {
+        const remote = snap.val() || {};
+        // Merge: keep the more recent timestamp for each term
+        for (const [term, ts] of Object.entries(remote)) {
+          if (!requests[term] || ts > requests[term]) {
+            requests[term] = ts;
+          }
+        }
+        await AsyncStorage.setItem(VOCAB_REQUESTS_KEY, JSON.stringify(requests));
+      }
+    }
+  } catch { /* Firebase unavailable */ }
+
+  return requests;
 }
 
-/**
- * Remove a term from the requests list (after it's been approved or dismissed).
- */
 export async function dismissVocabRequest(term) {
   try {
     const raw = await AsyncStorage.getItem(VOCAB_REQUESTS_KEY);
     const requests = raw ? JSON.parse(raw) : {};
     delete requests[term];
     await AsyncStorage.setItem(VOCAB_REQUESTS_KEY, JSON.stringify(requests));
-  } catch { /* ignore */ }
+  } catch { /* */ }
+
+  // Also remove from Firebase
+  try {
+    const uid = getAuth().currentUser?.uid;
+    if (uid) {
+      const db = getDatabase();
+      const snap = await fbGet(ref(db, `vocabRequests/${uid}`));
+      if (snap.exists()) {
+        const remote = snap.val() || {};
+        delete remote[term];
+        await fbSet(ref(db, `vocabRequests/${uid}`), remote);
+      }
+    }
+  } catch { /* */ }
 }
 
-async function save() {
+// ── Persistence ──
+
+async function saveLocal() {
   try {
     await AsyncStorage.setItem(CUSTOM_VOCAB_KEY, JSON.stringify(customItems));
   } catch (e) {
-    console.warn('Failed to save custom vocab:', e);
+    console.warn('Failed to save custom vocab locally:', e);
   }
+}
+
+function syncToFirebase() {
+  try {
+    const uid = getAuth().currentUser?.uid;
+    if (!uid) return;
+    const db = getDatabase();
+    fbSet(ref(db, `customVocab/${uid}`), customItems).catch(() => {});
+  } catch { /* non-blocking */ }
 }
