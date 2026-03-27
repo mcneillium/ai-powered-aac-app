@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, RefreshControl,
+  TouchableOpacity, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
@@ -14,7 +15,13 @@ import {
   getVocabularyGapInsights, getTopWords, hasLearnedData,
 } from '../services/aiProfileStore';
 import { getFrequentSentences } from '../services/sentenceHistoryStore';
+import {
+  addFavourite, isFavourite, loadFavourites,
+} from '../services/favouritesStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
+
+const VOCAB_REQUESTS_KEY = '@aac_vocab_requests';
 
 export default function InsightsScreen() {
   const { settings } = useSettings();
@@ -23,19 +30,49 @@ export default function InsightsScreen() {
   const [topWords, setTopWords] = useState([]);
   const [topSentences, setTopSentences] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [savedPhrases, setSavedPhrases] = useState({});
+  const [requestedWords, setRequestedWords] = useState({});
 
-  const load = () => {
+  const load = async () => {
     setInsights(getVocabularyGapInsights());
     setTopWords(getTopWords(10));
     setTopSentences(getFrequentSentences(5));
+    await loadFavourites();
+
+    try {
+      const raw = await AsyncStorage.getItem(VOCAB_REQUESTS_KEY);
+      if (raw) setRequestedWords(JSON.parse(raw));
+    } catch { /* ignore */ }
   };
 
   useEffect(() => { load(); }, []);
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    load();
+    await load();
     setRefreshing(false);
+  };
+
+  const handleSavePhrase = async (phrase) => {
+    if (isFavourite(phrase)) {
+      Alert.alert('Already saved', 'This phrase is already in favourites.');
+      return;
+    }
+    await addFavourite(phrase);
+    setSavedPhrases(prev => ({ ...prev, [phrase]: true }));
+    Alert.alert('Saved', `"${phrase}" added to favourites. It will appear in the AAC Board favourites panel.`);
+  };
+
+  const handleRequestWord = async (term) => {
+    const updated = { ...requestedWords, [term]: Date.now() };
+    setRequestedWords(updated);
+    try {
+      await AsyncStorage.setItem(VOCAB_REQUESTS_KEY, JSON.stringify(updated));
+    } catch { /* ignore */ }
+    Alert.alert(
+      'Vocabulary request noted',
+      `"${term}" has been flagged for addition. A caregiver or therapist can add it to the vocabulary in a future update.\n\nRequested words are saved on this device.`
+    );
   };
 
   if (!hasLearnedData()) {
@@ -80,7 +117,7 @@ export default function InsightsScreen() {
             The words this user taps most often
           </Text>
           <View style={styles.wordCloud}>
-            {topWords.map((w, i) => (
+            {topWords.map((w) => (
               <View key={w} style={[styles.wordChip, { backgroundColor: palette.primaryMuted }]}>
                 <Text style={[styles.wordChipText, { color: palette.primary }]}>{w}</Text>
               </View>
@@ -94,11 +131,23 @@ export default function InsightsScreen() {
         <View style={[styles.card, { backgroundColor: palette.cardBg, ...shadows.card }]}>
           <SectionHeader icon="repeat-outline" color={palette.info} title="Frequently spoken" palette={palette} />
           <Text style={[styles.hint, { color: palette.textSecondary }]}>
-            Sentences spoken multiple times — good candidates for quick phrase buttons
+            Sentences spoken multiple times — tap the star to save as a quick phrase
           </Text>
-          {topSentences.map((item, i) => (
-            <Row key={i} left={`"${item.text}"`} right={`${item.speakCount || 1}x`} palette={palette} />
-          ))}
+          {topSentences.map((item, i) => {
+            const alreadySaved = isFavourite(item.text) || savedPhrases[item.text];
+            return (
+              <ActionRow
+                key={i}
+                left={`"${item.text}"`}
+                right={`${item.speakCount || 1}x`}
+                palette={palette}
+                actionIcon={alreadySaved ? 'star' : 'star-outline'}
+                actionColor={alreadySaved ? palette.warning : palette.textSecondary}
+                actionLabel={alreadySaved ? 'Already in favourites' : `Save "${item.text}" as quick phrase`}
+                onAction={alreadySaved ? null : () => handleSavePhrase(item.text)}
+              />
+            );
+          })}
         </View>
       )}
 
@@ -107,11 +156,23 @@ export default function InsightsScreen() {
         <View style={[styles.card, { backgroundColor: palette.cardBg, ...shadows.card }]}>
           <SectionHeader icon="search-outline" color={palette.warning} title="Words searched but not found" palette={palette} />
           <Text style={[styles.hint, { color: palette.textSecondary }]}>
-            The user searched for these words but they aren't in the vocabulary. Consider adding them.
+            The user searched for these words but they aren't in the vocabulary. Tap the + to request adding them.
           </Text>
-          {insights.missingWords.map((item, i) => (
-            <Row key={i} left={item.term} right={`searched ${item.count}x`} palette={palette} />
-          ))}
+          {insights.missingWords.map((item, i) => {
+            const alreadyRequested = !!requestedWords[item.term];
+            return (
+              <ActionRow
+                key={i}
+                left={item.term}
+                right={`searched ${item.count}x`}
+                palette={palette}
+                actionIcon={alreadyRequested ? 'checkmark-circle' : 'add-circle-outline'}
+                actionColor={alreadyRequested ? palette.success : palette.primary}
+                actionLabel={alreadyRequested ? 'Already requested' : `Request adding "${item.term}" to vocabulary`}
+                onAction={alreadyRequested ? null : () => handleRequestWord(item.term)}
+              />
+            );
+          })}
         </View>
       )}
 
@@ -120,11 +181,23 @@ export default function InsightsScreen() {
         <View style={[styles.card, { backgroundColor: palette.cardBg, ...shadows.card }]}>
           <SectionHeader icon="star-outline" color="#FF9800" title="Phrases to promote" palette={palette} />
           <Text style={[styles.hint, { color: palette.textSecondary }]}>
-            These phrases are used so often they should be one-tap quick phrase buttons
+            These phrases are used so often they should be one-tap buttons. Tap the star to save.
           </Text>
-          {insights.frequentPhrases.map((item, i) => (
-            <Row key={i} left={`"${item.phrase}"`} right={`${item.count}x`} palette={palette} />
-          ))}
+          {insights.frequentPhrases.map((item, i) => {
+            const alreadySaved = isFavourite(item.phrase) || savedPhrases[item.phrase];
+            return (
+              <ActionRow
+                key={i}
+                left={`"${item.phrase}"`}
+                right={`${item.count}x`}
+                palette={palette}
+                actionIcon={alreadySaved ? 'star' : 'star-outline'}
+                actionColor={alreadySaved ? palette.warning : palette.textSecondary}
+                actionLabel={alreadySaved ? 'Already in favourites' : `Save "${item.phrase}" as quick phrase`}
+                onAction={alreadySaved ? null : () => handleSavePhrase(item.phrase)}
+              />
+            );
+          })}
         </View>
       )}
 
@@ -193,6 +266,25 @@ function Row({ left, right, palette }) {
   );
 }
 
+function ActionRow({ left, right, palette, actionIcon, actionColor, actionLabel, onAction }) {
+  return (
+    <View style={[styles.row, { borderBottomColor: palette.border }]}>
+      <Text style={[styles.rowLeft, { color: palette.text }]} numberOfLines={1}>{left}</Text>
+      <Text style={[styles.rowRight, { color: palette.textSecondary }]}>{right}</Text>
+      <TouchableOpacity
+        onPress={onAction}
+        disabled={!onAction}
+        style={styles.actionBtn}
+        accessibilityRole="button"
+        accessibilityLabel={actionLabel}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Ionicons name={actionIcon} size={22} color={actionColor} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 function formatSource(source) {
   switch (source) {
     case 'bigram': return 'Personal history';
@@ -222,7 +314,8 @@ const styles = StyleSheet.create({
   wordChipText: { fontSize: 14, fontWeight: '600' },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth },
   rowLeft: { fontSize: 14, flex: 1, marginRight: spacing.sm },
-  rowRight: { fontSize: 13, fontWeight: '500' },
+  rowRight: { fontSize: 13, fontWeight: '500', marginRight: spacing.sm },
+  actionBtn: { padding: 4 },
   barRow: { flexDirection: 'row', alignItems: 'center', marginVertical: spacing.xs, gap: spacing.sm },
   barLabel: { fontSize: 13, width: 100 },
   barTrack: { flex: 1, height: 8, borderRadius: 4, overflow: 'hidden' },
