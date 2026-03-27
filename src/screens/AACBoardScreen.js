@@ -55,6 +55,11 @@ import { getAACPhraseSuggestions } from '../services/vertexAISuggestions';
 import DisplayMode from '../components/DisplayMode';
 import VoicePresetPicker from '../components/VoicePresetPicker';
 import { applyPreset } from '../services/speechService';
+import {
+  setScanItems, setScanMode, setScanSpeed, getScanState,
+  onScanChange, onScanSelect, startScan, stopScan,
+  advanceScan, selectCurrent, cleanup as cleanupScan,
+} from '../services/switchScanService';
 
 export default function AACBoardScreen() {
   const { settings } = useSettings();
@@ -72,6 +77,8 @@ export default function AACBoardScreen() {
   const [voicePreset, setVoicePreset] = useState('normal');
   const [displayMode, setDisplayMode] = useState(null); // null | 'display' | 'listener'
   const [lastSpoken, setLastSpoken] = useState('');
+  const [scanActive, setScanActive] = useState(false);
+  const [scanFocusIndex, setScanFocusIndex] = useState(-1);
   const sentenceBarRef = useRef(null);
 
   const currentPage = getPage(currentPageId) || getHomePage();
@@ -82,6 +89,68 @@ export default function AACBoardScreen() {
     loadSentenceHistory().then(setHistory);
     loadFavourites().then(setFavourites);
   }, []);
+
+  // ── Switch scanning ──
+  // Build the ordered scan item list: action buttons first, then vocab grid
+  const actionItems = [
+    { type: 'action', id: 'speak', action: speakSentence, label: 'Speak' },
+    { type: 'action', id: 'backspace', action: removeLastWord, label: 'Delete' },
+    { type: 'action', id: 'clear', action: clearSentence, label: 'Clear' },
+  ];
+
+  const scanItemList = useRef([]);
+
+  useEffect(() => {
+    // Rebuild scan items when page or suggestions change
+    const vocabItems = currentPage.buttons.map(b => ({
+      type: 'vocab', id: b.id, button: b, label: b.label,
+    }));
+    const suggItems = suggestions.map((s, i) => ({
+      type: 'suggestion', id: `sug-${i}`, word: typeof s === 'string' ? s : s.word, label: typeof s === 'string' ? s : s.word,
+    }));
+    scanItemList.current = [...actionItems, ...vocabItems, ...suggItems];
+    if (scanActive) {
+      setScanItems(scanItemList.current);
+    }
+  }, [currentPage, suggestions, scanActive]);
+
+  // Register scan callbacks
+  useEffect(() => {
+    onScanChange(({ currentIndex, isRunning }) => {
+      setScanFocusIndex(isRunning ? currentIndex : -1);
+    });
+    onScanSelect(({ item }) => {
+      if (!item) return;
+      if (item.type === 'action') {
+        item.action();
+      } else if (item.type === 'vocab') {
+        handleButtonPress(item.button);
+      } else if (item.type === 'suggestion') {
+        handleSuggestionPress(item.word);
+      }
+    });
+    return () => { cleanupScan(); };
+  }, [handleButtonPress, handleSuggestionPress, speakSentence, removeLastWord, clearSentence]);
+
+  const toggleScan = useCallback(() => {
+    if (scanActive) {
+      stopScan();
+      setScanActive(false);
+    } else {
+      setScanItems(scanItemList.current);
+      startScan();
+      setScanActive(true);
+    }
+  }, [scanActive]);
+
+  // Determine if a specific item is the current scan focus
+  const isScanFocused = useCallback((type, id) => {
+    if (!scanActive || scanFocusIndex < 0) return false;
+    const focused = scanItemList.current[scanFocusIndex];
+    return focused && focused.type === type && focused.id === id;
+  }, [scanActive, scanFocusIndex]);
+
+  const scanRingStyle = { borderColor: '#FF6600', borderWidth: 4 };
 
   // Fetch AI suggestions when sentence changes
   useEffect(() => {
@@ -261,6 +330,7 @@ export default function AACBoardScreen() {
     const isNavButton = !!item.navigateTo;
     const buttonColor = settings.theme === 'highContrast' ? palette.cardBg : item.color;
     const buttonTextColor = settings.theme === 'highContrast' ? palette.text : item.textColor;
+    const focused = isScanFocused('vocab', item.id);
 
     return (
       <TouchableOpacity
@@ -271,6 +341,7 @@ export default function AACBoardScreen() {
             borderColor: settings.theme === 'highContrast' ? palette.border : '#DDD',
             flex: 1 / numColumns,
           },
+          focused && scanRingStyle,
         ]}
         onPress={() => handleButtonPress(item)}
         activeOpacity={0.7}
@@ -281,6 +352,7 @@ export default function AACBoardScreen() {
         accessibilityHint={
           isNavButton ? 'Opens a new vocabulary page' : 'Adds this word to your sentence'
         }
+        accessibilityState={{ selected: focused }}
       >
         {item.icon && (
           <Ionicons name={item.icon} size={20} color={buttonTextColor} style={styles.buttonIcon} />
@@ -294,7 +366,7 @@ export default function AACBoardScreen() {
         </Text>
       </TouchableOpacity>
     );
-  }, [handleButtonPress, numColumns, palette, settings.theme]);
+  }, [handleButtonPress, numColumns, palette, settings.theme, isScanFocused]);
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
@@ -371,7 +443,7 @@ export default function AACBoardScreen() {
           {/* Backspace */}
           <TouchableOpacity
             onPress={removeLastWord}
-            style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }]}
+            style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }, isScanFocused('action', 'backspace') && scanRingStyle]}
             accessibilityRole="button"
             accessibilityLabel="Delete last word"
             disabled={sentenceWords.length === 0}
@@ -382,7 +454,7 @@ export default function AACBoardScreen() {
           {/* Clear */}
           <TouchableOpacity
             onPress={clearSentence}
-            style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }]}
+            style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }, isScanFocused('action', 'clear') && scanRingStyle]}
             accessibilityRole="button"
             accessibilityLabel="Clear sentence"
             disabled={sentenceWords.length === 0}
@@ -393,7 +465,7 @@ export default function AACBoardScreen() {
           {/* Speak */}
           <TouchableOpacity
             onPress={speakSentence}
-            style={[styles.speakBtn, { backgroundColor: palette.primary }]}
+            style={[styles.speakBtn, { backgroundColor: palette.primary }, isScanFocused('action', 'speak') && scanRingStyle]}
             accessibilityRole="button"
             accessibilityLabel={
               sentenceWords.length > 0
@@ -402,6 +474,7 @@ export default function AACBoardScreen() {
             }
             accessibilityHint="Reads your sentence aloud"
             disabled={sentenceWords.length === 0}
+            accessibilityState={{ selected: isScanFocused('action', 'speak') }}
           >
             <Ionicons name="volume-high" size={26} color={palette.buttonText} />
           </TouchableOpacity>
@@ -421,6 +494,83 @@ export default function AACBoardScreen() {
 
       {/* Voice preset picker */}
       <VoicePresetPicker activePreset={voicePreset} onSelect={setVoicePreset} />
+
+      {/* Scan control bar */}
+      <View style={[styles.scanBar, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+        <TouchableOpacity
+          onPress={toggleScan}
+          style={[styles.scanToggle, { backgroundColor: scanActive ? '#FF6600' : palette.chipBg }]}
+          accessibilityRole="button"
+          accessibilityLabel={scanActive ? 'Stop switch scanning' : 'Start switch scanning'}
+          accessibilityState={{ selected: scanActive }}
+        >
+          <Ionicons name={scanActive ? 'stop' : 'scan-outline'} size={16} color={scanActive ? '#FFF' : palette.text} />
+          <Text style={[styles.scanToggleText, { color: scanActive ? '#FFF' : palette.text }]}>
+            {scanActive ? 'Scanning' : 'Scan'}
+          </Text>
+        </TouchableOpacity>
+        {scanActive && (
+          <>
+            <TouchableOpacity
+              onPress={() => {
+                const state = getScanState();
+                const next = state.scanMode === 'auto' ? 'step' : 'auto';
+                setScanMode(next);
+                stopScan();
+                setScanItems(scanItemList.current);
+                startScan();
+              }}
+              style={[styles.scanOptionBtn, { backgroundColor: palette.chipBg }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Switch to ${getScanState().scanMode === 'auto' ? 'step' : 'auto'} scan`}
+            >
+              <Text style={[styles.scanOptionText, { color: palette.text }]}>
+                {getScanState().scanMode === 'auto' ? 'Auto' : 'Step'}
+              </Text>
+            </TouchableOpacity>
+            {getScanState().scanMode === 'auto' && (
+              <>
+                <TouchableOpacity
+                  onPress={() => { setScanSpeed(getScanState().scanSpeed + 500); stopScan(); setScanItems(scanItemList.current); startScan(); }}
+                  style={[styles.scanOptionBtn, { backgroundColor: palette.chipBg }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Slower scanning"
+                >
+                  <Text style={[styles.scanOptionText, { color: palette.text }]}>Slower</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => { setScanSpeed(getScanState().scanSpeed - 500); stopScan(); setScanItems(scanItemList.current); startScan(); }}
+                  style={[styles.scanOptionBtn, { backgroundColor: palette.chipBg }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Faster scanning"
+                >
+                  <Text style={[styles.scanOptionText, { color: palette.text }]}>Faster</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            {getScanState().scanMode === 'step' && (
+              <>
+                <TouchableOpacity
+                  onPress={advanceScan}
+                  style={[styles.scanOptionBtn, { backgroundColor: palette.info }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Move to next item"
+                >
+                  <Text style={[styles.scanOptionText, { color: palette.buttonText }]}>Next</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={selectCurrent}
+                  style={[styles.scanOptionBtn, { backgroundColor: palette.primary }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Select current item"
+                >
+                  <Text style={[styles.scanOptionText, { color: palette.buttonText }]}>Select</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </>
+        )}
+      </View>
 
       {/* Display mode overlay */}
       <DisplayMode
@@ -504,12 +654,13 @@ export default function AACBoardScreen() {
             horizontal
             keyExtractor={(item, i) => `${typeof item === 'string' ? item : item.word}-${i}`}
             showsHorizontalScrollIndicator={false}
-            renderItem={({ item }) => {
+            renderItem={({ item, index }) => {
               const word = typeof item === 'string' ? item : item.word;
               const reason = typeof item === 'string' ? null : item.reason;
+              const sugFocused = isScanFocused('suggestion', `sug-${index}`);
               return (
                 <TouchableOpacity
-                  style={[styles.suggestionChip, { backgroundColor: palette.chipBg, borderColor: palette.border }]}
+                  style={[styles.suggestionChip, { backgroundColor: palette.chipBg, borderColor: palette.border }, sugFocused && scanRingStyle]}
                   onPress={() => handleSuggestionPress(word)}
                   accessibilityRole="button"
                   accessibilityLabel={`Suggestion: ${word}${reason ? `. ${reason}` : ''}`}
@@ -670,4 +821,27 @@ const styles = StyleSheet.create({
   buttonIcon: { marginBottom: 2 },
   buttonLabel: { fontSize: 15, fontWeight: '600', textAlign: 'center' },
   buttonLabelSmall: { fontSize: 13 },
+  scanBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  scanToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    gap: 4,
+  },
+  scanToggleText: { fontSize: 13, fontWeight: '600' },
+  scanOptionBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  scanOptionText: { fontSize: 12, fontWeight: '600' },
 });
