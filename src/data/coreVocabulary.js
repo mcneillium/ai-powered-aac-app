@@ -245,14 +245,34 @@ export function getPageIds() {
 
 /**
  * Get a specific page by ID.
+ * For the home page, merges any custom vocabulary items at the end.
  */
 export function getPage(pageId) {
-  return corePages[pageId] || null;
+  const page = corePages[pageId] || null;
+  if (!page) return null;
+  if (pageId === 'home') {
+    return { ...page, buttons: [...page.buttons, ...getCustomButtons()] };
+  }
+  return page;
+}
+
+// Lazy import to avoid circular dependency at module load time.
+// getCustomButtons() returns [] if custom vocab hasn't loaded yet.
+let _getCustomButtons = null;
+function getCustomButtons() {
+  if (!_getCustomButtons) {
+    try {
+      _getCustomButtons = require('../services/customVocabStore').getCustomButtons;
+    } catch {
+      return [];
+    }
+  }
+  return _getCustomButtons();
 }
 
 /**
  * Get the home page.
  */
 export function getHomePage() {
-  return corePages.home;
+  return getPage('home');
 }

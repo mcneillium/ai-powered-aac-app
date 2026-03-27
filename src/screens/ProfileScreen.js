@@ -117,6 +117,18 @@ export default function ProfileScreen() {
           <MaterialIcons name="insights" size={20} color={palette.buttonText} />
           <Text style={[styles.actionText, { color: palette.buttonText }]}>Insights</Text>
         </TouchableOpacity>
+      </View>
+
+      <View style={[styles.actions, { marginTop: spacing.sm }]}>
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: palette.info }]}
+          onPress={() => navigation.navigate('VocabManager')}
+          accessibilityRole="button"
+          accessibilityLabel="Manage custom vocabulary"
+        >
+          <MaterialIcons name="library-add" size={20} color={palette.buttonText} />
+          <Text style={[styles.actionText, { color: palette.buttonText }]}>Vocabulary</Text>
+        </TouchableOpacity>
 
         {user ? (
           <TouchableOpacity

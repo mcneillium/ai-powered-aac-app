@@ -39,10 +39,12 @@ import SignupScreen from './src/screens/SignupScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import CameraScreen from './src/screens/CameraScreen';
 import InsightsScreen from './src/screens/InsightsScreen';
+import VocabManagerScreen from './src/screens/VocabManagerScreen';
 
 // Non-blocking model load
 import { loadImprovedModel } from './src/services/improvedModelLoader';
 import { loadAIProfile, recordSessionStart } from './src/services/aiProfileStore';
+import { loadCustomVocab } from './src/services/customVocabStore';
 
 const Tab = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -55,6 +57,7 @@ loadImprovedModel().catch(err => console.warn('Model load failed (non-blocking):
 loadAIProfile()
   .then(() => recordSessionStart())
   .catch(err => console.warn('AI profile load failed (non-blocking):', err));
+loadCustomVocab().catch(err => console.warn('Custom vocab load failed (non-blocking):', err));
 
 const TAB_ICONS = {
   'AAC Board': 'grid-outline',
@@ -203,6 +206,11 @@ function RootNavigator() {
         name="Insights"
         component={InsightsScreen}
         options={{ title: 'Communication Insights' }}
+      />
+      <RootStack.Screen
+        name="VocabManager"
+        component={VocabManagerScreen}
+        options={{ title: 'Manage Vocabulary' }}
       />
       <RootStack.Screen
         name="Login"
