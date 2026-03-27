@@ -17,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette } from '../theme';
+import { t } from '../i18n/strings';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -29,7 +30,7 @@ export default function DisplayMode({ visible, onClose, text, mode = 'display' }
   const isListener = mode === 'listener';
   const bgColor = settings.theme === 'highContrast' ? '#000000' : '#FFFFFF';
   const textColor = settings.theme === 'highContrast' ? '#FFD600' : '#2E2E3A';
-  const displayText = text || (isListener ? 'Waiting for speech...' : 'No sentence to display');
+  const displayText = text || (isListener ? t('waitingForSpeech') : t('noSentenceToDisplay'));
   const hasText = !!text;
 
   // Scale font size based on text length
@@ -51,7 +52,7 @@ export default function DisplayMode({ visible, onClose, text, mode = 'display' }
         onPress={onClose}
         activeOpacity={1}
         accessibilityRole="button"
-        accessibilityLabel="Tap anywhere to close display mode"
+        accessibilityLabel={t('tapToCloseLabel')}
       >
         {/* Mode label */}
         <View style={styles.header}>
@@ -61,7 +62,7 @@ export default function DisplayMode({ visible, onClose, text, mode = 'display' }
             color={palette.textSecondary}
           />
           <Text style={[styles.modeLabel, { color: palette.textSecondary }]}>
-            {isListener ? 'Listener Mode' : 'Display Mode'}
+            {isListener ? t('listenerMode') : t('displayMode')}
           </Text>
         </View>
 
@@ -84,7 +85,7 @@ export default function DisplayMode({ visible, onClose, text, mode = 'display' }
 
         {/* Close hint */}
         <Text style={[styles.hint, { color: palette.textSecondary }]}>
-          Tap anywhere to close
+          {t('tapToClose')}
         </Text>
       </TouchableOpacity>
     </Modal>

@@ -29,6 +29,7 @@ import { speak, stop } from '../services/speechService';
 import { getHomePage, getPage } from '../data/coreVocabulary';
 import { getAISuggestions } from '../services/getAISuggestions';
 import { useOnDevicePrediction } from '../hooks/useOnDevicePrediction';
+import { t } from '../i18n/strings';
 import {
   recordWordSelection,
   recordSentenceSpoken,
@@ -456,7 +457,7 @@ export default function AACBoardScreen() {
         <View style={styles.sentenceWords}>
           {sentenceWords.length === 0 ? (
             <Text style={[styles.placeholder, { color: palette.textSecondary }]}>
-              Tap words to build a sentence
+              {t('tapToSpeak')}
             </Text>
           ) : (
             sentenceWords.map((word, i) => (
@@ -473,7 +474,7 @@ export default function AACBoardScreen() {
             onPress={() => navigation.navigate('Camera')}
             style={[styles.sentenceActionBtn, { backgroundColor: palette.accent }]}
             accessibilityRole="button"
-            accessibilityLabel="Open camera to describe what you see"
+            accessibilityLabel={t('openCamera')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="camera-outline" size={20} color={palette.buttonText} />
@@ -483,7 +484,7 @@ export default function AACBoardScreen() {
             onPress={() => { setShowFavourites(f => !f); setShowHistory(false); }}
             style={[styles.sentenceActionBtn, { backgroundColor: palette.warning }]}
             accessibilityRole="button"
-            accessibilityLabel={showFavourites ? 'Hide favourites' : 'Show favourites'}
+            accessibilityLabel={showFavourites ? t('hideFavourites') : t('showFavourites')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="star" size={20} color={palette.buttonText} />
@@ -494,7 +495,7 @@ export default function AACBoardScreen() {
               onPress={handleToggleFavourite}
               style={[styles.sentenceActionBtn, { backgroundColor: isCurrentFavourite ? palette.warning : palette.chipBg }]}
               accessibilityRole="button"
-              accessibilityLabel={isCurrentFavourite ? 'Remove from favourites' : 'Add to favourites'}
+              accessibilityLabel={isCurrentFavourite ? t('removeFromFavourites') : t('addToFavourites')}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Ionicons name={isCurrentFavourite ? 'star' : 'star-outline'} size={18} color={isCurrentFavourite ? palette.buttonText : palette.text} />
@@ -505,7 +506,7 @@ export default function AACBoardScreen() {
             onPress={() => { setShowHistory(h => !h); setShowFavourites(false); }}
             style={[styles.sentenceActionBtn, { backgroundColor: palette.info }]}
             accessibilityRole="button"
-            accessibilityLabel={showHistory ? 'Hide sentence history' : 'Show sentence history'}
+            accessibilityLabel={showHistory ? t('hideHistory') : t('showHistory')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Ionicons name="time-outline" size={20} color={palette.buttonText} />
@@ -515,7 +516,7 @@ export default function AACBoardScreen() {
             onPress={removeLastWord}
             style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }, isScanFocused('action', 'backspace') && scanRingStyle]}
             accessibilityRole="button"
-            accessibilityLabel="Delete last word"
+            accessibilityLabel={t('deleteLastWord')}
             disabled={sentenceWords.length === 0}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
@@ -526,7 +527,7 @@ export default function AACBoardScreen() {
             onPress={clearSentence}
             style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }, isScanFocused('action', 'clear') && scanRingStyle]}
             accessibilityRole="button"
-            accessibilityLabel="Clear sentence"
+            accessibilityLabel={t('clearSentence')}
             disabled={sentenceWords.length === 0}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
@@ -553,7 +554,7 @@ export default function AACBoardScreen() {
             onPress={() => setDisplayMode('display')}
             style={[styles.sentenceActionBtn, { backgroundColor: palette.chipBg }]}
             accessibilityRole="button"
-            accessibilityLabel="Show sentence on full screen for your conversation partner"
+            accessibilityLabel={t('showOnScreen')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             disabled={sentenceWords.length === 0}
           >
@@ -571,12 +572,12 @@ export default function AACBoardScreen() {
           onPress={toggleScan}
           style={[styles.scanToggle, { backgroundColor: scanActive ? '#FF6600' : palette.chipBg }]}
           accessibilityRole="button"
-          accessibilityLabel={scanActive ? 'Stop switch scanning' : 'Start switch scanning'}
+          accessibilityLabel={scanActive ? t('stopScanning') : t('startScanning')}
           accessibilityState={{ selected: scanActive }}
         >
           <Ionicons name={scanActive ? 'stop' : 'scan-outline'} size={16} color={scanActive ? '#FFF' : palette.text} />
           <Text style={[styles.scanToggleText, { color: scanActive ? '#FFF' : palette.text }]}>
-            {scanActive ? 'Scanning' : 'Scan'}
+            {scanActive ? t('scanning') : t('scan')}
           </Text>
         </TouchableOpacity>
         {scanActive && (
@@ -597,17 +598,17 @@ export default function AACBoardScreen() {
                   onPress={() => changeScanSpeed(500)}
                   style={[styles.scanOptionBtn, { backgroundColor: palette.chipBg }]}
                   accessibilityRole="button"
-                  accessibilityLabel="Slower scanning"
+                  accessibilityLabel={t('scanSlower')}
                 >
-                  <Text style={[styles.scanOptionText, { color: palette.text }]}>Slower</Text>
+                  <Text style={[styles.scanOptionText, { color: palette.text }]}>{t('scanSlower')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => changeScanSpeed(-500)}
                   style={[styles.scanOptionBtn, { backgroundColor: palette.chipBg }]}
                   accessibilityRole="button"
-                  accessibilityLabel="Faster scanning"
+                  accessibilityLabel={t('scanFaster')}
                 >
-                  <Text style={[styles.scanOptionText, { color: palette.text }]}>Faster</Text>
+                  <Text style={[styles.scanOptionText, { color: palette.text }]}>{t('scanFaster')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -617,17 +618,17 @@ export default function AACBoardScreen() {
                   onPress={advanceScan}
                   style={[styles.scanOptionBtn, { backgroundColor: palette.info }]}
                   accessibilityRole="button"
-                  accessibilityLabel="Move to next item"
+                  accessibilityLabel={t('scanNext')}
                 >
-                  <Text style={[styles.scanOptionText, { color: palette.buttonText }]}>Next</Text>
+                  <Text style={[styles.scanOptionText, { color: palette.buttonText }]}>{t('scanNext')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={selectCurrent}
                   style={[styles.scanOptionBtn, { backgroundColor: palette.primary }]}
                   accessibilityRole="button"
-                  accessibilityLabel="Select current item"
+                  accessibilityLabel={t('scanSelect')}
                 >
-                  <Text style={[styles.scanOptionText, { color: palette.buttonText }]}>Select</Text>
+                  <Text style={[styles.scanOptionText, { color: palette.buttonText }]}>{t('scanSelect')}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -652,10 +653,10 @@ export default function AACBoardScreen() {
       {/* Favourites panel */}
       {showFavourites && (
         <View style={[styles.historyPanel, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-          <Text style={[styles.historyTitle, { color: palette.textSecondary }]}>Favourites</Text>
+          <Text style={[styles.historyTitle, { color: palette.textSecondary }]}>{t('favourites')}</Text>
           {favourites.length === 0 ? (
             <Text style={[styles.emptyText, { color: palette.textSecondary }]}>
-              No favourites yet. Build a sentence and tap the star to save it.
+              {t('noFavourites')}
             </Text>
           ) : (
             favourites.slice(0, 8).map((fav) => (
@@ -679,10 +680,10 @@ export default function AACBoardScreen() {
       {/* Sentence history dropdown */}
       {showHistory && (
         <View style={[styles.historyPanel, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-          <Text style={[styles.historyTitle, { color: palette.textSecondary }]}>Recent Sentences</Text>
+          <Text style={[styles.historyTitle, { color: palette.textSecondary }]}>{t('sentenceHistory')}</Text>
           {history.length === 0 ? (
             <Text style={[styles.emptyText, { color: palette.textSecondary }]}>
-              No history yet. Speak a sentence to save it here.
+              {t('noHistory')}
             </Text>
           ) : (
             history.slice(0, 8).map((item, i) => (
@@ -747,7 +748,7 @@ export default function AACBoardScreen() {
             onPress={goHome}
             style={[styles.breadcrumbBtn, { backgroundColor: palette.surface }]}
             accessibilityRole="button"
-            accessibilityLabel="Go to home page"
+            accessibilityLabel={t('goHome')}
           >
             <Ionicons name="home-outline" size={18} color={palette.text} />
             <Text style={[styles.breadcrumbText, { color: palette.text }]}>Home</Text>
@@ -756,10 +757,10 @@ export default function AACBoardScreen() {
             onPress={goBack}
             style={[styles.breadcrumbBtn, { backgroundColor: palette.surface }]}
             accessibilityRole="button"
-            accessibilityLabel="Go back"
+            accessibilityLabel={t('goBack')}
           >
             <Ionicons name="arrow-back" size={18} color={palette.text} />
-            <Text style={[styles.breadcrumbText, { color: palette.text }]}>Back</Text>
+            <Text style={[styles.breadcrumbText, { color: palette.text }]}>{t('goBack')}</Text>
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: palette.text }]}>
             {currentPage.label}

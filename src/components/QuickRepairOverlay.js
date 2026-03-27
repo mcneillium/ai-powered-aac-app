@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { speak } from '../services/speechService';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, radii, spacing } from '../theme';
+import { t } from '../i18n/strings';
 import {
   setScanItems, onScanChange, onScanSelect,
   startScan, stopScan, cleanup as cleanupScan,
@@ -104,8 +105,8 @@ export default function QuickRepairOverlay() {
         style={[styles.fab, { backgroundColor: palette.primary }]}
         onPress={() => setVisible(true)}
         accessibilityRole="button"
-        accessibilityLabel="Quick phrases. Tap for instant communication repair phrases like wait, yes, no, help."
-        accessibilityHint="Opens quick repair phrase panel"
+        accessibilityLabel={t('quickPhrasesLabel')}
+        accessibilityHint={t('quickPhrasesHint')}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         <Ionicons name="flash" size={24} color={palette.buttonText} />
@@ -122,12 +123,12 @@ export default function QuickRepairOverlay() {
         <View style={[styles.overlay, { backgroundColor: palette.overlay }]}>
           <View style={[styles.panel, { backgroundColor: palette.cardBg }]}>
             <View style={styles.header}>
-              <Text style={[styles.title, { color: palette.text }]}>Quick Phrases</Text>
+              <Text style={[styles.title, { color: palette.text }]}>{t('quickPhrases')}</Text>
               <TouchableOpacity
                 onPress={() => setVisible(false)}
                 style={[styles.closeBtn, { backgroundColor: palette.danger }, scanFocusId === 'close_repair' && scanRing]}
                 accessibilityRole="button"
-                accessibilityLabel="Close quick phrases"
+                accessibilityLabel={t('closeQuickPhrases')}
               >
                 <Ionicons name="close" size={24} color={palette.buttonText} />
               </TouchableOpacity>
@@ -139,17 +140,17 @@ export default function QuickRepairOverlay() {
                 {getScanState().scanMode === 'step' ? (
                   <>
                     <TouchableOpacity onPress={advanceScan} style={[styles.scanBtn, { backgroundColor: palette.info }]}
-                      accessibilityRole="button" accessibilityLabel="Next phrase">
-                      <Text style={[styles.scanBtnText, { color: palette.buttonText }]}>Next</Text>
+                      accessibilityRole="button" accessibilityLabel={t('scanNext')}>
+                      <Text style={[styles.scanBtnText, { color: palette.buttonText }]}>{t('scanNext')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={selectCurrent} style={[styles.scanBtn, { backgroundColor: palette.primary }]}
-                      accessibilityRole="button" accessibilityLabel="Select phrase">
-                      <Text style={[styles.scanBtnText, { color: palette.buttonText }]}>Select</Text>
+                      accessibilityRole="button" accessibilityLabel={t('scanSelect')}>
+                      <Text style={[styles.scanBtnText, { color: palette.buttonText }]}>{t('scanSelect')}</Text>
                     </TouchableOpacity>
                   </>
                 ) : (
                   <Text style={[styles.scanHint, { color: palette.textSecondary }]}>
-                    Scanning — tap or press switch to select
+                    {t('scanningSelectHint')}
                   </Text>
                 )}
               </View>

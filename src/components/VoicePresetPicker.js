@@ -8,6 +8,7 @@ import { View, Text, TouchableOpacity, StyleSheet, FlatList } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { voicePresets } from '../services/speechService';
 import { getPalette, spacing, radii } from '../theme';
+import { t } from '../i18n/strings';
 import { useSettings } from '../contexts/SettingsContext';
 
 const PRESET_LIST = Object.entries(voicePresets).map(([id, preset]) => ({
@@ -41,7 +42,7 @@ export default function VoicePresetPicker({ activePreset, onSelect }) {
               ]}
               onPress={() => onSelect(item.id)}
               accessibilityRole="button"
-              accessibilityLabel={`Voice style: ${item.label}`}
+              accessibilityLabel={`${t('voiceStyle')}: ${item.label}`}
               accessibilityState={{ selected: isActive }}
             >
               <Ionicons

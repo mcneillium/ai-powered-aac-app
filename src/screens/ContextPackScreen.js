@@ -14,6 +14,7 @@ import { getPalette, radii, spacing } from '../theme';
 import { speak } from '../services/speechService';
 import { getAllContextPacks, getContextPack } from '../data/contextPacks';
 import { StatusBar } from 'expo-status-bar';
+import { t } from '../i18n/strings';
 
 const CATEGORY_COLORS = {
   request: '#2979FF',
@@ -52,7 +53,7 @@ export default function ContextPackScreen() {
         ]}
         onPress={() => setActivePackId(isActive ? null : item.id)}
         accessibilityRole="button"
-        accessibilityLabel={`${item.label} context pack`}
+        accessibilityLabel={`${item.label} ${t('contextPack')}`}
         accessibilityState={{ selected: isActive }}
       >
         <Ionicons
@@ -114,9 +115,9 @@ export default function ContextPackScreen() {
       ) : (
         <View style={styles.emptyState}>
           <Ionicons name="apps-outline" size={48} color={palette.textSecondary} />
-          <Text style={[styles.emptyTitle, { color: palette.text }]}>Choose a context</Text>
+          <Text style={[styles.emptyTitle, { color: palette.text }]}>{t('chooseContext')}</Text>
           <Text style={[styles.emptySubtitle, { color: palette.textSecondary }]}>
-            Tap a situation above to see relevant phrases
+            {t('chooseContextHint')}
           </Text>
         </View>
       )}
