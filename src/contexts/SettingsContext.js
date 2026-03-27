@@ -17,6 +17,8 @@ const defaultSettings = {
   speechPitch: 1.0,
   speechVoice: null, // null = system default
   aiPersonalisationEnabled: true, // learn from user input to improve suggestions
+  scanMode: 'auto',   // 'auto' | 'step'
+  scanSpeed: 1500,     // ms between auto-scan steps
 };
 
 export const SettingsContext = createContext({

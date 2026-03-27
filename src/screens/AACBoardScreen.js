@@ -91,30 +91,42 @@ export default function AACBoardScreen() {
   }, []);
 
   // ── Switch scanning ──
-  // Build the ordered scan item list: action buttons first, then vocab grid
-  const actionItems = [
-    { type: 'action', id: 'speak', action: speakSentence, label: 'Speak' },
-    { type: 'action', id: 'backspace', action: removeLastWord, label: 'Delete' },
-    { type: 'action', id: 'clear', action: clearSentence, label: 'Clear' },
-  ];
-
+  // Scan order: vocab grid first (main communication), then suggestions, then actions last.
+  // This puts the most-used items at the start of the scan cycle.
   const scanItemList = useRef([]);
 
+  // Use refs for action callbacks to avoid stale closures in scan select handler
+  const speakRef = useRef(speakSentence);
+  const backspaceRef = useRef(removeLastWord);
+  const clearRef = useRef(clearSentence);
+  const buttonPressRef = useRef(handleButtonPress);
+  const suggestionPressRef = useRef(handleSuggestionPress);
+  useEffect(() => { speakRef.current = speakSentence; }, [speakSentence]);
+  useEffect(() => { backspaceRef.current = removeLastWord; }, [removeLastWord]);
+  useEffect(() => { clearRef.current = clearSentence; }, [clearSentence]);
+  useEffect(() => { buttonPressRef.current = handleButtonPress; }, [handleButtonPress]);
+  useEffect(() => { suggestionPressRef.current = handleSuggestionPress; }, [handleSuggestionPress]);
+
   useEffect(() => {
-    // Rebuild scan items when page or suggestions change
+    // Rebuild scan items: vocab → suggestions → actions
     const vocabItems = currentPage.buttons.map(b => ({
       type: 'vocab', id: b.id, button: b, label: b.label,
     }));
     const suggItems = suggestions.map((s, i) => ({
       type: 'suggestion', id: `sug-${i}`, word: typeof s === 'string' ? s : s.word, label: typeof s === 'string' ? s : s.word,
     }));
-    scanItemList.current = [...actionItems, ...vocabItems, ...suggItems];
+    const actionItems = [
+      { type: 'action', id: 'speak', label: 'Speak' },
+      { type: 'action', id: 'backspace', label: 'Delete' },
+      { type: 'action', id: 'clear', label: 'Clear' },
+    ];
+    scanItemList.current = [...vocabItems, ...suggItems, ...actionItems];
     if (scanActive) {
       setScanItems(scanItemList.current);
     }
   }, [currentPage, suggestions, scanActive]);
 
-  // Register scan callbacks
+  // Register scan callbacks once — use refs to avoid stale closures
   useEffect(() => {
     onScanChange(({ currentIndex, isRunning }) => {
       setScanFocusIndex(isRunning ? currentIndex : -1);
@@ -122,28 +134,61 @@ export default function AACBoardScreen() {
     onScanSelect(({ item }) => {
       if (!item) return;
       if (item.type === 'action') {
-        item.action();
+        if (item.id === 'speak') speakRef.current();
+        else if (item.id === 'backspace') backspaceRef.current();
+        else if (item.id === 'clear') clearRef.current();
       } else if (item.type === 'vocab') {
-        handleButtonPress(item.button);
+        buttonPressRef.current(item.button);
       } else if (item.type === 'suggestion') {
-        handleSuggestionPress(item.word);
+        suggestionPressRef.current(item.word);
       }
     });
     return () => { cleanupScan(); };
-  }, [handleButtonPress, handleSuggestionPress, speakSentence, removeLastWord, clearSentence]);
+  }, []);
+
+  // Initialize scan service from persisted settings
+  useEffect(() => {
+    if (settings.scanMode) setScanMode(settings.scanMode);
+    if (settings.scanSpeed) setScanSpeed(settings.scanSpeed);
+  }, []);
+
+  const { updateSettings } = useSettings();
 
   const toggleScan = useCallback(() => {
     if (scanActive) {
       stopScan();
       setScanActive(false);
     } else {
+      setScanMode(settings.scanMode || 'auto');
+      setScanSpeed(settings.scanSpeed || 1500);
       setScanItems(scanItemList.current);
       startScan();
       setScanActive(true);
     }
-  }, [scanActive]);
+  }, [scanActive, settings.scanMode, settings.scanSpeed]);
 
-  // Determine if a specific item is the current scan focus
+  const changeScanMode = useCallback((newMode) => {
+    setScanMode(newMode);
+    updateSettings({ scanMode: newMode });
+    if (scanActive) {
+      stopScan();
+      setScanItems(scanItemList.current);
+      startScan();
+    }
+  }, [scanActive, updateSettings]);
+
+  const changeScanSpeed = useCallback((delta) => {
+    const state = getScanState();
+    const newSpeed = Math.max(500, Math.min(5000, state.scanSpeed + delta));
+    setScanSpeed(newSpeed);
+    updateSettings({ scanSpeed: newSpeed });
+    if (scanActive) {
+      stopScan();
+      setScanItems(scanItemList.current);
+      startScan();
+    }
+  }, [scanActive, updateSettings]);
+
   const isScanFocused = useCallback((type, id) => {
     if (!scanActive || scanFocusIndex < 0) return false;
     const focused = scanItemList.current[scanFocusIndex];
@@ -512,14 +557,7 @@ export default function AACBoardScreen() {
         {scanActive && (
           <>
             <TouchableOpacity
-              onPress={() => {
-                const state = getScanState();
-                const next = state.scanMode === 'auto' ? 'step' : 'auto';
-                setScanMode(next);
-                stopScan();
-                setScanItems(scanItemList.current);
-                startScan();
-              }}
+              onPress={() => changeScanMode(getScanState().scanMode === 'auto' ? 'step' : 'auto')}
               style={[styles.scanOptionBtn, { backgroundColor: palette.chipBg }]}
               accessibilityRole="button"
               accessibilityLabel={`Switch to ${getScanState().scanMode === 'auto' ? 'step' : 'auto'} scan`}
@@ -531,7 +569,7 @@ export default function AACBoardScreen() {
             {getScanState().scanMode === 'auto' && (
               <>
                 <TouchableOpacity
-                  onPress={() => { setScanSpeed(getScanState().scanSpeed + 500); stopScan(); setScanItems(scanItemList.current); startScan(); }}
+                  onPress={() => changeScanSpeed(500)}
                   style={[styles.scanOptionBtn, { backgroundColor: palette.chipBg }]}
                   accessibilityRole="button"
                   accessibilityLabel="Slower scanning"
@@ -539,7 +577,7 @@ export default function AACBoardScreen() {
                   <Text style={[styles.scanOptionText, { color: palette.text }]}>Slower</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => { setScanSpeed(getScanState().scanSpeed - 500); stopScan(); setScanItems(scanItemList.current); startScan(); }}
+                  onPress={() => changeScanSpeed(-500)}
                   style={[styles.scanOptionBtn, { backgroundColor: palette.chipBg }]}
                   accessibilityRole="button"
                   accessibilityLabel="Faster scanning"
