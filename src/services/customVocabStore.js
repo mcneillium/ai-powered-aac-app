@@ -43,30 +43,52 @@ export async function loadCustomVocab() {
   loaded = true;
 
   // 2. Merge remote (non-blocking)
+  await mergeRemote();
+
+  return customItems;
+}
+
+/**
+ * Force a fresh read from Firebase and merge into local state.
+ * Call from pull-to-refresh in VocabManagerScreen.
+ */
+export async function refreshFromFirebase() {
+  await mergeRemote();
+  return customItems;
+}
+
+async function mergeRemote() {
   try {
     const uid = getAuth().currentUser?.uid;
-    if (uid) {
-      const db = getDatabase();
-      const snap = await fbGet(ref(db, `customVocab/${uid}`));
-      if (snap.exists()) {
-        const remote = snap.val();
-        if (Array.isArray(remote)) {
-          // Merge: remote items not in local get added
-          const localIds = new Set(customItems.map(i => i.id));
-          for (const item of remote) {
-            if (!localIds.has(item.id)) {
-              customItems.push(item);
-            }
-          }
-          await saveLocal();
-        }
+    if (!uid) return;
+    const db = getDatabase();
+    const snap = await fbGet(ref(db, `customVocab/${uid}`));
+    if (!snap.exists()) return;
+    const remote = snap.val();
+    if (!Array.isArray(remote)) return;
+
+    const localById = new Map(customItems.map(i => [i.id, i]));
+    let changed = false;
+
+    for (const remoteItem of remote) {
+      const local = localById.get(remoteItem.id);
+      if (!local) {
+        // New remote item — add it
+        customItems.push(remoteItem);
+        changed = true;
+      } else if ((remoteItem.updatedAt || 0) > (local.updatedAt || 0)) {
+        // Remote is newer — update local fields
+        local.word = remoteItem.word;
+        local.category = remoteItem.category;
+        local.updatedAt = remoteItem.updatedAt;
+        changed = true;
       }
     }
+
+    if (changed) await saveLocal();
   } catch {
     // Firebase unavailable — local data is fine
   }
-
-  return customItems;
 }
 
 export function getCustomVocab() {
@@ -100,6 +122,7 @@ export async function addCustomVocabItem(word, category = 'noun', source = 'manu
     category,
     source,
     createdAt: Date.now(),
+    updatedAt: Date.now(),
   };
   customItems.push(entry);
   await saveLocal();
@@ -123,6 +146,7 @@ export async function updateCustomVocabItem(id, updates) {
   if (updates.category !== undefined) {
     item.category = updates.category;
   }
+  item.updatedAt = Date.now();
 
   await saveLocal();
   syncToFirebase();

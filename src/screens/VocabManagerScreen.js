@@ -14,7 +14,7 @@ import { getPalette, spacing, radii, shadows } from '../theme';
 import {
   loadCustomVocab, getCustomVocab, addCustomVocabItem,
   removeCustomVocabItem, updateCustomVocabItem,
-  getVocabRequests, dismissVocabRequest,
+  getVocabRequests, dismissVocabRequest, refreshFromFirebase,
 } from '../services/customVocabStore';
 import { StatusBar } from 'expo-status-bar';
 
@@ -50,7 +50,9 @@ export default function VocabManagerScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await load();
+    await refreshFromFirebase();
+    setVocab([...getCustomVocab()]);
+    setRequests(await getVocabRequests());
     setRefreshing(false);
   };
 
