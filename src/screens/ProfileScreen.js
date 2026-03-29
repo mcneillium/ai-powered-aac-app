@@ -45,18 +45,47 @@ export default function ProfileScreen() {
               if (!currentUser) return;
               const uid = currentUser.uid;
 
-              // Delete user data from database
+              // Delete all user data from Firebase
               try {
                 const db = getDatabase();
-                await remove(ref(db, `users/${uid}`));
-                await remove(ref(db, `userSettings/${uid}`));
+                await Promise.all([
+                  remove(ref(db, `users/${uid}`)),
+                  remove(ref(db, `userSettings/${uid}`)),
+                  remove(ref(db, `userLogs/${uid}`)),
+                  remove(ref(db, `userSync/${uid}`)),
+                  remove(ref(db, `customVocab/${uid}`)),
+                  remove(ref(db, `vocabRequests/${uid}`)),
+                ]);
               } catch (dbErr) {
-                console.warn('Could not remove user data:', dbErr);
+                console.warn('Could not remove some user data:', dbErr);
+              }
+
+              // Clear all user-related local data
+              try {
+                await AsyncStorage.multiRemove([
+                  '@aac_settings',
+                  '@aac_ai_profile',
+                  '@aac_sentence_history',
+                  '@aac_favourites',
+                  '@aac_custom_vocab',
+                  '@aac_custom_vocab_deleted',
+                  '@aac_vocab_requests',
+                  '@aac_feedback_queue',
+                  'userInteractionLog',
+                  'wordPredictionModel',
+                  'wordFrequencyModel',
+                  'currentSessionId',
+                  'lastActivity',
+                  'logLevel',
+                  'savedEmotion',
+                ]);
+              } catch (localErr) {
+                console.warn('Could not clear some local data:', localErr);
               }
 
               // Delete auth account
               await deleteUser(currentUser);
-              Alert.alert('Account Deleted', 'Your account has been permanently deleted.');
+              Alert.alert('Account Deleted', 'Your account and all associated data have been permanently deleted.');
             } catch (error) {
               if (error.code === 'auth/requires-recent-login') {
                 Alert.alert(

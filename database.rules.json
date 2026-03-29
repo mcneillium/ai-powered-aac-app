@@ -57,10 +57,18 @@
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid",
         "$logId": {
-          ".validate": "newData.hasChildren(['action', 'timestamp'])",
+          ".validate": "newData.hasChildren(['action', 'timestamp']) && newData.numChildren() <= 15",
           "action": { ".validate": "newData.isString() && newData.val().length <= 200" },
           "timestamp": { ".validate": "newData.isNumber()" },
-          "level": { ".validate": "newData.isString()" }
+          "level": { ".validate": "newData.isString() && newData.val().length <= 10" },
+          "sessionId": { ".validate": "newData.isString() && newData.val().length <= 100" },
+          "targetUserId": { ".validate": "newData.isString() && newData.val().length <= 128" },
+          "carerId": { ".validate": "newData.isString() && newData.val().length <= 128" },
+          "synced": { ".validate": "newData.isBoolean()" },
+          "syncTimestamp": { ".validate": "true" },
+          "serverTimestamp": { ".validate": "true" },
+          "count": { ".validate": "newData.isNumber()" },
+          "deviceInfo": { ".validate": "newData.numChildren() <= 5" }
         }
       }
     },

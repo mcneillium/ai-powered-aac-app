@@ -83,7 +83,14 @@ async function processLogQueue() {
     logQueue = []; // Clear the queue
     
     storedLogs = [...storedLogs, ...logsToAdd];
-    
+
+    // Cap local log storage at 500 entries to prevent unbounded growth.
+    // Oldest entries are dropped first.
+    const MAX_LOCAL_LOGS = 500;
+    if (storedLogs.length > MAX_LOCAL_LOGS) {
+      storedLogs = storedLogs.slice(storedLogs.length - MAX_LOCAL_LOGS);
+    }
+
     // Store logs back to AsyncStorage
     await AsyncStorage.setItem('userInteractionLog', JSON.stringify(storedLogs));
     
