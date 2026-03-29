@@ -2,17 +2,23 @@
 // Local-first store for caregiver-managed custom vocabulary.
 // Custom words appear alongside core vocabulary on the AAC Board.
 //
-// Storage strategy:
-// - AsyncStorage is the primary store (always works offline)
-// - Firebase syncs when a user is logged in (non-blocking)
-// - On load: reads local first, then merges remote if available
-// - On write: saves locally immediately, then pushes to Firebase
+// Storage:
+// - AsyncStorage: primary (always works offline)
+// - Firebase /customVocab/{uid}: { items: [...], deletedIds: { id: timestamp } }
+// - On load: local first, then merge remote
+// - On write: save locally, then push to Firebase (non-blocking)
+//
+// Deletion safety:
+// - Deleted item IDs are tracked in a deletedIds set
+// - mergeRemote skips any remote item whose ID is in deletedIds
+// - deletedIds syncs to Firebase so other devices respect deletions
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAuth } from 'firebase/auth';
 import { getDatabase, ref, set as fbSet, get as fbGet } from 'firebase/database';
 
 const CUSTOM_VOCAB_KEY = '@aac_custom_vocab';
+const DELETED_IDS_KEY = '@aac_custom_vocab_deleted';
 const VOCAB_REQUESTS_KEY = '@aac_vocab_requests';
 
 const CATEGORY_COLORS = {
@@ -26,6 +32,7 @@ const CATEGORY_COLORS = {
 };
 
 let customItems = [];
+let deletedIds = {}; // { id: timestamp } — tombstone map
 let loaded = false;
 
 // ── Load ──
@@ -33,25 +40,27 @@ let loaded = false;
 export async function loadCustomVocab() {
   if (loaded) return customItems;
 
-  // 1. Local first (instant, offline-safe)
+  // 1. Local first
   try {
     const raw = await AsyncStorage.getItem(CUSTOM_VOCAB_KEY);
     customItems = raw ? JSON.parse(raw) : [];
   } catch {
     customItems = [];
   }
+  try {
+    const raw = await AsyncStorage.getItem(DELETED_IDS_KEY);
+    deletedIds = raw ? JSON.parse(raw) : {};
+  } catch {
+    deletedIds = {};
+  }
   loaded = true;
 
-  // 2. Merge remote (non-blocking)
+  // 2. Merge remote
   await mergeRemote();
 
   return customItems;
 }
 
-/**
- * Force a fresh read from Firebase and merge into local state.
- * Call from pull-to-refresh in VocabManagerScreen.
- */
 export async function refreshFromFirebase() {
   await mergeRemote();
   return customItems;
@@ -65,27 +74,46 @@ async function mergeRemote() {
     const snap = await fbGet(ref(db, `customVocab/${uid}`));
     if (!snap.exists()) return;
     const remote = snap.val();
-    if (!Array.isArray(remote)) return;
 
-    const localById = new Map(customItems.map(i => [i.id, i]));
-    let changed = false;
-
-    for (const remoteItem of remote) {
-      const local = localById.get(remoteItem.id);
-      if (!local) {
-        // New remote item — add it
-        customItems.push(remoteItem);
-        changed = true;
-      } else if ((remoteItem.updatedAt || 0) > (local.updatedAt || 0)) {
-        // Remote is newer — update local fields
-        local.word = remoteItem.word;
-        local.category = remoteItem.category;
-        local.updatedAt = remoteItem.updatedAt;
-        changed = true;
+    // Merge remote deletedIds into local
+    const remoteDeleted = remote.deletedIds || {};
+    let deletedChanged = false;
+    for (const [id, ts] of Object.entries(remoteDeleted)) {
+      if (!deletedIds[id] || ts > deletedIds[id]) {
+        deletedIds[id] = ts;
+        deletedChanged = true;
       }
     }
 
-    if (changed) await saveLocal();
+    // Remove any local items that were deleted on another device
+    const beforeCount = customItems.length;
+    customItems = customItems.filter(i => !deletedIds[i.id]);
+    if (customItems.length !== beforeCount) deletedChanged = true;
+
+    // Merge remote items
+    const remoteItems = Array.isArray(remote.items) ? remote.items : (Array.isArray(remote) ? remote : []);
+    const localById = new Map(customItems.map(i => [i.id, i]));
+    let itemsChanged = false;
+
+    for (const remoteItem of remoteItems) {
+      // Skip if this item was deleted
+      if (deletedIds[remoteItem.id]) continue;
+
+      const local = localById.get(remoteItem.id);
+      if (!local) {
+        customItems.push(remoteItem);
+        itemsChanged = true;
+      } else if ((remoteItem.updatedAt || 0) > (local.updatedAt || 0)) {
+        local.word = remoteItem.word;
+        local.category = remoteItem.category;
+        local.updatedAt = remoteItem.updatedAt;
+        itemsChanged = true;
+      }
+    }
+
+    if (itemsChanged || deletedChanged) {
+      await saveLocal();
+    }
   } catch {
     // Firebase unavailable — local data is fine
   }
@@ -139,7 +167,6 @@ export async function updateCustomVocabItem(id, updates) {
   if (updates.word !== undefined) {
     const trimmed = updates.word.trim().toLowerCase();
     if (!trimmed) return null;
-    // Check for duplicate (another item with same word)
     if (customItems.some(i => i.id !== id && i.word === trimmed)) return null;
     item.word = trimmed;
   }
@@ -153,10 +180,11 @@ export async function updateCustomVocabItem(id, updates) {
   return item;
 }
 
-// ── Remove ──
+// ── Remove (with tombstone) ──
 
 export async function removeCustomVocabItem(id) {
   customItems = customItems.filter(item => item.id !== id);
+  deletedIds[id] = Date.now();
   await saveLocal();
   syncToFirebase();
 }
@@ -164,14 +192,12 @@ export async function removeCustomVocabItem(id) {
 // ── Vocabulary requests ──
 
 export async function getVocabRequests() {
-  // Local first
   let requests = {};
   try {
     const raw = await AsyncStorage.getItem(VOCAB_REQUESTS_KEY);
     requests = raw ? JSON.parse(raw) : {};
   } catch { /* */ }
 
-  // Merge remote requests if logged in
   try {
     const uid = getAuth().currentUser?.uid;
     if (uid) {
@@ -179,7 +205,6 @@ export async function getVocabRequests() {
       const snap = await fbGet(ref(db, `vocabRequests/${uid}`));
       if (snap.exists()) {
         const remote = snap.val() || {};
-        // Merge: keep the more recent timestamp for each term
         for (const [term, ts] of Object.entries(remote)) {
           if (!requests[term] || ts > requests[term]) {
             requests[term] = ts;
@@ -188,7 +213,7 @@ export async function getVocabRequests() {
         await AsyncStorage.setItem(VOCAB_REQUESTS_KEY, JSON.stringify(requests));
       }
     }
-  } catch { /* Firebase unavailable */ }
+  } catch { /* */ }
 
   return requests;
 }
@@ -201,7 +226,6 @@ export async function dismissVocabRequest(term) {
     await AsyncStorage.setItem(VOCAB_REQUESTS_KEY, JSON.stringify(requests));
   } catch { /* */ }
 
-  // Also remove from Firebase
   try {
     const uid = getAuth().currentUser?.uid;
     if (uid) {
@@ -221,6 +245,7 @@ export async function dismissVocabRequest(term) {
 async function saveLocal() {
   try {
     await AsyncStorage.setItem(CUSTOM_VOCAB_KEY, JSON.stringify(customItems));
+    await AsyncStorage.setItem(DELETED_IDS_KEY, JSON.stringify(deletedIds));
   } catch (e) {
     console.warn('Failed to save custom vocab locally:', e);
   }
@@ -231,6 +256,9 @@ function syncToFirebase() {
     const uid = getAuth().currentUser?.uid;
     if (!uid) return;
     const db = getDatabase();
-    fbSet(ref(db, `customVocab/${uid}`), customItems).catch(() => {});
+    fbSet(ref(db, `customVocab/${uid}`), {
+      items: customItems,
+      deletedIds: deletedIds,
+    }).catch(() => {});
   } catch { /* non-blocking */ }
 }

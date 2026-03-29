@@ -3,7 +3,11 @@
     "users": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid"
+        ".write": "auth != null && auth.uid === $uid",
+        "name": { ".validate": "newData.isString() && newData.val().length <= 100" },
+        "email": { ".validate": "newData.isString()" },
+        "role": { ".validate": "newData.val() === 'user' || newData.val() === 'caregiver'" },
+        "createdAt": { ".validate": "newData.isNumber()" }
       }
     },
     "userSettings": {
@@ -15,13 +19,30 @@
     "customVocab": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid"
+        ".write": "auth != null && auth.uid === $uid",
+        "items": {
+          "$idx": {
+            ".validate": "newData.hasChildren(['id', 'word', 'category'])",
+            "id": { ".validate": "newData.isString()" },
+            "word": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 100" },
+            "category": { ".validate": "newData.val() === 'noun' || newData.val() === 'verb' || newData.val() === 'adjective' || newData.val() === 'social' || newData.val() === 'important' || newData.val() === 'misc' || newData.val() === 'pronoun'" },
+            "source": { ".validate": "newData.isString()" },
+            "createdAt": { ".validate": "newData.isNumber()" },
+            "updatedAt": { ".validate": "newData.isNumber()" }
+          }
+        },
+        "deletedIds": {
+          "$id": { ".validate": "newData.isNumber()" }
+        }
       }
     },
     "vocabRequests": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid"
+        ".write": "auth != null && auth.uid === $uid",
+        "$term": {
+          ".validate": "newData.isNumber()"
+        }
       }
     },
     "$other": {
