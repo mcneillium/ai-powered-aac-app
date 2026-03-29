@@ -371,3 +371,90 @@ exports.ocrToAACPhrases = functions.https.onRequest(async (req, res) => {
     return res.status(500).json({ error: 'Internal server error', extractedText: '', phrases: [] });
   }
 });
+
+// ════════════════════════════════════════════
+// 5. LOG RETENTION — scheduled cleanup
+// ════════════════════════════════════════════
+//
+// Runs daily. Deletes log entries older than 30 days from
+// /userLogs/{uid}. Each user's logs are pruned independently.
+//
+// Deploy: firebase deploy --only functions
+// The schedule uses Cloud Scheduler (requires Blaze plan).
+
+exports.pruneUserLogs = functions.pubsub
+  .schedule('every 24 hours')
+  .timeZone('UTC')
+  .onRun(async () => {
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - THIRTY_DAYS_MS;
+
+    try {
+      const db = admin.database();
+      const usersSnap = await db.ref('userLogs').once('value');
+      if (!usersSnap.exists()) return null;
+
+      const promises = [];
+      usersSnap.forEach((userSnap) => {
+        userSnap.forEach((logSnap) => {
+          const ts = logSnap.val()?.timestamp;
+          if (typeof ts === 'number' && ts < cutoff) {
+            promises.push(logSnap.ref.remove());
+          }
+        });
+      });
+
+      if (promises.length > 0) {
+        await Promise.all(promises);
+        console.log(`pruneUserLogs: removed ${promises.length} entries older than 30 days`);
+      }
+    } catch (error) {
+      console.error('pruneUserLogs error:', error.message);
+    }
+
+    return null;
+  });
+
+// ════════════════════════════════════════════
+// 6. LEGACY LOG CLEANUP — one-time migration
+// ════════════════════════════════════════════
+//
+// Deletes entries at the old shared /userLogs root that were written
+// before the per-uid migration. These entries have no $uid parent —
+// they sit directly under /userLogs/{pushId}.
+//
+// Call once via: curl -X POST https://...cloudfunctions.net/cleanupLegacyLogs
+// After running, this function can be removed.
+
+exports.cleanupLegacyLogs = functions.https.onRequest(async (req, res) => {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+
+  try {
+    const db = admin.database();
+    const snap = await db.ref('userLogs').once('value');
+    if (!snap.exists()) return res.status(200).json({ removed: 0 });
+
+    let removed = 0;
+    const promises = [];
+
+    snap.forEach((child) => {
+      const val = child.val();
+      // Legacy entries are objects with an 'action' field directly (not a uid node).
+      // Per-uid nodes contain nested push IDs, not action/timestamp directly.
+      if (val && typeof val === 'object' && typeof val.action === 'string') {
+        promises.push(child.ref.remove());
+        removed++;
+      }
+    });
+
+    if (promises.length > 0) {
+      await Promise.all(promises);
+    }
+
+    console.log(`cleanupLegacyLogs: removed ${removed} legacy entries`);
+    return res.status(200).json({ removed });
+  } catch (error) {
+    console.error('cleanupLegacyLogs error:', error.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
