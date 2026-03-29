@@ -45,6 +45,16 @@
         }
       }
     },
+    "userSync": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "userLogs": {
+      ".read": false,
+      ".write": "auth != null"
+    },
     "$other": {
       ".read": false,
       ".write": false

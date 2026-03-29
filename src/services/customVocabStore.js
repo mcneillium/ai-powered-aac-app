@@ -67,6 +67,16 @@ export async function refreshFromFirebase() {
 }
 
 async function mergeRemote() {
+  // Conflict policy: DELETE ALWAYS WINS.
+  // If any device has deleted an item, it stays deleted everywhere,
+  // regardless of edit timestamps on other devices. This prevents
+  // caregivers from seeing words reappear after intentional removal.
+  //
+  // Merge order enforces this:
+  //   1. Merge deletedIds from both sides (union, keep newest timestamp)
+  //   2. Remove local items that appear in the merged deletedIds
+  //   3. Merge remote items, skipping any in deletedIds
+  //   4. Prune tombstones older than 30 days (keeps the set bounded)
   try {
     const uid = getAuth().currentUser?.uid;
     if (!uid) return;
@@ -75,7 +85,7 @@ async function mergeRemote() {
     if (!snap.exists()) return;
     const remote = snap.val();
 
-    // Merge remote deletedIds into local
+    // Step 1: Merge deletedIds (union, keep newest timestamp per ID)
     const remoteDeleted = remote.deletedIds || {};
     let deletedChanged = false;
     for (const [id, ts] of Object.entries(remoteDeleted)) {
@@ -85,19 +95,18 @@ async function mergeRemote() {
       }
     }
 
-    // Remove any local items that were deleted on another device
+    // Step 2: Remove local items that were deleted on another device
     const beforeCount = customItems.length;
     customItems = customItems.filter(i => !deletedIds[i.id]);
     if (customItems.length !== beforeCount) deletedChanged = true;
 
-    // Merge remote items
+    // Step 3: Merge remote items (skip tombstoned)
     const remoteItems = Array.isArray(remote.items) ? remote.items : (Array.isArray(remote) ? remote : []);
     const localById = new Map(customItems.map(i => [i.id, i]));
     let itemsChanged = false;
 
     for (const remoteItem of remoteItems) {
-      // Skip if this item was deleted
-      if (deletedIds[remoteItem.id]) continue;
+      if (deletedIds[remoteItem.id]) continue; // delete wins
 
       const local = localById.get(remoteItem.id);
       if (!local) {
@@ -108,6 +117,16 @@ async function mergeRemote() {
         local.category = remoteItem.category;
         local.updatedAt = remoteItem.updatedAt;
         itemsChanged = true;
+      }
+    }
+
+    // Step 4: Prune tombstones older than 30 days
+    const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - THIRTY_DAYS;
+    for (const [id, ts] of Object.entries(deletedIds)) {
+      if (ts < cutoff) {
+        delete deletedIds[id];
+        deletedChanged = true;
       }
     }
 
