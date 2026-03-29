@@ -18,9 +18,11 @@ export async function logEvent(action, metadata = {}) {
     ...metadata
   };
 
-  // Push to Firebase
-  const logsRef = ref(db, 'userLogs');
-  push(logsRef, logEntry);
+  // Push to Firebase (per-user path, skip if not logged in)
+  if (currentUser) {
+    const logsRef = ref(db, `userLogs/${currentUser.uid}`);
+    push(logsRef, logEntry).catch(() => {});
+  }
 
   // Also save to AsyncStorage
   try {

@@ -147,7 +147,7 @@ export async function logEvent(action, metadata = {}, level = 'info') {
     // Try to add log immediately to Firebase if online
     if (isOnline && currentUser) {
       try {
-        const logsRef = ref(db, 'userLogs');
+        const logsRef = ref(db, `userLogs/${currentUser.uid}`);
         await push(logsRef, {
           ...logEntry,
           serverTimestamp: serverTimestamp()
@@ -244,7 +244,7 @@ export async function syncLogsToFirebase() {
     console.log(`Syncing ${storedLogs.length} logs to Firebase...`);
     
     // Create a batch of logs in Firebase
-    const logsRef = ref(db, 'userLogs');
+    const logsRef = ref(db, `userLogs/${auth.currentUser.uid}`);
     const promises = storedLogs.map(log => {
       const newLogRef = push(logsRef);
       return set(newLogRef, {
@@ -262,7 +262,7 @@ export async function syncLogsToFirebase() {
     console.log('✅ Logs successfully synced to Firebase');
     
     // Log the sync itself (directly to Firebase)
-    const syncLogRef = push(ref(db, 'userLogs'));
+    const syncLogRef = push(ref(db, `userLogs/${auth.currentUser.uid}`));
     await set(syncLogRef, {
       action: 'logs_synced',
       count: storedLogs.length,

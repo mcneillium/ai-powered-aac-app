@@ -48,12 +48,21 @@
     "userSync": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid"
+        ".write": "auth != null && auth.uid === $uid",
+        "lastActivity": { ".validate": "newData.isString()" }
       }
     },
     "userLogs": {
-      ".read": false,
-      ".write": "auth != null"
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        "$logId": {
+          ".validate": "newData.hasChildren(['action', 'timestamp'])",
+          "action": { ".validate": "newData.isString() && newData.val().length <= 200" },
+          "timestamp": { ".validate": "newData.isNumber()" },
+          "level": { ".validate": "newData.isString()" }
+        }
+      }
     },
     "$other": {
       ".read": false,
