@@ -191,11 +191,11 @@ export default function QuickRepairOverlay() {
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
-    bottom: 80,
+    bottom: 140,
     right: 16,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 6,

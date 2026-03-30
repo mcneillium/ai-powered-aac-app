@@ -441,7 +441,7 @@ export default function AACBoardScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
-      {/* Sentence bar */}
+      {/* Sentence bar — words on top, actions below */}
       <View
         ref={sentenceBarRef}
         style={[styles.sentenceBar, { backgroundColor: palette.surface, borderColor: palette.border }]}
@@ -468,72 +468,8 @@ export default function AACBoardScreen() {
           )}
         </View>
 
+        {/* Action buttons — wrapped row below sentence words */}
         <View style={styles.sentenceActions}>
-          {/* Camera */}
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Camera')}
-            style={[styles.sentenceActionBtn, { backgroundColor: palette.accent }]}
-            accessibilityRole="button"
-            accessibilityLabel={t('openCamera')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="camera-outline" size={20} color={palette.buttonText} />
-          </TouchableOpacity>
-          {/* Favourites toggle */}
-          <TouchableOpacity
-            onPress={() => { setShowFavourites(f => !f); setShowHistory(false); }}
-            style={[styles.sentenceActionBtn, { backgroundColor: palette.warning }]}
-            accessibilityRole="button"
-            accessibilityLabel={showFavourites ? t('hideFavourites') : t('showFavourites')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="star" size={20} color={palette.buttonText} />
-          </TouchableOpacity>
-          {/* Star/unstar current sentence */}
-          {sentenceWords.length > 0 && (
-            <TouchableOpacity
-              onPress={handleToggleFavourite}
-              style={[styles.sentenceActionBtn, { backgroundColor: isCurrentFavourite ? palette.warning : palette.chipBg }]}
-              accessibilityRole="button"
-              accessibilityLabel={isCurrentFavourite ? t('removeFromFavourites') : t('addToFavourites')}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name={isCurrentFavourite ? 'star' : 'star-outline'} size={18} color={isCurrentFavourite ? palette.buttonText : palette.text} />
-            </TouchableOpacity>
-          )}
-          {/* History */}
-          <TouchableOpacity
-            onPress={() => { setShowHistory(h => !h); setShowFavourites(false); }}
-            style={[styles.sentenceActionBtn, { backgroundColor: palette.info }]}
-            accessibilityRole="button"
-            accessibilityLabel={showHistory ? t('hideHistory') : t('showHistory')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="time-outline" size={20} color={palette.buttonText} />
-          </TouchableOpacity>
-          {/* Backspace */}
-          <TouchableOpacity
-            onPress={removeLastWord}
-            style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }, isScanFocused('action', 'backspace') && scanRingStyle]}
-            accessibilityRole="button"
-            accessibilityLabel={t('deleteLastWord')}
-            disabled={sentenceWords.length === 0}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="backspace-outline" size={22} color={palette.buttonText} />
-          </TouchableOpacity>
-          {/* Clear */}
-          <TouchableOpacity
-            onPress={clearSentence}
-            style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }, isScanFocused('action', 'clear') && scanRingStyle]}
-            accessibilityRole="button"
-            accessibilityLabel={t('clearSentence')}
-            disabled={sentenceWords.length === 0}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="trash-outline" size={22} color={palette.buttonText} />
-          </TouchableOpacity>
-          {/* Speak */}
           <TouchableOpacity
             onPress={speakSentence}
             style={[styles.speakBtn, { backgroundColor: palette.primary }, isScanFocused('action', 'speak') && scanRingStyle]}
@@ -543,23 +479,73 @@ export default function AACBoardScreen() {
                 ? `Speak sentence: ${sentenceWords.join(' ')}`
                 : 'Speak button. Build a sentence first.'
             }
-            accessibilityHint="Reads your sentence aloud"
             disabled={sentenceWords.length === 0}
             accessibilityState={{ selected: isScanFocused('action', 'speak') }}
           >
-            <Ionicons name="volume-high" size={26} color={palette.buttonText} />
+            <Ionicons name="volume-high" size={24} color={palette.buttonText} />
           </TouchableOpacity>
-          {/* Display mode: show sentence large for partner */}
           <TouchableOpacity
-            onPress={() => setDisplayMode('display')}
-            style={[styles.sentenceActionBtn, { backgroundColor: palette.chipBg }]}
+            onPress={removeLastWord}
+            style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }, isScanFocused('action', 'backspace') && scanRingStyle]}
             accessibilityRole="button"
-            accessibilityLabel={t('showOnScreen')}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel={t('deleteLastWord')}
             disabled={sentenceWords.length === 0}
           >
-            <Ionicons name="tv-outline" size={18} color={palette.text} />
+            <Ionicons name="backspace-outline" size={20} color={palette.buttonText} />
           </TouchableOpacity>
+          <TouchableOpacity
+            onPress={clearSentence}
+            style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }, isScanFocused('action', 'clear') && scanRingStyle]}
+            accessibilityRole="button"
+            accessibilityLabel={t('clearSentence')}
+            disabled={sentenceWords.length === 0}
+          >
+            <Ionicons name="trash-outline" size={20} color={palette.buttonText} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => { setShowFavourites(f => !f); setShowHistory(false); }}
+            style={[styles.sentenceActionBtn, { backgroundColor: palette.warning }]}
+            accessibilityRole="button"
+            accessibilityLabel={showFavourites ? t('hideFavourites') : t('showFavourites')}
+          >
+            <Ionicons name="star" size={18} color={palette.buttonText} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => { setShowHistory(h => !h); setShowFavourites(false); }}
+            style={[styles.sentenceActionBtn, { backgroundColor: palette.info }]}
+            accessibilityRole="button"
+            accessibilityLabel={showHistory ? t('hideHistory') : t('showHistory')}
+          >
+            <Ionicons name="time-outline" size={18} color={palette.buttonText} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Camera')}
+            style={[styles.sentenceActionBtn, { backgroundColor: palette.accent }]}
+            accessibilityRole="button"
+            accessibilityLabel={t('openCamera')}
+          >
+            <Ionicons name="camera-outline" size={18} color={palette.buttonText} />
+          </TouchableOpacity>
+          {sentenceWords.length > 0 && (
+            <TouchableOpacity
+              onPress={handleToggleFavourite}
+              style={[styles.sentenceActionBtn, { backgroundColor: isCurrentFavourite ? palette.warning : palette.chipBg }]}
+              accessibilityRole="button"
+              accessibilityLabel={isCurrentFavourite ? t('removeFromFavourites') : t('addToFavourites')}
+            >
+              <Ionicons name={isCurrentFavourite ? 'star' : 'star-outline'} size={16} color={isCurrentFavourite ? palette.buttonText : palette.text} />
+            </TouchableOpacity>
+          )}
+          {sentenceWords.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setDisplayMode('display')}
+              style={[styles.sentenceActionBtn, { backgroundColor: palette.chipBg }]}
+              accessibilityRole="button"
+              accessibilityLabel={t('showOnScreen')}
+            >
+              <Ionicons name="tv-outline" size={16} color={palette.text} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -776,12 +762,8 @@ export default function AACBoardScreen() {
         key={`grid-${numColumns}`}
         contentContainerStyle={styles.grid}
         renderItem={renderButton}
-        getItemLayout={(data, index) => ({
-          length: 90,
-          offset: 90 * Math.floor(index / numColumns),
-          index,
-        })}
-        removeClippedSubviews={Platform.OS === 'android'}
+        extraData={scanFocusIndex}
+        removeClippedSubviews={false}
       />
     </View>
   );
@@ -790,35 +772,38 @@ export default function AACBoardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   sentenceBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderBottomWidth: 2,
-    minHeight: 60,
   },
   sentenceWords: {
-    flex: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
+    minHeight: 32,
+    marginBottom: 4,
   },
   sentenceWord: { fontSize: 20, fontWeight: '500', marginRight: 6, paddingVertical: 2 },
   placeholder: { fontSize: 16, fontStyle: 'italic' },
-  sentenceActions: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  sentenceActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 5,
+  },
   sentenceActionBtn: {
-    padding: 7,
+    padding: 6,
     borderRadius: 8,
-    minWidth: 36,
-    minHeight: 36,
+    minWidth: 34,
+    minHeight: 34,
     alignItems: 'center',
     justifyContent: 'center',
   },
   speakBtn: {
-    padding: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderRadius: 8,
-    minWidth: 52,
-    minHeight: 52,
+    minHeight: 34,
     alignItems: 'center',
     justifyContent: 'center',
   },

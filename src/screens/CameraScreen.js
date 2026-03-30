@@ -84,21 +84,28 @@ export default function CombinedImageScreen() {
   };
 
   const processDescribe = async (uri, base64) => {
+    // Safety timeout: always clear loading after 12 seconds max
+    const safetyTimer = setTimeout(() => {
+      setProcessing(false);
+      setSelected(prev => prev?.name ? prev : { uri, name: 'Processing took too long — try again' });
+    }, 12000);
+
     try {
-      const desc = await getImageCaption(uri);
+      // Run caption and AAC phrases in parallel instead of sequentially
+      const captionPromise = getImageCaption(uri).catch(() => 'Could not describe this image');
+      const phrasesPromise = base64
+        ? getImageAACPhrases(base64).catch(() => [])
+        : Promise.resolve([]);
+
+      const [desc, phrases] = await Promise.all([captionPromise, phrasesPromise]);
+
       setSelected({ uri, name: desc });
       speakPhrase(desc);
-
-      if (base64) {
-        try {
-          const phrases = await getImageAACPhrases(base64);
-          if (phrases.length > 0) setAacPhrases(phrases);
-        } catch { /* optional */ }
-      }
+      if (phrases.length > 0) setAacPhrases(phrases);
     } catch {
       setSelected({ uri, name: 'Could not describe this image' });
-      speakPhrase('Could not describe this image');
     } finally {
+      clearTimeout(safetyTimer);
       setProcessing(false);
     }
   };
@@ -109,18 +116,21 @@ export default function CombinedImageScreen() {
       setProcessing(false);
       return;
     }
+
+    const safetyTimer = setTimeout(() => {
+      setProcessing(false);
+      setSelected(prev => prev?.name ? prev : { uri, name: 'Processing took too long — try again' });
+    }, 12000);
+
     try {
       const result = await getOCRAACPhrases(base64);
       setOcrResult(result);
-      if (result.extractedText) {
-        setSelected({ uri, name: result.extractedText });
-      } else {
-        setSelected({ uri, name: 'No text found in this image' });
-      }
+      setSelected({ uri, name: result.extractedText || 'No text found in this image' });
     } catch {
       setOcrResult({ extractedText: '', phrases: [] });
       setSelected({ uri, name: 'Could not read text — try again or check connection' });
     } finally {
+      clearTimeout(safetyTimer);
       setProcessing(false);
     }
   };
