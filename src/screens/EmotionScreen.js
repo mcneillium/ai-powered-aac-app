@@ -15,6 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, spacing, radii } from '../theme';
 import { speak } from '../services/speechService';
+import { addSentenceToHistory } from '../services/sentenceHistoryStore';
+import { recordWordSelection } from '../services/aiProfileStore';
+import DisplayMode from '../components/DisplayMode';
 import { StatusBar } from 'expo-status-bar';
 
 const EMOTIONS = [
@@ -76,6 +79,16 @@ const NEEDS = [
   { id: 'sensory', label: 'Sensory toy', icon: 'cube-outline' },
 ];
 
+const REGULATION = [
+  { id: 'breathe', label: 'Breathe', icon: 'leaf-outline', color: '#26A69A' },
+  { id: 'count', label: 'Count', icon: 'calculator-outline', color: '#5C6BC0' },
+  { id: 'squeeze', label: 'Squeeze', icon: 'hand-left-outline', color: '#7E57C2' },
+  { id: 'music', label: 'Music', icon: 'musical-notes-outline', color: '#42A5F5' },
+  { id: 'quiet_time', label: 'Quiet time', icon: 'volume-mute-outline', color: '#78909C' },
+  { id: 'headphones', label: 'Headphones', icon: 'headset-outline', color: '#5C6BC0' },
+  { id: 'reg_break', label: 'Break', icon: 'pause-outline', color: '#66BB6A' },
+];
+
 function buildSentence(emotion, intensity, cause, need) {
   let sentence = '';
   if (emotion) {
@@ -98,6 +111,7 @@ export default function EmotionScreen() {
   const [intensity, setIntensity] = useState(null);
   const [cause, setCause] = useState(null);
   const [need, setNeed] = useState(null);
+  const [showDisplay, setShowDisplay] = useState(false);
 
   const sentence = buildSentence(emotion, intensity, cause, need);
 
@@ -108,7 +122,19 @@ export default function EmotionScreen() {
       pitch: settings.speechPitch,
       voice: settings.speechVoice,
     });
-  }, [sentence, settings]);
+    // Save to sentence history so it appears in AAC Board history panel
+    addSentenceToHistory(sentence).catch(() => {});
+    // Track emotion word for AI profile learning
+    if (emotion) {
+      recordWordSelection(emotion.label.toLowerCase(), ['i', 'feel'], false).catch(() => {});
+    }
+  }, [sentence, settings, emotion]);
+
+  const speakRegulation = useCallback((item) => {
+    const text = `I want to ${item.label.toLowerCase()}`;
+    speak(text, { rate: settings.speechRate, pitch: settings.speechPitch, voice: settings.speechVoice });
+    addSentenceToHistory(text).catch(() => {});
+  }, [settings]);
 
   const reset = () => {
     setEmotion(null);
@@ -140,17 +166,34 @@ export default function EmotionScreen() {
             <Ionicons name="volume-high" size={22} color={palette.buttonText} />
           </TouchableOpacity>
           {sentence ? (
-            <TouchableOpacity
-              onPress={reset}
-              style={[styles.resetBtn, { backgroundColor: palette.chipBg }]}
-              accessibilityRole="button"
-              accessibilityLabel="Start over"
-            >
-              <Ionicons name="refresh" size={18} color={palette.text} />
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                onPress={() => setShowDisplay(true)}
+                style={[styles.resetBtn, { backgroundColor: palette.chipBg }]}
+                accessibilityRole="button"
+                accessibilityLabel="Show on screen for conversation partner"
+              >
+                <Ionicons name="tv-outline" size={18} color={palette.text} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={reset}
+                style={[styles.resetBtn, { backgroundColor: palette.chipBg }]}
+                accessibilityRole="button"
+                accessibilityLabel="Start over"
+              >
+                <Ionicons name="refresh" size={18} color={palette.text} />
+              </TouchableOpacity>
+            </>
           ) : null}
         </View>
       </View>
+
+      <DisplayMode
+        visible={showDisplay}
+        onClose={() => setShowDisplay(false)}
+        text={sentence}
+        mode="display"
+      />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {/* Step 1: How do you feel? */}
@@ -254,6 +297,23 @@ export default function EmotionScreen() {
           })}
         </View>
 
+        {/* Step 5: Coping / regulation */}
+        <Text style={[styles.stepLabel, { color: palette.text }]}>To help me calm down:</Text>
+        <View style={styles.chipGrid}>
+          {REGULATION.map(r => (
+            <TouchableOpacity
+              key={r.id}
+              style={[styles.regChip, { backgroundColor: r.color }]}
+              onPress={() => speakRegulation(r)}
+              accessibilityRole="button"
+              accessibilityLabel={`I want to ${r.label.toLowerCase()}`}
+            >
+              <Ionicons name={r.icon} size={22} color="#FFF" />
+              <Text style={styles.regLabel}>{r.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         <View style={{ height: 100 }} />
       </ScrollView>
 
@@ -319,4 +379,15 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   needLabel: { fontSize: 13, fontWeight: '600' },
+  regChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radii.pill,
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  regLabel: { color: '#FFF', fontSize: 14, fontWeight: '700' },
 });
