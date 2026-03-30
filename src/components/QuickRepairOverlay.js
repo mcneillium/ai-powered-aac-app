@@ -12,6 +12,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Modal,
   Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { speak } from '../services/speechService';
 import { useSettings } from '../contexts/SettingsContext';
@@ -43,6 +44,9 @@ export default function QuickRepairOverlay() {
   const [scanFocusId, setScanFocusId] = useState(null);
   const { settings } = useSettings();
   const palette = getPalette(settings.theme);
+  const insets = useSafeAreaInsets();
+  // Tab bar height = 60 + insets.bottom. FAB sits 20px above that.
+  const fabBottom = 60 + insets.bottom + 20;
   const wasScanningBefore = useRef(false);
 
   const handlePhrase = useCallback((phrase) => {
@@ -102,7 +106,7 @@ export default function QuickRepairOverlay() {
     <>
       {/* Floating trigger button — always visible */}
       <TouchableOpacity
-        style={[styles.fab, { backgroundColor: palette.primary }]}
+        style={[styles.fab, { backgroundColor: palette.primary, bottom: fabBottom }]}
         onPress={() => setVisible(true)}
         accessibilityRole="button"
         accessibilityLabel={t('quickPhrasesLabel')}
@@ -191,7 +195,6 @@ export default function QuickRepairOverlay() {
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
-    bottom: 140,
     right: 16,
     width: 48,
     height: 48,

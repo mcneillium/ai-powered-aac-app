@@ -85,25 +85,35 @@ export default function CombinedImageScreen() {
 
   const processDescribe = async (uri, base64) => {
     // Safety timeout: always clear loading after 12 seconds max
+    let resolved = false;
     const safetyTimer = setTimeout(() => {
-      setProcessing(false);
-      setSelected(prev => prev?.name ? prev : { uri, name: 'Processing took too long — try again' });
+      if (!resolved) {
+        resolved = true;
+        setProcessing(false);
+        setSelected({ uri, name: 'Processing took too long — try again' });
+      }
     }, 12000);
 
     try {
-      // Run caption and AAC phrases in parallel instead of sequentially
-      const captionPromise = getImageCaption(uri).catch(() => 'Could not describe this image');
+      const captionPromise = getImageCaption(uri).catch(() => null);
       const phrasesPromise = base64
         ? getImageAACPhrases(base64).catch(() => [])
         : Promise.resolve([]);
 
       const [desc, phrases] = await Promise.all([captionPromise, phrasesPromise]);
 
-      setSelected({ uri, name: desc });
-      speakPhrase(desc);
+      if (resolved) return; // safety timeout already fired
+      resolved = true;
+
+      const caption = desc || 'Could not describe this image';
+      setSelected({ uri, name: caption });
+      if (desc) speakPhrase(caption);
       if (phrases.length > 0) setAacPhrases(phrases);
     } catch {
-      setSelected({ uri, name: 'Could not describe this image' });
+      if (!resolved) {
+        resolved = true;
+        setSelected({ uri, name: 'Could not describe this image' });
+      }
     } finally {
       clearTimeout(safetyTimer);
       setProcessing(false);
@@ -117,18 +127,27 @@ export default function CombinedImageScreen() {
       return;
     }
 
+    let resolved = false;
     const safetyTimer = setTimeout(() => {
-      setProcessing(false);
-      setSelected(prev => prev?.name ? prev : { uri, name: 'Processing took too long — try again' });
+      if (!resolved) {
+        resolved = true;
+        setProcessing(false);
+        setSelected({ uri, name: 'Processing took too long — try again' });
+      }
     }, 12000);
 
     try {
       const result = await getOCRAACPhrases(base64);
+      if (resolved) return;
+      resolved = true;
       setOcrResult(result);
       setSelected({ uri, name: result.extractedText || 'No text found in this image' });
     } catch {
-      setOcrResult({ extractedText: '', phrases: [] });
-      setSelected({ uri, name: 'Could not read text — try again or check connection' });
+      if (!resolved) {
+        resolved = true;
+        setOcrResult({ extractedText: '', phrases: [] });
+        setSelected({ uri, name: 'Could not read text — try again or check connection' });
+      }
     } finally {
       clearTimeout(safetyTimer);
       setProcessing(false);
