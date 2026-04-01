@@ -1,6 +1,6 @@
 {
   "name": "ai-powered-aac-app",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "private": true,
   "license": "0BSD",
   "main": "index.js",
@@ -13,10 +13,13 @@
     "clean": "npx rimraf node_modules package-lock.json && npm install",
     "lint": "eslint . --ext .js,.jsx",
     "lint:fix": "eslint . --ext .js,.jsx --fix",
-    "test": "jest",
-    "test:watch": "jest --watchAll",
     "eas:build:android": "npx eas build --profile development --platform android",
-    "eas:build:ios": "npx eas build --profile development --platform ios"
+    "eas:build:android:preview": "npx eas build --profile preview --platform android",
+    "eas:build:android:production": "npx eas build --profile production --platform android",
+    "eas:submit:android": "npx eas submit --platform android",
+    "eas:build:ios": "npx eas build --profile development --platform ios",
+    "test": "jest",
+    "test:watch": "jest --watchAll"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -62,6 +65,7 @@
     "babel-plugin-module-resolver": "^5.0.2",
     "eslint": "^8.57.1",
     "eslint-config-expo": "^55.0.0",
+    "googleapis": "^171.4.0",
     "http-server": "^14.1.1",
     "jest": "~29.7.0",
     "jest-expo": "~54.0.17",

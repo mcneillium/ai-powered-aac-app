@@ -14,6 +14,7 @@ import * as cocossd from '@tensorflow-models/coco-ssd';
 import * as Speech from 'expo-speech';
 import { StatusBar } from 'expo-status-bar';
 import { useSettings } from '../contexts/SettingsContext';
+import { getPalette } from '../theme';
 
 export default function LiveSceneModeScreen() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -25,12 +26,7 @@ export default function LiveSceneModeScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const cameraRef = useRef(null);
 
-  const palettes = {
-    light: { background: '#fff', text: '#000' },
-    dark:  { background: '#000', text: '#fff' },
-    highContrast: { background: '#000', text: '#FFD600' },
-  };
-  const palette = palettes[settings.theme];
+  const palette = getPalette(settings.theme);
 
   // Load TF and model
   useEffect(() => {
@@ -76,7 +72,7 @@ export default function LiveSceneModeScreen() {
   if (settingsLoading || !isTfReady || permission?.status !== 'granted') {
     return (
       <View style={[styles.center, { backgroundColor: palette.background }]}>  
-        <ActivityIndicator size="large" color="#4CAF50" />
+        <ActivityIndicator size="large" color={palette.primary} />
       </View>
     );
   }
@@ -85,7 +81,7 @@ export default function LiveSceneModeScreen() {
     <View style={[styles.container, { backgroundColor: palette.background }]}>  
       <CameraView style={styles.camera} ref={cameraRef} />
       <TouchableOpacity
-        style={[styles.toggle, { backgroundColor: '#4CAF50' }]}
+        style={[styles.toggle, { backgroundColor: palette.primary }]}
         onPress={() => setIsDetecting(d => !d)}
       >
         <Text style={{ color: palette.text }}>

@@ -6,27 +6,30 @@
 // 2. Auth is optional — enables sync, logging, and caregiver features
 // 3. Error boundary wraps the entire app to prevent total crash
 // 4. Model loading is non-blocking — app renders immediately
-// 5. Shared theme from src/theme.js
+// 5. QuickRepairOverlay floats above all screens for instant phrase access
+// 6. Shared theme from src/theme.js — no inline palette objects
 
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { SettingsProvider, useSettings } from './src/contexts/SettingsContext';
+import { NetworkProvider } from './src/contexts/NetworkContext';
 import { getPalette } from './src/theme';
 import ErrorBoundary from './src/components/ErrorBoundary';
+import OfflineBanner from './src/components/OfflineBanner';
+import QuickRepairOverlay from './src/components/QuickRepairOverlay';
 
 // Screens
 import AACBoardScreen from './src/screens/AACBoardScreen';
-import CommunicationStackScreen from './src/screens/CommunicationScreen';
+import ContextPackScreen from './src/screens/ContextPackScreen';
 import EasySentenceBuilderScreen from './src/screens/EasySentenceBuilderScreen';
-import CameraScreen from './src/screens/CameraScreen';
 import EmotionScreen from './src/screens/EmotionScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -34,10 +37,14 @@ import FeedbackScreen from './src/screens/FeedbackScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
+import CameraScreen from './src/screens/CameraScreen';
+import InsightsScreen from './src/screens/InsightsScreen';
+import VocabManagerScreen from './src/screens/VocabManagerScreen';
 
 // Non-blocking model load
 import { loadImprovedModel } from './src/services/improvedModelLoader';
 import { loadAIProfile, recordSessionStart } from './src/services/aiProfileStore';
+import { loadCustomVocab } from './src/services/customVocabStore';
 
 const Tab = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -50,6 +57,29 @@ loadImprovedModel().catch(err => console.warn('Model load failed (non-blocking):
 loadAIProfile()
   .then(() => recordSessionStart())
   .catch(err => console.warn('AI profile load failed (non-blocking):', err));
+loadCustomVocab().catch(err => console.warn('Custom vocab load failed (non-blocking):', err));
+
+const TAB_ICONS = {
+  'AAC Board': 'grid-outline',
+  'Contexts': 'apps-outline',
+  'Sentence': 'text-outline',
+  'Emotion': 'happy-outline',
+  'Profile': 'person-outline',
+};
+
+function SettingsHeaderButton({ tintColor, navigation }) {
+  return (
+    <TouchableOpacity
+      onPress={() => navigation.navigate('Settings')}
+      style={styles.headerBtn}
+      accessibilityRole="button"
+      accessibilityLabel="Open settings"
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+    >
+      <Ionicons name="settings-outline" size={22} color={tintColor} />
+    </TouchableOpacity>
+  );
+}
 
 function MainApp() {
   const insets = useSafeAreaInsets();
@@ -57,49 +87,53 @@ function MainApp() {
   const palette = getPalette(settings.theme);
 
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerStyle: { backgroundColor: palette.tabBarBg },
-        headerTintColor: palette.text,
-        headerTitleStyle: { color: palette.text },
-        tabBarActiveTintColor: palette.tabBarActive,
-        tabBarInactiveTintColor: palette.tabBarInactive,
-        tabBarStyle: {
-          backgroundColor: palette.tabBarBg,
-          borderTopWidth: 0,
-          elevation: 5,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -1 },
-          shadowOpacity: 0.1,
-          shadowRadius: 3,
-          borderTopLeftRadius: 15,
-          borderTopRightRadius: 15,
-          position: 'absolute',
-          height: 60 + insets.bottom,
-          paddingBottom: insets.bottom,
-        },
-        tabBarIcon: ({ color, size }) => {
-          const icons = {
-            'AAC Board': 'grid-outline',
-            'Communication': 'chatbubble-ellipses-outline',
-            'Sentence': 'text-outline',
-            'Emotion': 'happy-outline',
-            'Profile': 'person-outline',
-          };
-          return <Ionicons name={icons[route.name] || 'help-outline'} size={size} color={color} />;
-        },
-      })}
-    >
-      <Tab.Screen
-        name="AAC Board"
-        component={AACBoardScreen}
-        options={{ title: 'Communicate' }}
-      />
-      <Tab.Screen name="Communication" component={CommunicationStackScreen} />
-      <Tab.Screen name="Sentence" component={EasySentenceBuilderScreen} />
-      <Tab.Screen name="Emotion" component={EmotionScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
-    </Tab.Navigator>
+    <>
+      <Tab.Navigator
+        screenOptions={({ route, navigation }) => ({
+          headerStyle: { backgroundColor: palette.tabBarBg },
+          headerTintColor: palette.text,
+          headerTitleStyle: { color: palette.text, fontWeight: '600' },
+          headerRight: () => (
+            <SettingsHeaderButton tintColor={palette.text} navigation={navigation} />
+          ),
+          tabBarActiveTintColor: palette.tabBarActive,
+          tabBarInactiveTintColor: palette.tabBarInactive,
+          tabBarStyle: {
+            backgroundColor: palette.tabBarBg,
+            borderTopWidth: 0,
+            elevation: 5,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -1 },
+            shadowOpacity: 0.1,
+            shadowRadius: 3,
+            borderTopLeftRadius: 15,
+            borderTopRightRadius: 15,
+            position: 'absolute',
+            height: 60 + insets.bottom,
+            paddingBottom: insets.bottom,
+          },
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name={TAB_ICONS[route.name] || 'help-outline'} size={size} color={color} />
+          ),
+          tabBarAccessibilityLabel: `${route.name} tab`,
+        })}
+      >
+        <Tab.Screen
+          name="AAC Board"
+          component={AACBoardScreen}
+          options={{ title: 'Communicate' }}
+        />
+        <Tab.Screen
+          name="Contexts"
+          component={ContextPackScreen}
+          options={{ title: 'Situations' }}
+        />
+        <Tab.Screen name="Sentence" component={EasySentenceBuilderScreen} />
+        <Tab.Screen name="Emotion" component={EmotionScreen} />
+        <Tab.Screen name="Profile" component={ProfileScreen} />
+      </Tab.Navigator>
+      <QuickRepairOverlay />
+    </>
   );
 }
 
@@ -125,23 +159,29 @@ function AppNavigator() {
   if (hasLaunched === null) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#4CAF50" />
+        <ActivityIndicator size="large" color="#2979FF" />
       </View>
     );
   }
 
-  // Show onboarding for first launch (regardless of auth)
   if (!hasLaunched) {
     return <OnboardingScreen onComplete={() => setHasLaunched(true)} />;
   }
 
-  // Main app is ALWAYS available — auth is not required for communication
   return <MainApp />;
 }
 
 function RootNavigator() {
+  const { settings } = useSettings();
+  const palette = getPalette(settings.theme);
+
   return (
-    <RootStack.Navigator>
+    <RootStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: palette.tabBarBg },
+        headerTintColor: palette.text,
+      }}
+    >
       <RootStack.Screen
         name="App"
         component={AppNavigator}
@@ -158,6 +198,21 @@ function RootNavigator() {
         options={{ title: 'Feedback' }}
       />
       <RootStack.Screen
+        name="Camera"
+        component={CameraScreen}
+        options={{ title: 'Camera' }}
+      />
+      <RootStack.Screen
+        name="Insights"
+        component={InsightsScreen}
+        options={{ title: 'Communication Insights' }}
+      />
+      <RootStack.Screen
+        name="VocabManager"
+        component={VocabManagerScreen}
+        options={{ title: 'Manage Vocabulary' }}
+      />
+      <RootStack.Screen
         name="Login"
         component={AuthStackScreen}
         options={{ headerShown: false, presentation: 'modal' }}
@@ -171,11 +226,14 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <SettingsProvider>
-          <SafeAreaProvider>
-            <NavigationContainer>
-              <RootNavigator />
-            </NavigationContainer>
-          </SafeAreaProvider>
+          <NetworkProvider>
+            <SafeAreaProvider>
+              <OfflineBanner />
+              <NavigationContainer>
+                <RootNavigator />
+              </NavigationContainer>
+            </SafeAreaProvider>
+          </NetworkProvider>
         </SettingsProvider>
       </AuthProvider>
     </ErrorBoundary>
@@ -188,5 +246,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
+  },
+  headerBtn: {
+    marginRight: Platform.OS === 'ios' ? 16 : 12,
+    padding: 4,
   },
 });

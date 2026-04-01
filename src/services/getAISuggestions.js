@@ -1,11 +1,33 @@
-// src/services/getAISuggestions.js
-// Optional remote fallback. Keep simple; your app already prefers local.
+import { predictTopKWordsWithImprovedModel, modelReady } from './improvedModelLoader';
 
-export async function getAISuggestions(tokens, k = 5) {
-  // If you have a server endpoint, call it here; otherwise return empty.
-  // Example:
-  // const res = await fetch('https://your-api/suggest', { method:'POST', body: JSON.stringify({ tokens, k })});
-  // return await res.json();
+/**
+ * Get AI word suggestions for the current sentence.
+ * Awaits model readiness via Promise (no polling) with a timeout.
+ */
+export async function getAISuggestions(currentSentence) {
+  if (!currentSentence.trim()) return [];
 
-  return []; // no-op fallback
+  // Wait for model to be ready (max 3s), but don't block indefinitely
+  const ready = await Promise.race([
+    modelReady,
+    new Promise(resolve => setTimeout(() => resolve(false), 3000)),
+  ]);
+
+  if (!ready || !global.betterWordPredictionModel || !global.tokenizer) {
+    return [];
+  }
+
+  try {
+    return await predictTopKWordsWithImprovedModel(
+      global.betterWordPredictionModel,
+      global.tokenizer,
+      currentSentence,
+      1.0,  // temperature
+      4,    // sequenceLength
+      4     // topK
+    );
+  } catch (error) {
+    console.warn('AI suggestion error:', error.message);
+    return [];
+  }
 }

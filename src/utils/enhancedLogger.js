@@ -8,9 +8,6 @@ import NetInfo from '@react-native-community/netinfo';
 // Maximum number of logs to store locally before auto-sync
 const MAX_CACHED_LOGS = 50;
 
-// Maximum logs to keep locally (prevents AsyncStorage overflow ~2MB)
-const MAX_LOCAL_LOGS = 500;
-
 // Log levels
 const LOG_LEVELS = {
   DEBUG: 0,
@@ -76,33 +73,35 @@ async function processLogQueue() {
   
   isProcessingQueue = true;
   
-  // Drain queue before the try block so logsToAdd is in scope for the catch
-  const logsToAdd = [...logQueue];
-  logQueue = [];
-
   try {
     // Get current logs
     const storedLogsString = await AsyncStorage.getItem('userInteractionLog');
     let storedLogs = storedLogsString ? JSON.parse(storedLogsString) : [];
-
+    
+    // Add queued logs
+    const logsToAdd = [...logQueue];
+    logQueue = []; // Clear the queue
+    
     storedLogs = [...storedLogs, ...logsToAdd];
 
-    // Log rotation: keep only the most recent logs to prevent AsyncStorage overflow
+    // Cap local log storage at 500 entries to prevent unbounded growth.
+    // Oldest entries are dropped first.
+    const MAX_LOCAL_LOGS = 500;
     if (storedLogs.length > MAX_LOCAL_LOGS) {
-      storedLogs = storedLogs.slice(-MAX_LOCAL_LOGS);
+      storedLogs = storedLogs.slice(storedLogs.length - MAX_LOCAL_LOGS);
     }
 
     // Store logs back to AsyncStorage
     await AsyncStorage.setItem('userInteractionLog', JSON.stringify(storedLogs));
-
+    
     // If we're at the threshold, try to sync to Firebase
     if (storedLogs.length >= MAX_CACHED_LOGS && isOnline) {
       await syncLogsToFirebase();
     }
   } catch (error) {
     console.error('Error processing log queue:', error);
-    // Put the unprocessed logs back in the queue if operation failed
-    logQueue = [...logsToAdd, ...logQueue];
+    // Put the logs back in the queue if operation failed
+    logQueue = [...logQueue, ...logQueue];
   } finally {
     isProcessingQueue = false;
   }
@@ -155,7 +154,7 @@ export async function logEvent(action, metadata = {}, level = 'info') {
     // Try to add log immediately to Firebase if online
     if (isOnline && currentUser) {
       try {
-        const logsRef = ref(db, 'userLogs');
+        const logsRef = ref(db, `userLogs/${currentUser.uid}`);
         await push(logsRef, {
           ...logEntry,
           serverTimestamp: serverTimestamp()
@@ -206,13 +205,15 @@ async function getSessionId() {
  */
 async function getDeviceInfo() {
   try {
-    const { Platform } = require('react-native');
+    // This would typically use React Native's Platform and other APIs
+    // to get actual device info, but we'll use a placeholder for now
     return {
-      platform: Platform.OS,
-      version: Platform.Version,
+      platform: 'React Native',
       appVersion: '1.0.0',
+      // Add more device info as needed
     };
-  } catch {
+  } catch (error) {
+    console.error('Error getting device info:', error);
     return { platform: 'unknown' };
   }
 }
@@ -250,7 +251,7 @@ export async function syncLogsToFirebase() {
     console.log(`Syncing ${storedLogs.length} logs to Firebase...`);
     
     // Create a batch of logs in Firebase
-    const logsRef = ref(db, 'userLogs');
+    const logsRef = ref(db, `userLogs/${auth.currentUser.uid}`);
     const promises = storedLogs.map(log => {
       const newLogRef = push(logsRef);
       return set(newLogRef, {
@@ -268,7 +269,7 @@ export async function syncLogsToFirebase() {
     console.log('✅ Logs successfully synced to Firebase');
     
     // Log the sync itself (directly to Firebase)
-    const syncLogRef = push(ref(db, 'userLogs'));
+    const syncLogRef = push(ref(db, `userLogs/${auth.currentUser.uid}`));
     await set(syncLogRef, {
       action: 'logs_synced',
       count: storedLogs.length,

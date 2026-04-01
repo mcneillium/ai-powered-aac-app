@@ -1,124 +1,146 @@
 // src/screens/OnboardingScreen.js
-// First-launch welcome screen. Sets hasLaunched in AsyncStorage.
-// Accessible, themed, and informative without being overwhelming.
+// Multi-step onboarding that introduces the AAC app to new users.
+// Accessible, themed, and sets initial preferences.
 
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import React, { useState, useRef } from 'react';
+import {
+  View, Text, TouchableOpacity, StyleSheet, FlatList,
+  Dimensions, Image,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { brand, getPalette, radii, spacing } from '../theme';
+
+const { width } = Dimensions.get('window');
+const p = getPalette('light');
+
+const slides = [
+  {
+    key: 'welcome',
+    title: `Welcome to ${brand.name}`,
+    description: 'A powerful communication tool designed for everyone. Tap words to build sentences and speak them aloud.',
+    icon: 'chatbubbles',
+    color: p.primary,
+  },
+  {
+    key: 'offline',
+    title: 'Works Offline',
+    description: 'Your vocabulary and AI predictions work without the internet. No connection needed to communicate.',
+    icon: 'cloud-offline',
+    color: p.info,
+  },
+  {
+    key: 'personalise',
+    title: 'Personalise Your Experience',
+    description: 'Adjust grid size, themes, speech speed, and voice in Settings. The app learns from your usage over time.',
+    icon: 'settings',
+    color: p.warning,
+  },
+  {
+    key: 'ready',
+    title: "You're Ready!",
+    description: 'Start communicating. Sign in later to sync across devices, or use guest mode — no account required.',
+    icon: 'rocket',
+    color: p.accent,
+  },
+];
 
 export default function OnboardingScreen({ onComplete }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const flatListRef = useRef(null);
+
   const completeOnboarding = async () => {
     await AsyncStorage.setItem('hasLaunched', 'true');
     if (onComplete) onComplete();
   };
 
-  return (
-    <View style={styles.container} accessible accessibilityRole="summary">
-      <View style={styles.iconRow}>
-        <Ionicons name="chatbubble-ellipses" size={64} color="#4CAF50" />
+  const goToNext = () => {
+    if (currentIndex < slides.length - 1) {
+      flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
+      setCurrentIndex(currentIndex + 1);
+    } else {
+      completeOnboarding();
+    }
+  };
+
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    if (viewableItems.length > 0) {
+      setCurrentIndex(viewableItems[0].index);
+    }
+  }).current;
+
+  const renderSlide = ({ item }) => (
+    <View style={[styles.slide, { width }]} accessible accessibilityLabel={`${item.title}. ${item.description}`}>
+      <View style={[styles.iconCircle, { backgroundColor: item.color + '20' }]}>
+        <Ionicons name={item.icon} size={64} color={item.color} />
       </View>
-
-      <Text style={styles.title}>Welcome to CommAI</Text>
-      <Text style={styles.subtitle}>Your communication assistant</Text>
-
-      <View style={styles.features}>
-        <FeatureRow icon="grid-outline" text="Tap words to build sentences" />
-        <FeatureRow icon="volume-high-outline" text="Speak your sentences aloud" />
-        <FeatureRow icon="color-palette-outline" text="Customise themes and voice" />
-        <FeatureRow icon="cloud-offline-outline" text="Works offline — no internet needed" />
-      </View>
-
-      <TouchableOpacity
-        style={styles.button}
-        onPress={completeOnboarding}
-        accessibilityRole="button"
-        accessibilityLabel="Get started with the app"
-        accessibilityHint="Dismisses this welcome screen and opens the communication board"
-      >
-        <Text style={styles.buttonText}>Get Started</Text>
-        <Ionicons name="arrow-forward" size={20} color="#FFF" />
-      </TouchableOpacity>
-
-      <Text style={styles.note}>
-        No account needed — sign in later to sync across devices.
-      </Text>
+      <Text style={styles.title}>{item.title}</Text>
+      <Text style={styles.description}>{item.description}</Text>
     </View>
   );
-}
 
-function FeatureRow({ icon, text }) {
+  const isLast = currentIndex === slides.length - 1;
+
   return (
-    <View style={styles.featureRow} accessibilityRole="text">
-      <Ionicons name={icon} size={24} color="#4CAF50" style={styles.featureIcon} />
-      <Text style={styles.featureText}>{text}</Text>
+    <View style={styles.container}>
+      <TouchableOpacity
+        style={styles.skipBtn}
+        onPress={completeOnboarding}
+        accessibilityRole="button"
+        accessibilityLabel="Skip onboarding"
+      >
+        <Text style={styles.skipText}>Skip</Text>
+      </TouchableOpacity>
+
+      <FlatList
+        ref={flatListRef}
+        data={slides}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(item) => item.key}
+        renderItem={renderSlide}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={{ viewAreaCoveragePercentThreshold: 50 }}
+      />
+
+      <View style={styles.footer}>
+        <View style={styles.dots}>
+          {slides.map((_, i) => (
+            <View
+              key={i}
+              style={[styles.dot, i === currentIndex && styles.dotActive]}
+              accessibilityLabel={`Page ${i + 1} of ${slides.length}`}
+            />
+          ))}
+        </View>
+
+        <TouchableOpacity
+          style={[styles.nextBtn, { backgroundColor: slides[currentIndex]?.color || brand.primaryColor }]}
+          onPress={goToNext}
+          accessibilityRole="button"
+          accessibilityLabel={isLast ? 'Get started' : 'Next slide'}
+        >
+          <Text style={styles.nextText}>{isLast ? 'Get Started' : 'Next'}</Text>
+          <Ionicons name={isLast ? 'checkmark' : 'arrow-forward'} size={20} color={p.buttonText} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-    backgroundColor: '#FFFFFF',
-  },
-  iconRow: {
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#212121',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 32,
-    textAlign: 'center',
-  },
-  features: {
-    width: '100%',
-    marginBottom: 32,
-  },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 8,
-  },
-  featureIcon: {
-    marginRight: 12,
-    width: 28,
-  },
-  featureText: {
-    fontSize: 16,
-    color: '#333',
-    flex: 1,
-  },
-  button: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4CAF50',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 12,
-    gap: 8,
-    minWidth: 200,
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  buttonText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  note: {
-    fontSize: 13,
-    color: '#999',
-    textAlign: 'center',
-  },
+  container: { flex: 1, backgroundColor: p.background },
+  skipBtn: { position: 'absolute', top: 56, right: spacing.xl, zIndex: 10, padding: spacing.sm },
+  skipText: { fontSize: 16, color: p.textSecondary },
+  slide: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xxl },
+  iconCircle: { width: 120, height: 120, borderRadius: 60, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.xxl },
+  title: { fontSize: 26, fontWeight: 'bold', color: p.text, textAlign: 'center', marginBottom: spacing.lg },
+  description: { fontSize: 17, color: p.textSecondary, textAlign: 'center', lineHeight: 24 },
+  footer: { paddingHorizontal: spacing.xl, paddingBottom: 40, alignItems: 'center' },
+  dots: { flexDirection: 'row', marginBottom: spacing.xl },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: p.border, marginHorizontal: spacing.xs },
+  dotActive: { backgroundColor: p.primary, width: 24 },
+  nextBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.xxl, paddingVertical: 14, borderRadius: radii.xl, gap: spacing.sm },
+  nextText: { color: p.buttonText, fontSize: 18, fontWeight: '600' },
 });

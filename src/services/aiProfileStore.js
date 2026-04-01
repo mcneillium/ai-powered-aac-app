@@ -46,9 +46,15 @@ function createDefaultProfile() {
     // Time-of-day patterns (hour buckets 0-23)
     hourlyActivity: {},       // { hour: count }
 
-    // Suggestion acceptance tracking
+    // Suggestion acceptance tracking — per source
     suggestionsShown: 0,
     suggestionsAccepted: 0,
+    suggestionsBySource: {
+      bigram: { shown: 0, accepted: 0 },
+      neural: { shown: 0, accepted: 0 },
+      vertex: { shown: 0, accepted: 0 },
+      frequency: { shown: 0, accepted: 0 },
+    },
   };
 }
 
@@ -104,6 +110,26 @@ async function maybeSave() {
  */
 export async function flushAIProfile() {
   await saveProfile();
+}
+
+/**
+ * Reset the AI profile to defaults (user-initiated).
+ * Clears all learned data while preserving the session count.
+ */
+export async function resetAIProfile() {
+  const sessions = profile?.totalSessions || 0;
+  profile = createDefaultProfile();
+  profile.totalSessions = sessions; // preserve session count for analytics
+  await saveProfile();
+  return profile;
+}
+
+/**
+ * Check if the profile has any learned data.
+ */
+export function hasLearnedData() {
+  if (!profile) return false;
+  return profile.totalWordSelections > 0 || Object.keys(profile.bigrams).length > 0;
 }
 
 /**
@@ -294,6 +320,160 @@ export function scoreByFrequencyAndRecency(candidates) {
     const score = Math.log(freq + 1) + recencyBoost * 2;
     return { word, score };
   }).sort((a, b) => b.score - a.score);
+}
+
+// ── Suggestion source tracking ──
+
+/**
+ * Record that a suggestion from a specific source was accepted.
+ * @param {'bigram'|'neural'|'vertex'|'frequency'} source
+ */
+export async function recordSuggestionAccepted(source) {
+  if (!profile) await loadAIProfile();
+  if (!profile.suggestionsBySource) {
+    profile.suggestionsBySource = {
+      bigram: { shown: 0, accepted: 0 },
+      neural: { shown: 0, accepted: 0 },
+      vertex: { shown: 0, accepted: 0 },
+      frequency: { shown: 0, accepted: 0 },
+    };
+  }
+  if (profile.suggestionsBySource[source]) {
+    profile.suggestionsBySource[source].accepted++;
+  }
+  profile.suggestionsAccepted++;
+  await maybeSave();
+}
+
+/**
+ * Record that suggestions from a specific source were shown.
+ * @param {'bigram'|'neural'|'vertex'|'frequency'} source
+ * @param {number} count
+ */
+export function recordSourceShown(source, count) {
+  if (!profile) return;
+  if (!profile.suggestionsBySource) return;
+  if (profile.suggestionsBySource[source]) {
+    profile.suggestionsBySource[source].shown += count;
+  }
+}
+
+/**
+ * Get the acceptance rate per source for ranking optimization.
+ * Sources with higher acceptance rates should be prioritized.
+ */
+export function getSourceAcceptanceRates() {
+  if (!profile || !profile.suggestionsBySource) return {};
+  const rates = {};
+  for (const [source, data] of Object.entries(profile.suggestionsBySource)) {
+    rates[source] = data.shown > 10 ? data.accepted / data.shown : 0.5; // default 50% until enough data
+  }
+  return rates;
+}
+
+// ── Explainable suggestions ──
+
+/**
+ * Score candidates and return explanation labels.
+ * Used to show users why a word was suggested.
+ * @param {string[]} candidates
+ * @returns {{ word: string, score: number, reason: string }[]}
+ */
+export function scoreWithExplanation(candidates) {
+  if (!profile || !candidates.length) {
+    return candidates.map(w => ({ word: w, score: 0, reason: 'suggested' }));
+  }
+
+  const now = Date.now();
+  const ONE_HOUR = 3600000;
+  const ONE_DAY = 86400000;
+
+  return candidates.map(word => {
+    const w = word.toLowerCase();
+    const freq = profile.wordFrequencies[w] || 0;
+    const lastUsed = profile.wordRecency[w] || 0;
+    const timeSince = now - lastUsed;
+
+    let recencyBoost = 0;
+    let reason = '';
+
+    if (lastUsed > 0 && timeSince < ONE_HOUR) {
+      recencyBoost = 1.0;
+      reason = 'used recently';
+    } else if (lastUsed > 0 && timeSince < ONE_DAY) {
+      recencyBoost = 0.5;
+      reason = 'used today';
+    } else if (freq >= 10) {
+      reason = 'used often';
+    } else if (freq >= 3) {
+      reason = 'used before';
+    } else {
+      reason = 'suggested';
+    }
+
+    const score = Math.log(freq + 1) + recencyBoost * 2;
+    return { word, score, reason };
+  }).sort((a, b) => b.score - a.score);
+}
+
+// ── Vocabulary gap analysis ──
+
+/**
+ * Get actionable vocabulary gap insights for caregivers.
+ * Combines failed searches, frequent phrases, and usage patterns.
+ * @returns {Object} Structured gap analysis
+ */
+export function getVocabularyGapInsights() {
+  if (!profile) return { missingWords: [], frequentPhrases: [], peakHours: [], stats: {} };
+
+  // Words the user searched for but couldn't find (>= 2 times)
+  const missingWords = Object.entries(profile.failedSearches)
+    .filter(([, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([term, count]) => ({ term, count, action: 'Consider adding to vocabulary' }));
+
+  // Phrases used so often they should be one-tap buttons
+  const frequentPhrases = Object.entries(profile.phraseFrequencies)
+    .filter(([, count]) => count >= 5)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([phrase, count]) => ({ phrase, count, action: 'Add as quick phrase' }));
+
+  // Peak usage hours (top 3)
+  const peakHours = Object.entries(profile.hourlyActivity)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([hour, count]) => ({
+      hour: parseInt(hour),
+      label: formatHour(parseInt(hour)),
+      count,
+    }));
+
+  // Suggestion effectiveness
+  const sourceRates = getSourceAcceptanceRates();
+
+  return {
+    missingWords,
+    frequentPhrases,
+    peakHours,
+    stats: {
+      totalWords: profile.totalWordSelections,
+      totalSentences: profile.totalSentencesSpoken,
+      vocabularySize: Object.keys(profile.wordFrequencies).length,
+      suggestionAcceptanceRate: profile.suggestionsShown > 0
+        ? (profile.suggestionsAccepted / profile.suggestionsShown * 100).toFixed(1) + '%'
+        : 'No data',
+      sourceEffectiveness: sourceRates,
+    },
+  };
+}
+
+function formatHour(h) {
+  if (h === 0) return '12 AM';
+  if (h < 12) return `${h} AM`;
+  if (h === 12) return '12 PM';
+  return `${h - 12} PM`;
 }
 
 /**

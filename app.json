@@ -1,15 +1,14 @@
 {
   "expo": {
-    "name": "ai-powered-aac-app",
+    "name": "Voice",
     "slug": "ai-powered-aac-app",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "plugins": [
       "expo-camera",
-      "expo-dev-client",
       "expo-asset"
     ],
     "assetBundlePatterns": [
@@ -18,12 +17,13 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#FAFAFA"
     },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "This app needs access to the camera to capture images for AAC purposes.",
+        "NSCameraUsageDescription": "Voice uses the camera to identify objects and generate communication suggestions.",
+        "NSMicrophoneUsageDescription": "Voice uses the microphone for audio-based communication features.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.elpabloawakens.aipoweredaacapp"
@@ -31,16 +31,15 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundImage": "./assets/adaptive-icon-background.png",
+        "backgroundColor": "#2979FF"
       },
       "permissions": [
         "CAMERA",
-        "RECORD_AUDIO",
-        "READ_EXTERNAL_STORAGE",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "RECORD_AUDIO"
       ],
-      "package": "com.elpabloawakens.aipoweredaacapp"
+      "package": "com.elpabloawakens.aipoweredaacapp",
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/favicon.png"

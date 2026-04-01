@@ -33,6 +33,12 @@ export const corePages = {
     id: 'home',
     label: 'Home',
     buttons: [
+      // Row 0: Sentence starters — multi-word buttons that reduce taps
+      { id: 'start_i_want', label: 'I want', category: 'social', color: '#E3F2FD', textColor: '#1565C0', multiWord: true },
+      { id: 'start_i_need', label: 'I need', category: 'social', color: '#E3F2FD', textColor: '#1565C0', multiWord: true },
+      { id: 'start_i_feel', label: 'I feel', category: 'social', color: '#E3F2FD', textColor: '#1565C0', multiWord: true },
+      { id: 'start_can_i', label: 'Can I', category: 'social', color: '#E3F2FD', textColor: '#1565C0', multiWord: true },
+
       // Row 1: Pronouns + key verbs
       { id: 'i', label: 'I', category: 'pronoun', color: '#FFF9C4', textColor: '#000' },
       { id: 'you', label: 'you', category: 'pronoun', color: '#FFF9C4', textColor: '#000' },
@@ -245,14 +251,34 @@ export function getPageIds() {
 
 /**
  * Get a specific page by ID.
+ * For the home page, merges any custom vocabulary items at the end.
  */
 export function getPage(pageId) {
-  return corePages[pageId] || null;
+  const page = corePages[pageId] || null;
+  if (!page) return null;
+  if (pageId === 'home') {
+    return { ...page, buttons: [...page.buttons, ...getCustomButtons()] };
+  }
+  return page;
+}
+
+// Lazy import to avoid circular dependency at module load time.
+// getCustomButtons() returns [] if custom vocab hasn't loaded yet.
+let _getCustomButtons = null;
+function getCustomButtons() {
+  if (!_getCustomButtons) {
+    try {
+      _getCustomButtons = require('../services/customVocabStore').getCustomButtons;
+    } catch {
+      return [];
+    }
+  }
+  return _getCustomButtons();
 }
 
 /**
  * Get the home page.
  */
 export function getHomePage() {
-  return corePages.home;
+  return getPage('home');
 }

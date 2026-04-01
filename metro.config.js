@@ -10,7 +10,7 @@ assetExts.add('bin');   // TFJS weight shards
 assetExts.add('json');  // TFJS model.json must be served raw
 config.resolver.assetExts = Array.from(assetExts);
 
-// ---------- Don’t parse .json as JS modules ----------
+// ---------- Don't parse .json as JS modules ----------
 config.resolver.sourceExts = config.resolver.sourceExts.filter((ext) => ext !== 'json');
 
 // ---------- Keep .mjs (some deps ship ESM-only files) ----------
