@@ -80,13 +80,21 @@ const NEEDS = [
 ];
 
 const REGULATION = [
-  { id: 'breathe', label: 'Breathe', icon: 'leaf-outline', color: '#26A69A' },
-  { id: 'count', label: 'Count', icon: 'calculator-outline', color: '#5C6BC0' },
-  { id: 'squeeze', label: 'Squeeze', icon: 'hand-left-outline', color: '#7E57C2' },
-  { id: 'music', label: 'Music', icon: 'musical-notes-outline', color: '#42A5F5' },
-  { id: 'quiet_time', label: 'Quiet time', icon: 'volume-mute-outline', color: '#78909C' },
-  { id: 'headphones', label: 'Headphones', icon: 'headset-outline', color: '#5C6BC0' },
-  { id: 'reg_break', label: 'Break', icon: 'pause-outline', color: '#66BB6A' },
+  { id: 'breathe', label: 'Breathe', phrase: 'I need to breathe', icon: 'leaf-outline', color: '#26A69A' },
+  { id: 'count', label: 'Count', phrase: 'I need to count', icon: 'calculator-outline', color: '#5C6BC0' },
+  { id: 'squeeze', label: 'Squeeze', phrase: 'I need to squeeze something', icon: 'hand-left-outline', color: '#7E57C2' },
+  { id: 'music', label: 'Music', phrase: 'I want to listen to music', icon: 'musical-notes-outline', color: '#42A5F5' },
+  { id: 'quiet_time', label: 'Quiet time', phrase: 'I need quiet time', icon: 'volume-mute-outline', color: '#78909C' },
+  { id: 'headphones', label: 'Headphones', phrase: 'I need my headphones', icon: 'headset-outline', color: '#5C6BC0' },
+  { id: 'reg_break', label: 'Break', phrase: 'I need a break', icon: 'pause-outline', color: '#66BB6A' },
+];
+
+const CRISIS = [
+  { id: 'help_now', label: 'HELP', phrase: 'I need help right now', icon: 'alert-circle', color: '#D32F2F' },
+  { id: 'pain_now', label: 'PAIN', phrase: 'I am in pain', icon: 'medkit-outline', color: '#E53935' },
+  { id: 'stop_now', label: 'STOP', phrase: 'Stop. Please stop.', icon: 'close-circle', color: '#C62828' },
+  { id: 'cant_breathe', label: "CAN'T BREATHE", phrase: 'I cannot breathe', icon: 'alert-circle-outline', color: '#D32F2F' },
+  { id: 'sick_now', label: 'SICK', phrase: 'I am going to be sick', icon: 'warning-outline', color: '#E65100' },
 ];
 
 function buildSentence(emotion, intensity, cause, need) {
@@ -130,10 +138,9 @@ export default function EmotionScreen() {
     }
   }, [sentence, settings, emotion]);
 
-  const speakRegulation = useCallback((item) => {
-    const text = `I want to ${item.label.toLowerCase()}`;
-    speak(text, { rate: settings.speechRate, pitch: settings.speechPitch, voice: settings.speechVoice });
-    addSentenceToHistory(text).catch(() => {});
+  const speakDirect = useCallback((phrase) => {
+    speak(phrase, { rate: settings.speechRate, pitch: settings.speechPitch, voice: settings.speechVoice });
+    addSentenceToHistory(phrase).catch(() => {});
   }, [settings]);
 
   const reset = () => {
@@ -196,6 +203,22 @@ export default function EmotionScreen() {
       />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        {/* Crisis — always at top, 1-tap emergency phrases */}
+        <View style={styles.crisisRow}>
+          {CRISIS.map(c => (
+            <TouchableOpacity
+              key={c.id}
+              style={[styles.crisisBtn, { backgroundColor: c.color }]}
+              onPress={() => speakDirect(c.phrase)}
+              accessibilityRole="button"
+              accessibilityLabel={c.phrase}
+            >
+              <Ionicons name={c.icon} size={20} color="#FFF" />
+              <Text style={styles.crisisLabel}>{c.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         {/* Step 1: How do you feel? */}
         <Text style={[styles.stepLabel, { color: palette.text }]}>How do you feel?</Text>
         <View style={styles.chipGrid}>
@@ -304,7 +327,7 @@ export default function EmotionScreen() {
             <TouchableOpacity
               key={r.id}
               style={[styles.regChip, { backgroundColor: r.color }]}
-              onPress={() => speakRegulation(r)}
+              onPress={() => speakDirect(r.phrase)}
               accessibilityRole="button"
               accessibilityLabel={`I want to ${r.label.toLowerCase()}`}
             >
@@ -390,4 +413,20 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   regLabel: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  crisisRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  crisisBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radii.sm,
+    gap: spacing.xs,
+    minHeight: 48,
+  },
+  crisisLabel: { color: '#FFF', fontSize: 14, fontWeight: '800', letterSpacing: 0.5 },
 });
