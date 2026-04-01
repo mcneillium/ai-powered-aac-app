@@ -33,6 +33,12 @@ export const corePages = {
     id: 'home',
     label: 'Home',
     buttons: [
+      // Row 0: Sentence starters — multi-word buttons that reduce taps
+      { id: 'start_i_want', label: 'I want', category: 'social', color: '#E3F2FD', textColor: '#1565C0', multiWord: true },
+      { id: 'start_i_need', label: 'I need', category: 'social', color: '#E3F2FD', textColor: '#1565C0', multiWord: true },
+      { id: 'start_i_feel', label: 'I feel', category: 'social', color: '#E3F2FD', textColor: '#1565C0', multiWord: true },
+      { id: 'start_can_i', label: 'Can I', category: 'social', color: '#E3F2FD', textColor: '#1565C0', multiWord: true },
+
       // Row 1: Pronouns + key verbs
       { id: 'i', label: 'I', category: 'pronoun', color: '#FFF9C4', textColor: '#000' },
       { id: 'you', label: 'you', category: 'pronoun', color: '#FFF9C4', textColor: '#000' },

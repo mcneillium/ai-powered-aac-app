@@ -320,10 +320,17 @@ export default function AACBoardScreen() {
   const handleButtonPress = useCallback((button) => {
     if (button.navigateTo) {
       navigateToPage(button.navigateTo);
+    } else if (button.multiWord) {
+      // Sentence starters: add all words at once, speak the phrase
+      const words = button.label.split(' ');
+      setSentenceWords(prev => [...prev, ...words]);
+      speak(button.label, applyPreset(voicePreset, {
+        rate: settings.speechRate, pitch: settings.speechPitch, voice: settings.speechVoice,
+      }));
     } else {
       addWord(button.label);
     }
-  }, [navigateToPage, addWord]);
+  }, [navigateToPage, addWord, settings, voicePreset]);
 
   const handleSuggestionPress = useCallback((word) => {
     // If suggestion is a multi-word phrase, add all words
