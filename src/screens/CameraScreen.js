@@ -11,15 +11,71 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import * as Speech from 'expo-speech';
-import { getImageCaption } from '../services/hfImageCaption';
-import { getImageAACPhrases, getOCRAACPhrases } from '../services/vertexAISuggestions';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, radii, spacing } from '../theme';
 import { speak } from '../services/speechService';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
+
+// Cloud Function endpoints
+const FUNCTIONS_BASE = 'https://us-central1-commai-b98fe.cloudfunctions.net';
+const CAPTION_ENDPOINT = `${FUNCTIONS_BASE}/imageCaptionProxy`;
+const IMAGE_AAC_ENDPOINT = `${FUNCTIONS_BASE}/imageToAACPhrases`;
+const OCR_AAC_ENDPOINT = `${FUNCTIONS_BASE}/ocrToAACPhrases`;
+
+// Timeout wrapper: rejects if promise doesn't resolve in ms
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
+// Read file as base64 with a timeout. Returns null on failure.
+async function readBase64(uri, timeoutMs = 8000) {
+  try {
+    console.log('[Camera] base64 read start');
+    const result = await withTimeout(
+      FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }),
+      timeoutMs,
+      'base64 read'
+    );
+    console.log('[Camera] base64 read done, length:', result?.length || 0);
+    return result;
+  } catch (e) {
+    console.warn('[Camera] base64 read failed:', e.message);
+    return null;
+  }
+}
+
+// Call a Cloud Function with base64 image. Returns parsed JSON or null.
+async function callCloudFunction(endpoint, body, timeoutMs, label) {
+  try {
+    console.log(`[Camera] ${label} call start`);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!response.ok) {
+      console.warn(`[Camera] ${label} HTTP ${response.status}`);
+      return null;
+    }
+    const json = await response.json();
+    console.log(`[Camera] ${label} call done`);
+    return json;
+  } catch (e) {
+    console.warn(`[Camera] ${label} failed:`, e.message);
+    return null;
+  }
+}
 
 export default function CombinedImageScreen() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -28,8 +84,8 @@ export default function CombinedImageScreen() {
   const [openCam, setOpenCam] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [aacPhrases, setAacPhrases] = useState([]);
-  const [ocrResult, setOcrResult] = useState(null); // { extractedText, phrases }
-  const [mode, setMode] = useState('describe'); // 'describe' | 'read'
+  const [ocrResult, setOcrResult] = useState(null);
+  const [mode, setMode] = useState('describe');
   const cameraRef = useRef(null);
 
   const palette = getPalette(settings.theme);
@@ -53,7 +109,7 @@ export default function CombinedImageScreen() {
   };
 
   const pickImage = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
+    const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.5 });
     if (!res.canceled) {
       handleImage(res.assets[0].uri);
     }
@@ -61,97 +117,100 @@ export default function CombinedImageScreen() {
 
   const takePicture = async () => {
     if (!cameraRef.current) return;
-    const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+    console.log('[Camera] takePicture start');
+    const photo = await cameraRef.current.takePictureAsync({ quality: 0.5 });
+    console.log('[Camera] takePicture done, uri:', photo.uri?.slice(0, 50));
     setOpenCam(false);
     handleImage(photo.uri);
   };
 
   const handleImage = async (uri) => {
+    console.log('[Camera] handleImage start, mode:', mode);
     setSelected({ uri, name: '' });
     setAacPhrases([]);
     setOcrResult(null);
     setProcessing(true);
 
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    }).catch(() => null);
+    try {
+      // Read base64 ONCE with a timeout — shared by all backend calls
+      const base64 = await readBase64(uri, 8000);
 
-    if (mode === 'read') {
-      await processOCR(uri, base64);
-    } else {
-      await processDescribe(uri, base64);
+      if (mode === 'read') {
+        await processOCR(uri, base64);
+      } else {
+        await processDescribe(uri, base64);
+      }
+    } catch (e) {
+      // Catch-all: if anything unexpected throws, always clear loading
+      console.error('[Camera] handleImage unexpected error:', e);
+      setSelected({ uri, name: 'Something went wrong — try again' });
+      setProcessing(false);
     }
   };
 
   const processDescribe = async (uri, base64) => {
-    // Safety timeout: always clear loading after 12 seconds max
-    let resolved = false;
-    const safetyTimer = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        setProcessing(false);
-        setSelected({ uri, name: 'Processing took too long — try again' });
-      }
-    }, 12000);
+    console.log('[Camera] processDescribe start, has base64:', !!base64);
 
-    try {
-      const captionPromise = getImageCaption(uri).catch(() => null);
-      const phrasesPromise = base64
-        ? getImageAACPhrases(base64).catch(() => [])
-        : Promise.resolve([]);
-
-      const [desc, phrases] = await Promise.all([captionPromise, phrasesPromise]);
-
-      if (resolved) return; // safety timeout already fired
-      resolved = true;
-
-      const caption = desc || 'Could not describe this image';
-      setSelected({ uri, name: caption });
-      if (desc) speakPhrase(caption);
-      if (phrases.length > 0) setAacPhrases(phrases);
-    } catch {
-      if (!resolved) {
-        resolved = true;
-        setSelected({ uri, name: 'Could not describe this image' });
-      }
-    } finally {
-      clearTimeout(safetyTimer);
-      setProcessing(false);
-    }
-  };
-
-  const processOCR = async (uri, base64) => {
     if (!base64) {
-      setOcrResult({ extractedText: '', phrases: [] });
+      // Can't send to any backend without base64
+      setSelected({ uri, name: 'Could not process this image — try again' });
       setProcessing(false);
       return;
     }
 
-    let resolved = false;
-    const safetyTimer = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        setProcessing(false);
-        setSelected({ uri, name: 'Processing took too long — try again' });
-      }
-    }, 12000);
+    // Run caption and AAC phrases in parallel, each with its own timeout
+    const captionPromise = callCloudFunction(
+      CAPTION_ENDPOINT, { image: base64 }, 10000, 'caption'
+    );
+    const phrasesPromise = callCloudFunction(
+      IMAGE_AAC_ENDPOINT, { image: base64 }, 10000, 'image-aac'
+    );
 
-    try {
-      const result = await getOCRAACPhrases(base64);
-      if (resolved) return;
-      resolved = true;
+    const [captionResult, phrasesResult] = await Promise.all([captionPromise, phrasesPromise]);
+
+    const caption = captionResult?.caption || null;
+    const phrases = phrasesResult?.phrases || [];
+
+    console.log('[Camera] processDescribe results — caption:', !!caption, 'phrases:', phrases.length);
+
+    if (caption) {
+      setSelected({ uri, name: caption });
+      speakPhrase(caption);
+    } else if (phrases.length > 0) {
+      setSelected({ uri, name: 'Could not describe, but here are some phrases:' });
+    } else {
+      setSelected({ uri, name: 'Could not describe this image — check your connection' });
+    }
+
+    if (phrases.length > 0) setAacPhrases(phrases);
+    setProcessing(false);
+    console.log('[Camera] processDescribe done, processing=false');
+  };
+
+  const processOCR = async (uri, base64) => {
+    console.log('[Camera] processOCR start, has base64:', !!base64);
+
+    if (!base64) {
+      setOcrResult({ extractedText: '', phrases: [] });
+      setSelected({ uri, name: 'Could not process this image — try again' });
+      setProcessing(false);
+      return;
+    }
+
+    const result = await callCloudFunction(
+      OCR_AAC_ENDPOINT, { image: base64 }, 10000, 'ocr-aac'
+    );
+
+    if (result) {
       setOcrResult(result);
       setSelected({ uri, name: result.extractedText || 'No text found in this image' });
-    } catch {
-      if (!resolved) {
-        resolved = true;
-        setOcrResult({ extractedText: '', phrases: [] });
-        setSelected({ uri, name: 'Could not read text — try again or check connection' });
-      }
-    } finally {
-      clearTimeout(safetyTimer);
-      setProcessing(false);
+    } else {
+      setOcrResult({ extractedText: '', phrases: [] });
+      setSelected({ uri, name: 'Could not read text — check your connection' });
     }
+
+    setProcessing(false);
+    console.log('[Camera] processOCR done, processing=false');
   };
 
   if (settingsLoading) {
@@ -193,7 +252,7 @@ export default function CombinedImageScreen() {
               onPress={() => setMode('describe')}
               accessibilityRole="button"
               accessibilityState={{ selected: mode === 'describe' }}
-              accessibilityLabel="Describe mode — describe what you see"
+              accessibilityLabel="Describe mode"
             >
               <Ionicons name="image-outline" size={18} color={mode === 'describe' ? palette.buttonText : palette.text} />
               <Text style={[styles.modeBtnText, { color: mode === 'describe' ? palette.buttonText : palette.text }]}>Describe</Text>
@@ -203,7 +262,7 @@ export default function CombinedImageScreen() {
               onPress={() => setMode('read')}
               accessibilityRole="button"
               accessibilityState={{ selected: mode === 'read' }}
-              accessibilityLabel="Read Text mode — read signs, menus, and labels"
+              accessibilityLabel="Read Text mode"
             >
               <Ionicons name="document-text-outline" size={18} color={mode === 'read' ? palette.buttonText : palette.text} />
               <Text style={[styles.modeBtnText, { color: mode === 'read' ? palette.buttonText : palette.text }]}>Read Text</Text>
@@ -228,29 +287,26 @@ export default function CombinedImageScreen() {
 
       {processing && <ActivityIndicator style={{ marginTop: 20 }} size="large" color={palette.primary} />}
 
-      {/* Results */}
-      {selected && !processing && (
+      {/* Results — shown when not processing AND we have a selected image with a name */}
+      {selected && !processing && selected.name !== '' && (
         <View style={styles.previewContainer}>
           <Image source={{ uri: selected.uri }} style={styles.preview} />
 
-          {/* Caption / extracted text */}
-          {selected.name ? (
-            <View style={[styles.captionBox, { backgroundColor: palette.cardBg }]}>
-              <Text style={[styles.captionLabel, { color: palette.textSecondary }]}>
-                {mode === 'read' ? 'Text found:' : 'Description:'}
-              </Text>
-              <Text style={[styles.captionText, { color: palette.text }]}>{selected.name}</Text>
-              <TouchableOpacity
-                onPress={() => speakPhrase(selected.name)}
-                style={[styles.speakCaptionBtn, { backgroundColor: palette.primary }]}
-                accessibilityRole="button"
-                accessibilityLabel={`Say: ${selected.name}`}
-              >
-                <Ionicons name="volume-high" size={16} color={palette.buttonText} />
-                <Text style={[styles.speakCaptionText, { color: palette.buttonText }]}>Say this</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
+          <View style={[styles.captionBox, { backgroundColor: palette.cardBg }]}>
+            <Text style={[styles.captionLabel, { color: palette.textSecondary }]}>
+              {mode === 'read' ? 'Text found:' : 'Description:'}
+            </Text>
+            <Text style={[styles.captionText, { color: palette.text }]}>{selected.name}</Text>
+            <TouchableOpacity
+              onPress={() => speakPhrase(selected.name)}
+              style={[styles.speakCaptionBtn, { backgroundColor: palette.primary }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Say: ${selected.name}`}
+            >
+              <Ionicons name="volume-high" size={16} color={palette.buttonText} />
+              <Text style={[styles.speakCaptionText, { color: palette.buttonText }]}>Say this</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* OCR phrases */}
           {ocrResult && ocrResult.phrases.length > 0 && (
@@ -270,13 +326,6 @@ export default function CombinedImageScreen() {
                 ))}
               </View>
             </View>
-          )}
-
-          {/* OCR: no text found */}
-          {ocrResult && !ocrResult.extractedText && ocrResult.phrases.length === 0 && (
-            <Text style={[styles.noResults, { color: palette.textSecondary }]}>
-              No readable text found. Try a clearer photo of a sign, menu, or label.
-            </Text>
           )}
 
           {/* Describe mode phrases */}
@@ -353,5 +402,4 @@ const styles = StyleSheet.create({
   phrasesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   phraseChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radii.pill },
   phraseChipText: { fontSize: 14, fontWeight: '500' },
-  noResults: { fontSize: 14, fontStyle: 'italic', marginTop: spacing.lg, textAlign: 'center' },
 });
