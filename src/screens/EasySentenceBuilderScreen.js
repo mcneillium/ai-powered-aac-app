@@ -7,9 +7,22 @@ import { searchPictograms } from '../services/arasaacService';
 import { getAISuggestions } from '../services/getAISuggestions';
 import { updateLastActivity } from '../utils/syncStatus';
 import { useSettings } from '../contexts/SettingsContext';
-import { getPalette } from '../theme';
+import { getPalette, spacing, radii } from '../theme';
 import { useOnDevicePrediction } from '../hooks/useOnDevicePrediction';
 import { recordWordSelection, recordSentenceSpoken, recordSuggestionsShown, recordFailedSearch } from '../services/aiProfileStore';
+import { addSentenceToHistory } from '../services/sentenceHistoryStore';
+import { corePages } from '../data/coreVocabulary';
+
+// Offline fallback: text-based word lists from core vocabulary
+const OFFLINE_CATEGORIES = {
+  Everyday: corePages.home.buttons.filter(b => !b.navigateTo).map(b => b.label),
+  Food: corePages.food.buttons.map(b => b.label),
+  People: corePages.people.buttons.map(b => b.label),
+  Actions: corePages.actions.buttons.map(b => b.label),
+  Feelings: corePages.feelings.buttons.map(b => b.label),
+  Things: corePages.things.buttons.map(b => b.label),
+  Places: corePages.places.buttons.map(b => b.label),
+};
 
 export default function EasySentenceBuilderScreen() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -23,8 +36,9 @@ export default function EasySentenceBuilderScreen() {
   const [categoryImages, setCategoryImages] = useState({});
   const { predictNext, recordTap } = useOnDevicePrediction();
 
-  const categories = ['Everyday', 'Food', 'Drinks', 'People', 'Places'];
+  const categories = Object.keys(OFFLINE_CATEGORIES);
   const palette = getPalette(settings.theme);
+  const [offlineMode, setOfflineMode] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -45,15 +59,12 @@ export default function EasySentenceBuilderScreen() {
       try {
         const pics = wordSearch ? await searchPictograms('en', wordSearch) : await searchPictograms('en', selectedCategory);
         wordSearch ? setSearchResults(pics || []) : setCategoryPictures(pics || []);
+        setOfflineMode(false);
       } catch (e) {
-        if (!(wordSearch && e.response?.status === 404)) {
-          console.error('Error loading pictograms:', e);
-          Alert.alert('Error', 'Failed to load pictograms.');
-        } else {
-          wordSearch ? setSearchResults([]) : setCategoryPictures([]);
-          // AI Profile: record failed search for vocabulary gap detection
-          if (wordSearch) recordFailedSearch(wordSearch).catch(() => {});
-        }
+        // Fall back to offline word list — no disruptive alert
+        setOfflineMode(true);
+        wordSearch ? setSearchResults([]) : setCategoryPictures([]);
+        if (wordSearch) recordFailedSearch(wordSearch).catch(() => {});
       } finally {
         setLoadingPictures(false);
       }
@@ -99,12 +110,14 @@ export default function EasySentenceBuilderScreen() {
   const removeWord = (i) => setSentenceWords(ws => ws.filter((_, idx) => idx !== i));
   const clearSentence = () => setSentenceWords([]);
   const speakSentence = () => {
-    speak(sentenceWords.join(' ') || ' ', {
+    const text = sentenceWords.join(' ');
+    if (!text.trim()) return;
+    speak(text, {
       rate: settings.speechRate,
       pitch: settings.speechPitch,
       voice: settings.speechVoice,
     });
-    // AI Profile: record the spoken sentence for phrase learning
+    addSentenceToHistory(text).catch(() => {});
     if (sentenceWords.length > 0) {
       recordSentenceSpoken(sentenceWords).catch(() => {});
     }
@@ -122,10 +135,18 @@ export default function EasySentenceBuilderScreen() {
   };
 
   const renderCategory = ({ item }) => {
+    const isSel = selectedCategory === item;
+    if (offlineMode) {
+      return (
+        <TouchableOpacity style={[styles.categoryChip, { backgroundColor: isSel ? palette.primary : palette.chipBg }]} onPress={() => { setWordSearch(''); setSelectedCategory(item); }} accessibilityRole="button" accessibilityState={{ selected: isSel }}>
+          <Text style={[styles.categoryChipText, { color: isSel ? palette.buttonText : palette.text }]}>{item}</Text>
+        </TouchableOpacity>
+      );
+    }
     const rep = categoryImages[item];
     const id = rep?.id ?? rep?._id;
     const uri = id ? `https://static.arasaac.org/pictograms/${id}/${id}_500.png` : `https://via.placeholder.com/80?text=${item}`;
-    return <TouchableOpacity style={[styles.categoryCard, selectedCategory === item && [styles.categorySelected, { borderColor: palette.primary }]]} onPress={() => { setWordSearch(''); setSelectedCategory(item); }}><Image source={{ uri }} style={styles.categoryImage}/><Text style={[styles.categoryLabel, { color: palette.text }]}>{item}</Text></TouchableOpacity>;
+    return <TouchableOpacity style={[styles.categoryCard, isSel && [styles.categorySelected, { borderColor: palette.primary }]]} onPress={() => { setWordSearch(''); setSelectedCategory(item); }}><Image source={{ uri }} style={styles.categoryImage}/><Text style={[styles.categoryLabel, { color: palette.text }]}>{item}</Text></TouchableOpacity>;
   };
 
   return (
@@ -136,7 +157,17 @@ export default function EasySentenceBuilderScreen() {
       <Text style={[styles.label, { color: palette.text }]}>Categories</Text>
       <FlatList data={categories} horizontal keyExtractor={i => i} showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }} contentContainerStyle={{ paddingVertical: 4 }} renderItem={renderCategory} />
       <TextInput style={[styles.input, { borderColor: palette.inputBorder, color: palette.text }]} placeholder="Search any English word" placeholderTextColor={palette.textSecondary} value={wordSearch} onChangeText={setWordSearch}/>
-      {loadingPictures ? <ActivityIndicator/> : <FlatList data={wordSearch ? searchResults : categoryPictures} horizontal keyExtractor={item => ((item.id ?? item._id) ?? '').toString()} showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, maxHeight: 100, marginBottom: 12 }} contentContainerStyle={{ paddingVertical: 4 }} renderItem={renderPic} ListEmptyComponent={() => <Text style={[styles.emptyText, { color: palette.text }]}>No pictograms.</Text>} />}
+      {loadingPictures ? <ActivityIndicator/> : offlineMode ? (
+        <View style={styles.offlineGrid}>
+          {(OFFLINE_CATEGORIES[selectedCategory] || []).map(word => (
+            <TouchableOpacity key={word} style={[styles.offlineWord, { backgroundColor: palette.chipBg, borderColor: palette.border }]} onPress={() => addWord(word)} accessibilityRole="button" accessibilityLabel={`Add ${word}`}>
+              <Text style={[styles.offlineWordText, { color: palette.text }]}>{word}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : (
+        <FlatList data={wordSearch ? searchResults : categoryPictures} horizontal keyExtractor={item => ((item.id ?? item._id) ?? '').toString()} showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, maxHeight: 100, marginBottom: 12 }} contentContainerStyle={{ paddingVertical: 4 }} renderItem={renderPic} ListEmptyComponent={() => <Text style={[styles.emptyText, { color: palette.text }]}>No pictograms found.</Text>} />
+      )}
       <Text style={[styles.label, { color: palette.text }]}>AI Suggestions</Text>
       <FlatList data={suggestions} horizontal keyExtractor={(_, i) => i.toString()} showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }} contentContainerStyle={{ paddingVertical: 4 }} renderItem={({ item }) => <View style={{ marginRight: 8 }}><Button title={item} onPress={() => addWord(item, true)} color={palette.primary}/></View>} />
       <StatusBar style={settings.theme === 'dark' ? 'light' : 'dark'}/>
@@ -162,5 +193,10 @@ const styles = StyleSheet.create({
   categorySelected: { borderWidth: 2, borderRadius: 8 },
   picContainer: { marginRight: 8, alignItems: 'center' },
   picImage: { width: 80, height: 80, borderRadius: 8 },
-  emptyText: { textAlign: 'center', fontSize: 16 }
+  emptyText: { textAlign: 'center', fontSize: 16 },
+  offlineGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
+  offlineWord: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.sm, borderWidth: 1 },
+  offlineWordText: { fontSize: 15, fontWeight: '500' },
+  categoryChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.pill, marginRight: spacing.sm },
+  categoryChipText: { fontSize: 14, fontWeight: '600' },
 });
