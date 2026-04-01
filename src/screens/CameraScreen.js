@@ -83,7 +83,7 @@ export default function CombinedImageScreen() {
   const [selected, setSelected] = useState(null);
   const [openCam, setOpenCam] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [aacPhrases, setAacPhrases] = useState([]);
+  const [aacPhrases, setAacPhrases] = useState(null); // { comments, requests, questions, summary } or null
   const [ocrResult, setOcrResult] = useState(null);
   const [mode, setMode] = useState('describe');
   const cameraRef = useRef(null);
@@ -127,7 +127,7 @@ export default function CombinedImageScreen() {
   const handleImage = async (uri) => {
     console.log('[Camera] handleImage start, mode:', mode);
     setSelected({ uri, name: '' });
-    setAacPhrases([]);
+    setAacPhrases(null);
     setOcrResult(null);
     setProcessing(true);
 
@@ -169,20 +169,30 @@ export default function CombinedImageScreen() {
     const [captionResult, phrasesResult] = await Promise.all([captionPromise, phrasesPromise]);
 
     const caption = captionResult?.caption || null;
-    const phrases = phrasesResult?.phrases || [];
+    // Extract categorized phrases, fall back to flat array
+    const comments = phrasesResult?.comments || phrasesResult?.phrases || [];
+    const requests = phrasesResult?.requests || [];
+    const questions = phrasesResult?.questions || [];
+    const summary = phrasesResult?.summary || [];
+    const hasAny = comments.length + requests.length + questions.length + summary.length > 0;
 
-    console.log('[Camera] processDescribe results — caption:', !!caption, 'phrases:', phrases.length);
+    console.log('[Camera] processDescribe results — caption:', !!caption,
+      'comments:', comments.length, 'requests:', requests.length,
+      'questions:', questions.length, 'summary:', summary.length);
 
-    if (caption) {
+    if (summary.length > 0) {
+      setSelected({ uri, name: summary[0] });
+      speakPhrase(summary[0]);
+    } else if (caption) {
       setSelected({ uri, name: caption });
       speakPhrase(caption);
-    } else if (phrases.length > 0) {
-      setSelected({ uri, name: 'Could not describe, but here are some phrases:' });
+    } else if (hasAny) {
+      setSelected({ uri, name: 'Here is what you can say about this:' });
     } else {
       setSelected({ uri, name: 'Could not describe this image — check your connection' });
     }
 
-    if (phrases.length > 0) setAacPhrases(phrases);
+    if (hasAny) setAacPhrases({ comments, requests, questions, summary });
     setProcessing(false);
     console.log('[Camera] processDescribe done, processing=false');
   };
@@ -328,29 +338,46 @@ export default function CombinedImageScreen() {
             </View>
           )}
 
-          {/* Describe mode phrases */}
-          {mode === 'describe' && aacPhrases.length > 0 && (
-            <View style={styles.phrasesContainer}>
-              <Text style={[styles.phrasesLabel, { color: palette.textSecondary }]}>Say something about this:</Text>
-              <View style={styles.phrasesRow}>
-                {aacPhrases.map((phrase, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    style={[styles.phraseChip, { backgroundColor: palette.primary }]}
-                    onPress={() => speakPhrase(phrase)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Say: ${phrase}`}
-                  >
-                    <Text style={[styles.phraseChipText, { color: palette.buttonText }]}>{phrase}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+          {/* Describe mode — categorized phrases */}
+          {mode === 'describe' && aacPhrases && (
+            <>
+              <PhraseGroup label="Comment" icon="chatbubble-outline" color={palette.primary}
+                phrases={aacPhrases.comments} speakPhrase={speakPhrase} palette={palette} />
+              <PhraseGroup label="Request" icon="hand-left-outline" color={palette.success}
+                phrases={aacPhrases.requests} speakPhrase={speakPhrase} palette={palette} />
+              <PhraseGroup label="Ask" icon="help-circle-outline" color={palette.info}
+                phrases={aacPhrases.questions} speakPhrase={speakPhrase} palette={palette} />
+            </>
           )}
         </View>
       )}
       <StatusBar style={settings.theme === 'dark' ? 'light' : 'dark'} />
     </ScrollView>
+  );
+}
+
+function PhraseGroup({ label, icon, color, phrases, speakPhrase, palette }) {
+  if (!phrases || phrases.length === 0) return null;
+  return (
+    <View style={styles.phrasesContainer}>
+      <View style={styles.phrasesHeader}>
+        <Ionicons name={icon} size={14} color={color} />
+        <Text style={[styles.phrasesLabel, { color: palette.textSecondary }]}>{label}</Text>
+      </View>
+      <View style={styles.phrasesRow}>
+        {phrases.map((phrase, i) => (
+          <TouchableOpacity
+            key={i}
+            style={[styles.phraseChip, { backgroundColor: color }]}
+            onPress={() => speakPhrase(phrase)}
+            accessibilityRole="button"
+            accessibilityLabel={`${label}: ${phrase}`}
+          >
+            <Text style={[styles.phraseChipText, { color: '#FFF' }]}>{phrase}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -398,7 +425,8 @@ const styles = StyleSheet.create({
   },
   speakCaptionText: { fontSize: 13, fontWeight: '600' },
   phrasesContainer: { marginTop: spacing.lg, width: '100%' },
-  phrasesLabel: { fontSize: 13, marginBottom: spacing.sm, fontWeight: '500' },
+  phrasesHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs },
+  phrasesLabel: { fontSize: 13, fontWeight: '600' },
   phrasesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   phraseChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radii.pill },
   phraseChipText: { fontSize: 14, fontWeight: '500' },

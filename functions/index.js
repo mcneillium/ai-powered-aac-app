@@ -198,10 +198,14 @@ exports.aacPhraseSuggestions = functions.https.onRequest(async (req, res) => {
 
 const IMAGE_AAC_PROMPT = `Look at this image. You are helping an AAC user communicate about what they see.
 
-Generate 4-6 short, simple phrases (2-5 words each) that an AAC user might want to say about this image.
-Focus on: what objects are visible, what actions are happening, feelings it might evoke.
+Generate short, simple phrases (2-5 words each) in these categories:
+- comments: things the user might say about what they see (3-4 phrases)
+- requests: things the user might want to ask for or do (2-3 phrases)
+- questions: things the user might want to ask about (2-3 phrases)
+- summary: one simple sentence describing what matters most in this image (1 phrase)
 
-Return ONLY a JSON array of strings. Example: ["I see a dog", "it is big", "I like it", "can I touch"]`;
+Return ONLY a JSON object with these keys. Example:
+{"comments":["I see a dog","it is big","I like it"],"requests":["can I touch","I want one"],"questions":["what is that","whose is it"],"summary":["there is a big dog here"]}`;
 
 exports.imageToAACPhrases = functions.https.onRequest(async (req, res) => {
   setCors(res);
@@ -256,21 +260,34 @@ exports.imageToAACPhrases = functions.https.onRequest(async (req, res) => {
     }
 
     const result = await vertexResponse.json();
-    const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+    const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
 
-    let phrases = [];
+    const filterPhrases = (arr) =>
+      (Array.isArray(arr) ? arr : []).filter(s => typeof s === 'string' && s.length > 0 && s.length <= 40).slice(0, 4);
+
+    let parsed = {};
     try {
-      const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-      if (jsonMatch) phrases = JSON.parse(jsonMatch[0]);
+      // Try object format first (new)
+      const objMatch = rawText.match(/\{[\s\S]*\}/);
+      if (objMatch) parsed = JSON.parse(objMatch[0]);
     } catch {
-      phrases = [];
+      try {
+        // Fall back to array format (old)
+        const arrMatch = rawText.match(/\[[\s\S]*\]/);
+        if (arrMatch) parsed = { comments: JSON.parse(arrMatch[0]) };
+      } catch { /* give up */ }
     }
 
-    phrases = phrases
-      .filter(s => typeof s === 'string' && s.length > 0 && s.length <= 40)
-      .slice(0, 6);
+    const response = {
+      comments: filterPhrases(parsed.comments),
+      requests: filterPhrases(parsed.requests),
+      questions: filterPhrases(parsed.questions),
+      summary: filterPhrases(parsed.summary).slice(0, 1),
+      // Backward compat: flat phrases array for old clients
+      phrases: filterPhrases(parsed.comments || parsed.phrases),
+    };
 
-    return res.status(200).json({ phrases });
+    return res.status(200).json(response);
   } catch (error) {
     console.error('Image-to-AAC error:', error.message);
     return res.status(500).json({ error: 'Internal server error', phrases: [] });
