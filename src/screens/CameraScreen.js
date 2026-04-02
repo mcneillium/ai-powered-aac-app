@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   Image,
   Alert,
   ScrollView,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -17,6 +19,8 @@ import { speak } from '../services/speechService';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
+import { addSentenceToHistory, loadSentenceHistory } from '../services/sentenceHistoryStore';
+import { addFavourite, isFavourite, loadFavourites } from '../services/favouritesStore';
 
 // Cloud Function endpoints
 const FUNCTIONS_BASE = 'https://us-central1-commai-b98fe.cloudfunctions.net';
@@ -89,6 +93,9 @@ export default function CombinedImageScreen() {
   const cameraRef = useRef(null);
 
   const palette = getPalette(settings.theme);
+  const [saveMenu, setSaveMenu] = useState(null); // { phrase, alreadyFav }
+  const [toast, setToast] = useState(null); // string or null
+  const toastTimer = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -97,7 +104,16 @@ export default function CombinedImageScreen() {
       if (!media.granted) {
         Alert.alert('Permission needed', 'Need permission to access library');
       }
+      // Pre-load stores so isFavourite() works synchronously
+      await loadSentenceHistory();
+      await loadFavourites();
     })();
+  }, []);
+
+  const showToast = useCallback((msg) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 1800);
   }, []);
 
   const speakPhrase = (text) => {
@@ -107,6 +123,27 @@ export default function CombinedImageScreen() {
       voice: settings.speechVoice,
     });
   };
+
+  const handleLongPress = useCallback((phrase) => {
+    setSaveMenu({ phrase, alreadyFav: isFavourite(phrase) });
+  }, []);
+
+  const handleSaveToHistory = useCallback(async () => {
+    if (!saveMenu) return;
+    await addSentenceToHistory(saveMenu.phrase);
+    speakPhrase(saveMenu.phrase);
+    setSaveMenu(null);
+    showToast('Saved to history');
+  }, [saveMenu, showToast]);
+
+  const handleSaveToFavourites = useCallback(async () => {
+    if (!saveMenu) return;
+    await addFavourite(saveMenu.phrase);
+    await addSentenceToHistory(saveMenu.phrase);
+    speakPhrase(saveMenu.phrase);
+    setSaveMenu(null);
+    showToast('Added to favourites ★');
+  }, [saveMenu, showToast]);
 
   const pickImage = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.5 });
@@ -328,8 +365,10 @@ export default function CombinedImageScreen() {
                     key={i}
                     style={[styles.phraseChip, { backgroundColor: palette.primary }]}
                     onPress={() => speakPhrase(phrase)}
+                    onLongPress={() => handleLongPress(phrase)}
+                    delayLongPress={400}
                     accessibilityRole="button"
-                    accessibilityLabel={`Say: ${phrase}`}
+                    accessibilityLabel={`Say: ${phrase}. Long press to save.`}
                   >
                     <Text style={[styles.phraseChipText, { color: palette.buttonText }]}>{phrase}</Text>
                   </TouchableOpacity>
@@ -342,21 +381,72 @@ export default function CombinedImageScreen() {
           {mode === 'describe' && aacPhrases && (
             <>
               <PhraseGroup label="Comment" icon="chatbubble-outline" color={palette.primary}
-                phrases={aacPhrases.comments} speakPhrase={speakPhrase} palette={palette} />
+                phrases={aacPhrases.comments} speakPhrase={speakPhrase} onLongPress={handleLongPress} palette={palette} />
               <PhraseGroup label="Request" icon="hand-left-outline" color={palette.success}
-                phrases={aacPhrases.requests} speakPhrase={speakPhrase} palette={palette} />
+                phrases={aacPhrases.requests} speakPhrase={speakPhrase} onLongPress={handleLongPress} palette={palette} />
               <PhraseGroup label="Ask" icon="help-circle-outline" color={palette.info}
-                phrases={aacPhrases.questions} speakPhrase={speakPhrase} palette={palette} />
+                phrases={aacPhrases.questions} speakPhrase={speakPhrase} onLongPress={handleLongPress} palette={palette} />
             </>
           )}
         </View>
       )}
+      {/* Save menu modal — shown on long press */}
+      <Modal visible={!!saveMenu} transparent animationType="fade" onRequestClose={() => setSaveMenu(null)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setSaveMenu(null)}>
+          <View style={[styles.saveMenuCard, { backgroundColor: palette.cardBg }]}>
+            <Text style={[styles.saveMenuPhrase, { color: palette.text }]} numberOfLines={3}>
+              "{saveMenu?.phrase}"
+            </Text>
+            <TouchableOpacity
+              style={[styles.saveMenuBtn, { backgroundColor: palette.primary }]}
+              onPress={handleSaveToHistory}
+              accessibilityRole="button"
+              accessibilityLabel="Save to history and speak"
+            >
+              <Ionicons name="time-outline" size={18} color="#FFF" />
+              <Text style={styles.saveMenuBtnText}>Save to history</Text>
+            </TouchableOpacity>
+            {!saveMenu?.alreadyFav && (
+              <TouchableOpacity
+                style={[styles.saveMenuBtn, { backgroundColor: palette.warning }]}
+                onPress={handleSaveToFavourites}
+                accessibilityRole="button"
+                accessibilityLabel="Add to favourites and speak"
+              >
+                <Ionicons name="star" size={18} color="#FFF" />
+                <Text style={styles.saveMenuBtnText}>Add to favourites</Text>
+              </TouchableOpacity>
+            )}
+            {saveMenu?.alreadyFav && (
+              <Text style={[styles.saveMenuNote, { color: palette.textSecondary }]}>
+                ★ Already in favourites
+              </Text>
+            )}
+            <TouchableOpacity
+              style={[styles.saveMenuBtn, { backgroundColor: palette.chipBg }]}
+              onPress={() => setSaveMenu(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+            >
+              <Text style={[styles.saveMenuBtnText, { color: palette.text }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Toast notification */}
+      {toast && (
+        <View style={[styles.toast, { backgroundColor: palette.text }]} pointerEvents="none">
+          <Text style={[styles.toastText, { color: palette.background }]}>{toast}</Text>
+        </View>
+      )}
+
       <StatusBar style={settings.theme === 'dark' ? 'light' : 'dark'} />
     </ScrollView>
   );
 }
 
-function PhraseGroup({ label, icon, color, phrases, speakPhrase, palette }) {
+function PhraseGroup({ label, icon, color, phrases, speakPhrase, onLongPress, palette }) {
   if (!phrases || phrases.length === 0) return null;
   return (
     <View style={styles.phrasesContainer}>
@@ -370,8 +460,10 @@ function PhraseGroup({ label, icon, color, phrases, speakPhrase, palette }) {
             key={i}
             style={[styles.phraseChip, { backgroundColor: color }]}
             onPress={() => speakPhrase(phrase)}
+            onLongPress={() => onLongPress(phrase)}
+            delayLongPress={400}
             accessibilityRole="button"
-            accessibilityLabel={`${label}: ${phrase}`}
+            accessibilityLabel={`${label}: ${phrase}. Long press to save.`}
           >
             <Text style={[styles.phraseChipText, { color: '#FFF' }]}>{phrase}</Text>
           </TouchableOpacity>
@@ -430,4 +522,57 @@ const styles = StyleSheet.create({
   phrasesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   phraseChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radii.pill },
   phraseChipText: { fontSize: 14, fontWeight: '500' },
+  // Save menu modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  saveMenuCard: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: radii.lg,
+    padding: spacing.xl,
+    gap: spacing.md,
+  },
+  saveMenuPhrase: {
+    fontSize: 16,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  saveMenuBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    borderRadius: radii.sm,
+    gap: spacing.sm,
+  },
+  saveMenuBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  saveMenuNote: {
+    fontSize: 13,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  // Toast
+  toast: {
+    position: 'absolute',
+    bottom: 100,
+    alignSelf: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+    opacity: 0.9,
+  },
+  toastText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });
