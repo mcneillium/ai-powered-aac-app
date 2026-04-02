@@ -89,6 +89,104 @@ const REGULATION = [
   { id: 'reg_break', label: 'Break', phrase: 'I need a break', icon: 'pause-outline', color: '#66BB6A' },
 ];
 
+// ── Pain / Body / Discomfort data ──
+
+const BODY_LOCATIONS = [
+  { id: 'head',      label: 'Head',      icon: 'ellipse-outline' },
+  { id: 'face',      label: 'Face',      icon: 'happy-outline' },
+  { id: 'mouth',     label: 'Mouth / Teeth', icon: 'nutrition-outline' },
+  { id: 'throat',    label: 'Throat',    icon: 'mic-outline' },
+  { id: 'neck',      label: 'Neck',      icon: 'remove-outline' },
+  { id: 'chest',     label: 'Chest',     icon: 'heart-outline' },
+  { id: 'stomach',   label: 'Stomach',   icon: 'ellipse-outline' },
+  { id: 'back',      label: 'Back',      icon: 'body-outline' },
+  { id: 'shoulder',  label: 'Shoulder',  icon: 'arrow-up-outline' },
+  { id: 'arm',       label: 'Arm',       icon: 'hand-left-outline' },
+  { id: 'hand',      label: 'Hand',      icon: 'hand-right-outline' },
+  { id: 'hip',       label: 'Hip',       icon: 'resize-outline' },
+  { id: 'leg',       label: 'Leg',       icon: 'walk-outline' },
+  { id: 'knee',      label: 'Knee',      icon: 'ellipse-outline' },
+  { id: 'foot',      label: 'Foot',      icon: 'footsteps-outline' },
+  { id: 'everywhere', label: 'Everywhere', icon: 'body-outline' },
+];
+
+const PAIN_INTENSITIES = [
+  { id: 1, label: 'A little',  bars: 1, color: '#66BB6A' },
+  { id: 2, label: 'Some',      bars: 2, color: '#FFB300' },
+  { id: 3, label: 'A lot',     bars: 3, color: '#FF9800' },
+  { id: 4, label: 'Very bad',  bars: 4, color: '#F4511E' },
+  { id: 5, label: 'The worst', bars: 5, color: '#D32F2F' },
+];
+
+const PAIN_TYPES = [
+  { id: 'sharp',     label: 'Sharp' },
+  { id: 'dull',      label: 'Dull' },
+  { id: 'burning',   label: 'Burning' },
+  { id: 'throbbing', label: 'Throbbing' },
+  { id: 'aching',    label: 'Aching' },
+  { id: 'cramping',  label: 'Cramping' },
+  { id: 'pressure',  label: 'Pressure' },
+  { id: 'stiff',     label: 'Stiff' },
+  { id: 'sore',      label: 'Sore' },
+  { id: 'numb',      label: 'Numb' },
+  { id: 'tingling',  label: 'Tingling' },
+  { id: 'itchy',     label: 'Itchy' },
+];
+
+const DISCOMFORT_TYPES = [
+  { id: 'nausea',   label: 'Sick / Nausea', icon: 'warning-outline',       color: '#8D6E63' },
+  { id: 'dizzy',    label: 'Dizzy',         icon: 'sync-outline',          color: '#7E57C2' },
+  { id: 'tired',    label: 'Very tired',    icon: 'moon-outline',          color: '#78909C' },
+  { id: 'hot',      label: 'Too hot',       icon: 'flame-outline',         color: '#F4511E' },
+  { id: 'cold',     label: 'Too cold',      icon: 'snow-outline',          color: '#42A5F5' },
+  { id: 'weak',     label: 'Weak',          icon: 'trending-down-outline', color: '#78909C' },
+  { id: 'shaking',  label: 'Shaking',       icon: 'pulse-outline',         color: '#7E57C2' },
+];
+
+const PAIN_NEEDS = [
+  { id: 'medicine', label: 'Medicine',   icon: 'medkit-outline',     color: '#E53935' },
+  { id: 'doctor',   label: 'Doctor',     icon: 'medical-outline',    color: '#D32F2F' },
+  { id: 'rest',     label: 'Lie down',   icon: 'bed-outline',        color: '#5C6BC0' },
+  { id: 'water',    label: 'Water',      icon: 'water-outline',      color: '#42A5F5' },
+  { id: 'toilet',   label: 'Toilet',     icon: 'navigate-outline',   color: '#8D6E63' },
+  { id: 'help',     label: 'Help',       icon: 'hand-left-outline',  color: '#E53935' },
+  { id: 'ice',      label: 'Ice / Cold', icon: 'snow-outline',       color: '#42A5F5' },
+  { id: 'heat',     label: 'Heat / Warm', icon: 'flame-outline',     color: '#FF9800' },
+  { id: 'sit',      label: 'Sit down',   icon: 'log-in-outline',     color: '#78909C' },
+  { id: 'home',     label: 'Go home',    icon: 'home-outline',       color: '#5D4037' },
+  { id: 'hospital', label: 'Hospital',   icon: 'fitness-outline',    color: '#D32F2F' },
+];
+
+function buildPainSentence(location, painIntensity, painType, discomfort, painNeed) {
+  const parts = [];
+
+  if (location) {
+    if (location.id === 'everywhere') {
+      parts.push('I hurt everywhere');
+    } else {
+      parts.push(`My ${location.label.toLowerCase()} hurts`);
+    }
+  }
+
+  if (discomfort) {
+    parts.push(`I feel ${discomfort.label.toLowerCase()}`);
+  }
+
+  if (painType) {
+    parts.push(`It is a ${painType.label.toLowerCase()} pain`);
+  }
+
+  if (painIntensity) {
+    parts.push(`It is ${painIntensity.label.toLowerCase()}`);
+  }
+
+  if (painNeed) {
+    parts.push(`I need ${painNeed.label.toLowerCase()}`);
+  }
+
+  return parts.join('. ') + (parts.length > 0 ? '.' : '');
+}
+
 const CRISIS = [
   { id: 'help_now', label: 'HELP', phrase: 'I need help right now', icon: 'alert-circle', color: '#D32F2F' },
   { id: 'pain_now', label: 'PAIN', phrase: 'I am in pain', icon: 'medkit-outline', color: '#E53935' },
@@ -121,7 +219,17 @@ export default function EmotionScreen() {
   const [need, setNeed] = useState(null);
   const [showDisplay, setShowDisplay] = useState(false);
 
-  const sentence = buildSentence(emotion, intensity, cause, need);
+  // Pain / body flow state
+  const [bodyLocation, setBodyLocation] = useState(null);
+  const [painIntensity, setPainIntensity] = useState(null);
+  const [painType, setPainType] = useState(null);
+  const [discomfort, setDiscomfort] = useState(null);
+  const [painNeed, setPainNeed] = useState(null);
+
+  const isPainMode = emotion?.id === 'in_pain' || emotion?.id === 'sick';
+  const sentence = isPainMode
+    ? buildPainSentence(bodyLocation, painIntensity, painType, discomfort, painNeed)
+    : buildSentence(emotion, intensity, cause, need);
 
   const speakNow = useCallback(() => {
     if (!sentence) return;
@@ -148,6 +256,11 @@ export default function EmotionScreen() {
     setIntensity(null);
     setCause(null);
     setNeed(null);
+    setBodyLocation(null);
+    setPainIntensity(null);
+    setPainType(null);
+    setDiscomfort(null);
+    setPainNeed(null);
   };
 
   const numCols = settings.gridSize || 3;
@@ -232,7 +345,12 @@ export default function EmotionScreen() {
                   { backgroundColor: sel ? e.color : palette.cardBg, borderColor: e.color,
                     width: `${Math.floor(100 / numCols) - 2}%` },
                 ]}
-                onPress={() => { setEmotion(sel ? null : e); if (sel) { setIntensity(null); setCause(null); setNeed(null); } }}
+                onPress={() => {
+                  setEmotion(sel ? null : e);
+                  if (sel) { setIntensity(null); setCause(null); setNeed(null); }
+                  // Reset pain state when switching emotions
+                  setBodyLocation(null); setPainIntensity(null); setPainType(null); setDiscomfort(null); setPainNeed(null);
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={`I feel ${e.label}`}
                 accessibilityState={{ selected: sel }}
@@ -244,9 +362,133 @@ export default function EmotionScreen() {
           })}
         </View>
 
-        {/* Step 2: How much? */}
-        {emotion && (
+        {/* Pain / Body flow — shown when "In pain" or "Sick" is selected */}
+        {isPainMode && (
           <>
+            {/* Where does it hurt? */}
+            <Text style={[styles.stepLabel, { color: palette.text }]}>Where does it hurt?</Text>
+            <View style={styles.chipGrid}>
+              {BODY_LOCATIONS.map(loc => {
+                const sel = bodyLocation?.id === loc.id;
+                return (
+                  <TouchableOpacity
+                    key={loc.id}
+                    style={[
+                      styles.needChip,
+                      { backgroundColor: sel ? '#E53935' : palette.cardBg, borderColor: sel ? '#E53935' : palette.border,
+                        width: `${Math.floor(100 / numCols) - 2}%` },
+                    ]}
+                    onPress={() => setBodyLocation(sel ? null : loc)}
+                    accessibilityRole="button"
+                    accessibilityLabel={loc.id === 'everywhere' ? 'I hurt everywhere' : `My ${loc.label.toLowerCase()} hurts`}
+                    accessibilityState={{ selected: sel }}
+                  >
+                    <Ionicons name={loc.icon} size={22} color={sel ? '#FFF' : palette.text} />
+                    <Text style={[styles.needLabel, { color: sel ? '#FFF' : palette.text }]}>{loc.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Also feeling... (non-pain discomfort) */}
+            <Text style={[styles.stepLabel, { color: palette.text }]}>I also feel...</Text>
+            <View style={styles.chipGrid}>
+              {DISCOMFORT_TYPES.map(d => {
+                const sel = discomfort?.id === d.id;
+                return (
+                  <TouchableOpacity
+                    key={d.id}
+                    style={[styles.causeChip, { backgroundColor: sel ? d.color : palette.cardBg, borderColor: sel ? d.color : palette.border }]}
+                    onPress={() => setDiscomfort(sel ? null : d)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`I feel ${d.label.toLowerCase()}`}
+                    accessibilityState={{ selected: sel }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Ionicons name={d.icon} size={16} color={sel ? '#FFF' : palette.text} />
+                      <Text style={[styles.causeText, { color: sel ? '#FFF' : palette.text }]}>{d.label}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* What kind of pain? */}
+            <Text style={[styles.stepLabel, { color: palette.text }]}>What kind of pain?</Text>
+            <View style={styles.chipGrid}>
+              {PAIN_TYPES.map(pt => {
+                const sel = painType?.id === pt.id;
+                return (
+                  <TouchableOpacity
+                    key={pt.id}
+                    style={[styles.causeChip, { backgroundColor: sel ? palette.primary : palette.cardBg, borderColor: palette.border }]}
+                    onPress={() => setPainType(sel ? null : pt)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${pt.label} pain`}
+                    accessibilityState={{ selected: sel }}
+                  >
+                    <Text style={[styles.causeText, { color: sel ? palette.buttonText : palette.text }]}>{pt.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* How bad? */}
+            <Text style={[styles.stepLabel, { color: palette.text }]}>How bad?</Text>
+            <View style={styles.intensityRow}>
+              {PAIN_INTENSITIES.map(pi => {
+                const sel = painIntensity?.id === pi.id;
+                return (
+                  <TouchableOpacity
+                    key={pi.id}
+                    style={[styles.intensityChip, { backgroundColor: sel ? pi.color : palette.cardBg, borderColor: sel ? pi.color : palette.border }]}
+                    onPress={() => setPainIntensity(sel ? null : pi)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Pain is ${pi.label.toLowerCase()}`}
+                    accessibilityState={{ selected: sel }}
+                  >
+                    <View style={{ flexDirection: 'row', gap: 2 }}>
+                      {Array.from({ length: pi.bars }).map((_, idx) => (
+                        <View key={idx} style={{ width: 6, height: 16 + idx * 4, backgroundColor: sel ? '#FFF' : pi.color, borderRadius: 2 }} />
+                      ))}
+                    </View>
+                    <Text style={[styles.intensityLabel, { color: sel ? '#FFF' : palette.text }]}>{pi.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* I need... (pain-specific) */}
+            <Text style={[styles.stepLabel, { color: palette.text }]}>I need...</Text>
+            <View style={styles.chipGrid}>
+              {PAIN_NEEDS.map(pn => {
+                const sel = painNeed?.id === pn.id;
+                return (
+                  <TouchableOpacity
+                    key={pn.id}
+                    style={[
+                      styles.needChip,
+                      { backgroundColor: sel ? pn.color : palette.cardBg, borderColor: sel ? pn.color : palette.border,
+                        width: `${Math.floor(100 / numCols) - 2}%` },
+                    ]}
+                    onPress={() => setPainNeed(sel ? null : pn)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`I need ${pn.label.toLowerCase()}`}
+                    accessibilityState={{ selected: sel }}
+                  >
+                    <Ionicons name={pn.icon} size={22} color={sel ? '#FFF' : palette.text} />
+                    <Text style={[styles.needLabel, { color: sel ? '#FFF' : palette.text }]}>{pn.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </>
+        )}
+
+        {/* Standard emotion flow — hidden when in pain mode */}
+        {emotion && !isPainMode && (
+          <>
+            {/* Step 2: How much? */}
             <Text style={[styles.stepLabel, { color: palette.text }]}>How much?</Text>
             <View style={styles.intensityRow}>
               {INTENSITIES.map(i => {
@@ -266,12 +508,8 @@ export default function EmotionScreen() {
                 );
               })}
             </View>
-          </>
-        )}
 
-        {/* Step 3: Because... */}
-        {emotion && (
-          <>
+            {/* Step 3: Because... */}
             <Text style={[styles.stepLabel, { color: palette.text }]}>Because...</Text>
             <View style={styles.chipGrid}>
               {CAUSES.map(c => {
@@ -293,32 +531,36 @@ export default function EmotionScreen() {
           </>
         )}
 
-        {/* Step 4: I need... */}
-        <Text style={[styles.stepLabel, { color: palette.text }]}>
-          {emotion ? 'I need...' : 'Or just say what you need:'}
-        </Text>
-        <View style={styles.chipGrid}>
-          {NEEDS.map(n => {
-            const sel = need?.id === n.id;
-            return (
-              <TouchableOpacity
-                key={n.id}
-                style={[
-                  styles.needChip,
-                  { backgroundColor: sel ? palette.primary : palette.cardBg, borderColor: palette.border,
-                    width: `${Math.floor(100 / numCols) - 2}%` },
-                ]}
-                onPress={() => setNeed(sel ? null : n)}
-                accessibilityRole="button"
-                accessibilityLabel={`I need ${n.label.toLowerCase()}`}
-                accessibilityState={{ selected: sel }}
-              >
-                <Ionicons name={n.icon} size={22} color={sel ? palette.buttonText : palette.text} />
-                <Text style={[styles.needLabel, { color: sel ? palette.buttonText : palette.text }]}>{n.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {/* I need... (general — shown when NOT in pain mode) */}
+        {!isPainMode && (
+          <>
+            <Text style={[styles.stepLabel, { color: palette.text }]}>
+              {emotion ? 'I need...' : 'Or just say what you need:'}
+            </Text>
+            <View style={styles.chipGrid}>
+              {NEEDS.map(n => {
+                const sel = need?.id === n.id;
+                return (
+                  <TouchableOpacity
+                    key={n.id}
+                    style={[
+                      styles.needChip,
+                      { backgroundColor: sel ? palette.primary : palette.cardBg, borderColor: palette.border,
+                        width: `${Math.floor(100 / numCols) - 2}%` },
+                    ]}
+                    onPress={() => setNeed(sel ? null : n)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`I need ${n.label.toLowerCase()}`}
+                    accessibilityState={{ selected: sel }}
+                  >
+                    <Ionicons name={n.icon} size={22} color={sel ? palette.buttonText : palette.text} />
+                    <Text style={[styles.needLabel, { color: sel ? palette.buttonText : palette.text }]}>{n.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </>
+        )}
 
         {/* Step 5: Coping / regulation */}
         <Text style={[styles.stepLabel, { color: palette.text }]}>To help me calm down:</Text>
