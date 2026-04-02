@@ -41,8 +41,8 @@ export default function CrisisOverlay() {
   const palette = getPalette(settings.theme);
   const insets = useSafeAreaInsets();
 
-  // Position FAB above the QuickRepair FAB (which sits at 60 + insets.bottom + 20)
-  const fabBottom = 60 + insets.bottom + 80;
+  // Position FAB just above the QuickRepair FAB — tight vertical stack
+  const fabBottom = 60 + insets.bottom + 76;
 
   const handlePhrase = useCallback((item) => {
     speak(item.phrase, {
@@ -153,10 +153,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#D32F2F',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 8,
-    shadowColor: '#D32F2F',
+    elevation: 6,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.25,
     shadowRadius: 6,
     zIndex: 1001,
   },

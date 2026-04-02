@@ -94,8 +94,9 @@ export default function PartnerCoachOverlay() {
   const palette = getPalette(settings.theme);
   const insets = useSafeAreaInsets();
 
-  // Position below Crisis FAB (which is at 60 + insets.bottom + 80)
-  const fabBottom = 60 + insets.bottom + 140;
+  // Position on the LEFT side, just above tab bar — separate from the
+  // right-side action column (QuickRepair + Crisis) to reduce clutter
+  const fabBottom = 60 + insets.bottom + 20;
 
   if (settings.partnerCoachEnabled === false) return null;
 
@@ -110,7 +111,7 @@ export default function PartnerCoachOverlay() {
         accessibilityHint="Opens communication tips for conversation partners"
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
-        <Ionicons name="people-outline" size={22} color="#FFFFFF" />
+        <Ionicons name="people-outline" size={20} color="#FFFFFF" />
       </TouchableOpacity>
 
       {/* Full coaching overlay */}
@@ -164,18 +165,18 @@ export default function PartnerCoachOverlay() {
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
-    right: 16,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    left: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 6,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    zIndex: 1000,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    zIndex: 999,
   },
   overlay: {
     flex: 1,
