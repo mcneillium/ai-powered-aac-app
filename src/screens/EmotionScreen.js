@@ -92,69 +92,69 @@ const REGULATION = [
 // ── Pain / Body / Discomfort data ──
 
 const BODY_LOCATIONS = [
-  { id: 'head',      label: 'Head',      icon: 'ellipse-outline' },
-  { id: 'face',      label: 'Face',      icon: 'happy-outline' },
-  { id: 'mouth',     label: 'Mouth / Teeth', icon: 'nutrition-outline' },
-  { id: 'throat',    label: 'Throat',    icon: 'mic-outline' },
-  { id: 'neck',      label: 'Neck',      icon: 'remove-outline' },
-  { id: 'chest',     label: 'Chest',     icon: 'heart-outline' },
-  { id: 'stomach',   label: 'Stomach',   icon: 'ellipse-outline' },
-  { id: 'back',      label: 'Back',      icon: 'body-outline' },
-  { id: 'shoulder',  label: 'Shoulder',  icon: 'arrow-up-outline' },
-  { id: 'arm',       label: 'Arm',       icon: 'hand-left-outline' },
-  { id: 'hand',      label: 'Hand',      icon: 'hand-right-outline' },
-  { id: 'hip',       label: 'Hip',       icon: 'resize-outline' },
-  { id: 'leg',       label: 'Leg',       icon: 'walk-outline' },
-  { id: 'knee',      label: 'Knee',      icon: 'ellipse-outline' },
-  { id: 'foot',      label: 'Foot',      icon: 'footsteps-outline' },
-  { id: 'everywhere', label: 'Everywhere', icon: 'body-outline' },
+  { id: 'head',      label: 'Head',          icon: 'ellipse-outline' },
+  { id: 'face',      label: 'Face',          icon: 'happy-outline' },
+  { id: 'mouth',     label: 'Mouth / Teeth', icon: 'nutrition-outline', spoken: 'mouth' },
+  { id: 'throat',    label: 'Throat',        icon: 'mic-outline' },
+  { id: 'neck',      label: 'Neck',          icon: 'remove-outline' },
+  { id: 'chest',     label: 'Chest',         icon: 'heart-outline' },
+  { id: 'stomach',   label: 'Stomach',       icon: 'ellipse-outline' },
+  { id: 'back',      label: 'Back',          icon: 'body-outline' },
+  { id: 'shoulder',  label: 'Shoulder',      icon: 'arrow-up-outline' },
+  { id: 'arm',       label: 'Arm',           icon: 'hand-left-outline' },
+  { id: 'hand',      label: 'Hand',          icon: 'hand-right-outline' },
+  { id: 'hip',       label: 'Hip',           icon: 'resize-outline' },
+  { id: 'leg',       label: 'Leg',           icon: 'walk-outline' },
+  { id: 'knee',      label: 'Knee',          icon: 'ellipse-outline' },
+  { id: 'foot',      label: 'Foot',          icon: 'footsteps-outline' },
+  { id: 'everywhere', label: 'Everywhere',   icon: 'body-outline' },
 ];
 
 const PAIN_INTENSITIES = [
-  { id: 1, label: 'A little',  bars: 1, color: '#66BB6A' },
-  { id: 2, label: 'Some',      bars: 2, color: '#FFB300' },
-  { id: 3, label: 'A lot',     bars: 3, color: '#FF9800' },
-  { id: 4, label: 'Very bad',  bars: 4, color: '#F4511E' },
-  { id: 5, label: 'The worst', bars: 5, color: '#D32F2F' },
+  { id: 1, label: 'A little',  spoken: 'It hurts a little',       bars: 1, color: '#66BB6A' },
+  { id: 2, label: 'Moderate',  spoken: 'It hurts moderately',     bars: 2, color: '#FFB300' },
+  { id: 3, label: 'A lot',     spoken: 'It hurts a lot',          bars: 3, color: '#FF9800' },
+  { id: 4, label: 'Very bad',  spoken: 'It is really bad',        bars: 4, color: '#F4511E' },
+  { id: 5, label: 'The worst', spoken: 'It is the worst pain',    bars: 5, color: '#D32F2F' },
 ];
 
 const PAIN_TYPES = [
-  { id: 'sharp',     label: 'Sharp' },
-  { id: 'dull',      label: 'Dull' },
-  { id: 'burning',   label: 'Burning' },
-  { id: 'throbbing', label: 'Throbbing' },
-  { id: 'aching',    label: 'Aching' },
-  { id: 'cramping',  label: 'Cramping' },
-  { id: 'pressure',  label: 'Pressure' },
-  { id: 'stiff',     label: 'Stiff' },
-  { id: 'sore',      label: 'Sore' },
-  { id: 'numb',      label: 'Numb' },
-  { id: 'tingling',  label: 'Tingling' },
-  { id: 'itchy',     label: 'Itchy' },
+  { id: 'sharp',     label: 'Sharp',     spoken: 'It is a sharp pain' },
+  { id: 'dull',      label: 'Dull',      spoken: 'It is a dull pain' },
+  { id: 'burning',   label: 'Burning',   spoken: 'It is a burning pain' },
+  { id: 'throbbing', label: 'Throbbing', spoken: 'It is a throbbing pain' },
+  { id: 'aching',    label: 'Aching',    spoken: 'It is an aching pain' },
+  { id: 'cramping',  label: 'Cramping',  spoken: 'It is a cramping pain' },
+  { id: 'pressure',  label: 'Pressure',  spoken: 'It feels like pressure' },
+  { id: 'stiff',     label: 'Stiff',     spoken: 'It feels stiff' },
+  { id: 'sore',      label: 'Sore',      spoken: 'It feels sore' },
+  { id: 'numb',      label: 'Numb',      spoken: 'It feels numb' },
+  { id: 'tingling',  label: 'Tingling',  spoken: 'It feels tingly' },
+  { id: 'itchy',     label: 'Itchy',     spoken: 'It feels itchy' },
 ];
 
 const DISCOMFORT_TYPES = [
-  { id: 'nausea',   label: 'Sick / Nausea', icon: 'warning-outline',       color: '#8D6E63' },
-  { id: 'dizzy',    label: 'Dizzy',         icon: 'sync-outline',          color: '#7E57C2' },
-  { id: 'tired',    label: 'Very tired',    icon: 'moon-outline',          color: '#78909C' },
-  { id: 'hot',      label: 'Too hot',       icon: 'flame-outline',         color: '#F4511E' },
-  { id: 'cold',     label: 'Too cold',      icon: 'snow-outline',          color: '#42A5F5' },
-  { id: 'weak',     label: 'Weak',          icon: 'trending-down-outline', color: '#78909C' },
-  { id: 'shaking',  label: 'Shaking',       icon: 'pulse-outline',         color: '#7E57C2' },
+  { id: 'nausea',   label: 'Nauseous',   icon: 'warning-outline',       color: '#8D6E63' },
+  { id: 'dizzy',    label: 'Dizzy',      icon: 'sync-outline',          color: '#7E57C2' },
+  { id: 'tired',    label: 'Very tired', icon: 'moon-outline',          color: '#78909C' },
+  { id: 'hot',      label: 'Too hot',    icon: 'flame-outline',         color: '#F4511E' },
+  { id: 'cold',     label: 'Too cold',   icon: 'snow-outline',          color: '#42A5F5' },
+  { id: 'weak',     label: 'Weak',       icon: 'trending-down-outline', color: '#78909C' },
+  { id: 'shaking',  label: 'Shaky',      icon: 'pulse-outline',         color: '#7E57C2' },
 ];
 
 const PAIN_NEEDS = [
-  { id: 'medicine', label: 'Medicine',   icon: 'medkit-outline',     color: '#E53935' },
-  { id: 'doctor',   label: 'Doctor',     icon: 'medical-outline',    color: '#D32F2F' },
-  { id: 'rest',     label: 'Lie down',   icon: 'bed-outline',        color: '#5C6BC0' },
-  { id: 'water',    label: 'Water',      icon: 'water-outline',      color: '#42A5F5' },
-  { id: 'toilet',   label: 'Toilet',     icon: 'navigate-outline',   color: '#8D6E63' },
-  { id: 'help',     label: 'Help',       icon: 'hand-left-outline',  color: '#E53935' },
-  { id: 'ice',      label: 'Ice / Cold', icon: 'snow-outline',       color: '#42A5F5' },
-  { id: 'heat',     label: 'Heat / Warm', icon: 'flame-outline',     color: '#FF9800' },
-  { id: 'sit',      label: 'Sit down',   icon: 'log-in-outline',     color: '#78909C' },
-  { id: 'home',     label: 'Go home',    icon: 'home-outline',       color: '#5D4037' },
-  { id: 'hospital', label: 'Hospital',   icon: 'fitness-outline',    color: '#D32F2F' },
+  { id: 'medicine', label: 'Medicine',    icon: 'medkit-outline',     color: '#E53935', spoken: 'my medicine' },
+  { id: 'doctor',   label: 'Doctor',      icon: 'medical-outline',    color: '#D32F2F', spoken: 'a doctor' },
+  { id: 'rest',     label: 'Lie down',    icon: 'bed-outline',        color: '#5C6BC0', spoken: 'to lie down' },
+  { id: 'water',    label: 'Water',       icon: 'water-outline',      color: '#42A5F5' },
+  { id: 'toilet',   label: 'Toilet',      icon: 'navigate-outline',   color: '#8D6E63', spoken: 'the toilet' },
+  { id: 'help',     label: 'Help',        icon: 'hand-left-outline',  color: '#E53935' },
+  { id: 'ice',      label: 'Ice',         icon: 'snow-outline',       color: '#42A5F5' },
+  { id: 'heat',     label: 'Heat',        icon: 'flame-outline',      color: '#FF9800', spoken: 'something warm' },
+  { id: 'sit',      label: 'Sit down',    icon: 'log-in-outline',     color: '#78909C', spoken: 'to sit down' },
+  { id: 'home',     label: 'Go home',     icon: 'home-outline',       color: '#5D4037', spoken: 'to go home' },
+  { id: 'hospital', label: 'Hospital',    icon: 'fitness-outline',    color: '#D32F2F', spoken: 'to go to hospital' },
 ];
 
 function buildPainSentence(location, painIntensity, painType, discomfort, painNeed) {
@@ -164,7 +164,8 @@ function buildPainSentence(location, painIntensity, painType, discomfort, painNe
     if (location.id === 'everywhere') {
       parts.push('I hurt everywhere');
     } else {
-      parts.push(`My ${location.label.toLowerCase()} hurts`);
+      const bodyWord = (location.spoken || location.label).toLowerCase();
+      parts.push(`My ${bodyWord} hurts`);
     }
   }
 
@@ -173,15 +174,16 @@ function buildPainSentence(location, painIntensity, painType, discomfort, painNe
   }
 
   if (painType) {
-    parts.push(`It is a ${painType.label.toLowerCase()} pain`);
+    parts.push(painType.spoken);
   }
 
   if (painIntensity) {
-    parts.push(`It is ${painIntensity.label.toLowerCase()}`);
+    parts.push(painIntensity.spoken);
   }
 
   if (painNeed) {
-    parts.push(`I need ${painNeed.label.toLowerCase()}`);
+    const needWord = (painNeed.spoken || painNeed.label).toLowerCase();
+    parts.push(`I need ${needWord}`);
   }
 
   return parts.join('. ') + (parts.length > 0 ? '.' : '');
