@@ -730,8 +730,12 @@ export default function AACBoardScreen() {
           const words = text.split(' ');
           setSentenceWords(words);
         }}
-        onAddWord={(word) => {
-          addCustomVocabItem(word, 'noun', 'smart-suggestion').catch(() => {});
+        onAddWord={(word, category) => {
+          addCustomVocabItem(word, category || 'noun', 'smart-suggestion').catch(() => {});
+        }}
+        onCreateQuickPage={() => {
+          setShowSmart(false);
+          navigation.navigate('Contexts');
         }}
         onRefresh={() => setFavourites([...getFavourites()])}
       />

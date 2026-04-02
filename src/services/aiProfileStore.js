@@ -281,6 +281,27 @@ export function getRepeatedPhrases(minCount = 3, n = 10) {
  * @param {number} minCount - Minimum search failures
  * @returns {{ term: string, count: number }[]}
  */
+/**
+ * Get repeated sentence starters — 2-word beginnings the user types often.
+ * Extracted from bigram data where the first word is a common AAC starter.
+ * @param {number} minCount - Minimum bigram count to qualify
+ * @param {number} n - Max starters to return
+ * @returns {{ starter: string, count: number }[]}
+ */
+export function getFrequentStarters(minCount = 4, n = 8) {
+  if (!profile) return [];
+  const starterWords = new Set(['i', 'can', 'please', 'do', 'where', 'what', 'when', 'how', 'my', 'the', 'let', 'give']);
+  return Object.entries(profile.bigrams)
+    .filter(([key, count]) => {
+      if (count < minCount) return false;
+      const first = key.split(' ')[0];
+      return starterWords.has(first);
+    })
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([key, count]) => ({ starter: key, count }));
+}
+
 export function getFrequentFailedSearches(minCount = 2) {
   if (!profile) return [];
   return Object.entries(profile.failedSearches)

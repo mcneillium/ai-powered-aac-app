@@ -3,35 +3,129 @@
 // Reads from existing stores (aiProfileStore, sentenceHistoryStore, favouritesStore)
 // and presents suggestions the user can act on immediately.
 //
-// Every suggestion has an explainable reason (used often, repeated, searched but missing).
-// User-controlled: nothing is auto-spoken or auto-created.
+// Every suggestion has an explainable reason. User-controlled throughout.
+// Dismissals persist locally so suggestions don't reappear after panel close.
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { radii, spacing } from '../theme';
 import { getFrequentSentences } from '../services/sentenceHistoryStore';
 import {
-  getRepeatedPhrases, getFrequentFailedSearches, getTopWords,
+  getRepeatedPhrases, getFrequentFailedSearches, getFrequentStarters,
 } from '../services/aiProfileStore';
 import { isFavourite, addFavourite, getFavourites } from '../services/favouritesStore';
 import { speak } from '../services/speechService';
 import { addSentenceToHistory } from '../services/sentenceHistoryStore';
+import { quickPageTemplates } from '../data/quickPageTemplates';
+
+const DISMISSED_KEY = '@aac_smart_dismissed';
+
+// ── Category guessing for missing words ──
+// Simple keyword-based heuristic — no AI needed.
+const CATEGORY_HINTS = {
+  // Verbs / actions
+  verb: ['go', 'come', 'eat', 'drink', 'play', 'run', 'walk', 'sit', 'stand', 'sleep',
+    'read', 'write', 'draw', 'sing', 'dance', 'swim', 'jump', 'push', 'pull', 'open',
+    'close', 'wash', 'brush', 'cook', 'clean', 'give', 'take', 'put', 'get', 'make',
+    'watch', 'listen', 'wait', 'try', 'finish', 'start', 'stop', 'help', 'share', 'hug'],
+  // Adjectives / descriptions
+  adjective: ['big', 'small', 'hot', 'cold', 'loud', 'quiet', 'fast', 'slow', 'hard',
+    'soft', 'new', 'old', 'good', 'bad', 'nice', 'mean', 'funny', 'scary', 'pretty',
+    'ugly', 'happy', 'sad', 'angry', 'tired', 'hungry', 'thirsty', 'sick', 'sore',
+    'wet', 'dry', 'clean', 'dirty', 'full', 'empty', 'light', 'dark', 'heavy', 'easy'],
+  // Social / pragmatic
+  social: ['hello', 'hi', 'bye', 'thanks', 'sorry', 'please', 'excuse', 'welcome',
+    'congratulations', 'cheers', 'wow', 'cool', 'awesome', 'oops', 'uh-oh', 'yay'],
+  // Pronouns / people
+  pronoun: ['he', 'she', 'they', 'we', 'you', 'me', 'him', 'her', 'them', 'us',
+    'mum', 'dad', 'mom', 'teacher', 'friend', 'brother', 'sister', 'grandma', 'grandpa'],
+  // Important / high-priority
+  important: ['stop', 'help', 'hurt', 'pain', 'emergency', 'danger', 'medicine',
+    'toilet', 'bathroom', 'doctor', 'nurse', 'hospital', 'ambulance', 'fire', 'police'],
+};
+
+function guessCategory(word) {
+  const w = word.toLowerCase().trim();
+  for (const [category, words] of Object.entries(CATEGORY_HINTS)) {
+    if (words.includes(w)) return category;
+  }
+  // Fallback heuristics
+  if (w.endsWith('ing') || w.endsWith('ed')) return 'verb';
+  if (w.endsWith('ly')) return 'adjective';
+  if (w.endsWith('er') || w.endsWith('est')) return 'adjective';
+  return 'noun'; // safe default
+}
+
+// ── Topic detection for quick page suggestions ──
+// Match user's frequent phrases against known situation keywords.
+const TOPIC_KEYWORDS = {
+  dentist:    ['dentist', 'teeth', 'tooth', 'mouth', 'numb', 'drill', 'filling', 'bite', 'rinse', 'spit'],
+  restaurant: ['menu', 'order', 'waiter', 'food', 'bill', 'table', 'chef', 'dish', 'meal', 'dessert', 'restaurant'],
+  hospital:   ['hospital', 'nurse', 'doctor', 'medicine', 'injection', 'blood', 'scan', 'ward', 'bed', 'drip'],
+  school:     ['teacher', 'homework', 'class', 'lesson', 'break', 'playground', 'assembly', 'test', 'exam', 'desk'],
+  birthday:   ['birthday', 'party', 'cake', 'present', 'candle', 'balloon', 'gift', 'invite'],
+  haircut:    ['hair', 'haircut', 'scissors', 'barber', 'trim', 'shampoo', 'mirror', 'comb'],
+  bus:        ['bus', 'train', 'ticket', 'seat', 'station', 'stop', 'driver', 'platform', 'track'],
+  playground: ['slide', 'swing', 'climb', 'sand', 'seesaw', 'roundabout', 'ball', 'race', 'tag'],
+  shopping:   ['shop', 'buy', 'pay', 'money', 'price', 'bag', 'checkout', 'trolley', 'aisle'],
+};
+
+function detectTopicSuggestions(frequentPhrases) {
+  const allText = frequentPhrases.map(p => (p.text || p.phrase || '').toLowerCase()).join(' ');
+  const matches = [];
+
+  for (const [topicId, keywords] of Object.entries(TOPIC_KEYWORDS)) {
+    const hits = keywords.filter(kw => allText.includes(kw));
+    if (hits.length >= 2) {
+      const template = quickPageTemplates.find(t => t.id === topicId);
+      matches.push({
+        topicId,
+        label: template?.label || topicId,
+        hitCount: hits.length,
+        keywords: hits.slice(0, 3),
+      });
+    }
+  }
+
+  return matches.sort((a, b) => b.hitCount - a.hitCount).slice(0, 2);
+}
+
+// ── Persistent dismissals ──
+let dismissedCache = null;
+
+async function loadDismissed() {
+  if (dismissedCache) return dismissedCache;
+  try {
+    const raw = await AsyncStorage.getItem(DISMISSED_KEY);
+    dismissedCache = raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    dismissedCache = new Set();
+  }
+  return dismissedCache;
+}
+
+async function saveDismissed(dismissed) {
+  dismissedCache = dismissed;
+  try {
+    await AsyncStorage.setItem(DISMISSED_KEY, JSON.stringify([...dismissed]));
+  } catch {}
+}
 
 /**
  * Build a ranked list of smart suggestions from existing user data.
- * Each suggestion has: text, reason (explainable), type, action.
  */
-function buildSuggestions() {
+function buildSuggestions(dismissed) {
   const suggestions = [];
   const seen = new Set();
 
   // 1. Frequent full sentences not yet in favourites
   const frequent = getFrequentSentences(20);
   for (const item of frequent) {
-    if (item.speakCount >= 3 && !isFavourite(item.text) && !seen.has(item.text)) {
+    if (item.speakCount >= 3 && !isFavourite(item.text) && !seen.has(item.text) && !dismissed.has(item.text)) {
       suggestions.push({
         text: item.text,
         reason: `Spoken ${item.speakCount} times`,
@@ -43,10 +137,25 @@ function buildSuggestions() {
     }
   }
 
-  // 2. Repeated multi-word phrases from AI profile (bigram/phrase patterns)
+  // 2. Repeated starters — learned communication patterns
+  const starters = getFrequentStarters(4, 6);
+  for (const item of starters) {
+    if (!seen.has(item.starter) && !dismissed.has(item.starter)) {
+      suggestions.push({
+        text: item.starter,
+        reason: `Repeated starter — used ${item.count} times`,
+        type: 'starter',
+        icon: 'arrow-forward-outline',
+        color: '#00BCD4',
+      });
+      seen.add(item.starter);
+    }
+  }
+
+  // 3. Repeated multi-word phrases from AI profile
   const repeated = getRepeatedPhrases(3, 10);
   for (const item of repeated) {
-    if (!isFavourite(item.phrase) && !seen.has(item.phrase)) {
+    if (!isFavourite(item.phrase) && !seen.has(item.phrase) && !dismissed.has(item.phrase)) {
       suggestions.push({
         text: item.phrase,
         reason: `Used ${item.count} times`,
@@ -58,58 +167,75 @@ function buildSuggestions() {
     }
   }
 
-  // 3. Failed searches — words the user looked for but couldn't find
+  // 4. Topic suggestions — detect if phrases cluster around a known situation
+  const allPhrases = [...frequent.map(f => ({ text: f.text })), ...repeated.map(r => ({ phrase: r.phrase }))];
+  const topics = detectTopicSuggestions(allPhrases);
+  for (const topic of topics) {
+    const key = `topic:${topic.topicId}`;
+    if (!dismissed.has(key)) {
+      suggestions.push({
+        text: `Create "${topic.label}" Quick Page`,
+        reason: `Related phrases used often (${topic.keywords.join(', ')})`,
+        type: 'topic_suggestion',
+        icon: 'flash-outline',
+        color: '#FF6D00',
+        topicId: topic.topicId,
+        topicLabel: topic.label,
+      });
+    }
+  }
+
+  // 5. Failed searches — with smart category guess
   const gaps = getFrequentFailedSearches(2);
   for (const item of gaps) {
-    if (!seen.has(item.term)) {
+    if (!seen.has(item.term) && !dismissed.has(item.term)) {
+      const category = guessCategory(item.term);
       suggestions.push({
         text: item.term,
         reason: `Searched ${item.count} times but not found`,
         type: 'missing_word',
         icon: 'search-outline',
         color: '#F44336',
+        guessedCategory: category,
       });
       seen.add(item.term);
     }
   }
 
-  // 4. Top words used frequently as sentence starters (from bigrams starting with common starters)
-  const topWords = getTopWords(10);
-  const starters = ['I', 'can', 'please', 'help', 'want', 'need', 'more', 'yes', 'no', 'stop'];
-  for (const word of topWords) {
-    if (starters.includes(word.toLowerCase()) && !seen.has(word)) {
-      // Don't add starters as suggestions — they're already in core vocab
-      // But note them for the reason labels on other suggestions
-    }
-  }
+  // Sort: missing words and topics float up, then by type priority
+  const typePriority = { missing_word: 0, topic_suggestion: 1, starter: 2, frequent_phrase: 3, repeated_pattern: 4 };
+  suggestions.sort((a, b) => (typePriority[a.type] ?? 5) - (typePriority[b.type] ?? 5));
 
-  // Sort: missing words first (urgent), then by frequency/count
-  suggestions.sort((a, b) => {
-    if (a.type === 'missing_word' && b.type !== 'missing_word') return -1;
-    if (b.type === 'missing_word' && a.type !== 'missing_word') return 1;
-    return 0; // preserve existing order within type
-  });
-
-  return suggestions.slice(0, 8);
+  return suggestions.slice(0, 10);
 }
 
 export default function SmartSuggestionsPanel({
   visible,
   palette,
   settings,
-  onSpeakPhrase, // (text) => void — loads words into sentence bar and speaks
-  onAddWord,     // (word) => void — adds a word to custom vocab
-  onRefresh,     // () => void — refresh favourites after adding
+  onSpeakPhrase,
+  onAddWord,     // (word, category) => void
+  onCreateQuickPage, // (topicId) => void — navigates to quick page
+  onRefresh,
 }) {
   const [suggestions, setSuggestions] = useState([]);
   const [dismissed, setDismissed] = useState(new Set());
+  const loaded = useRef(false);
 
-  // Rebuild suggestions when panel opens
+  // Load persistent dismissals once
   useEffect(() => {
-    if (visible) {
-      setSuggestions(buildSuggestions());
+    loadDismissed().then(d => {
+      setDismissed(d);
+      loaded.current = true;
+    });
+  }, []);
+
+  // Rebuild suggestions when panel opens (after dismissals loaded)
+  useEffect(() => {
+    if (visible && loaded.current) {
+      setSuggestions(buildSuggestions(dismissed));
     }
-  }, [visible]);
+  }, [visible, dismissed]);
 
   const handleSpeak = useCallback((text) => {
     speak(text, {
@@ -129,13 +255,40 @@ export default function SmartSuggestionsPanel({
     if (onRefresh) onRefresh();
   }, [onRefresh]);
 
-  const handleDismiss = useCallback((text) => {
-    setDismissed(prev => new Set([...prev, text]));
-  }, []);
+  const handleDismiss = useCallback(async (key) => {
+    const next = new Set([...dismissed, key]);
+    setDismissed(next);
+    await saveDismissed(next);
+  }, [dismissed]);
+
+  const handleAddWord = useCallback((item) => {
+    if (onAddWord) onAddWord(item.text, item.guessedCategory || 'noun');
+    handleDismiss(item.text);
+  }, [onAddWord, handleDismiss]);
+
+  const handleTopicAction = useCallback((item) => {
+    Alert.alert(
+      `Create "${item.topicLabel}" page?`,
+      `You often use phrases related to "${item.topicLabel}". Open the Quick Pages to create or use this page?`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Open Quick Pages',
+          onPress: () => {
+            handleDismiss(`topic:${item.topicId}`);
+            if (onCreateQuickPage) onCreateQuickPage(item.topicId);
+          },
+        },
+      ]
+    );
+  }, [onCreateQuickPage, handleDismiss]);
 
   if (!visible) return null;
 
-  const visibleSuggestions = suggestions.filter(s => !dismissed.has(s.text));
+  const visibleSuggestions = suggestions.filter(s => {
+    const key = s.type === 'topic_suggestion' ? `topic:${s.topicId}` : s.text;
+    return !dismissed.has(key);
+  });
 
   if (visibleSuggestions.length === 0) {
     return (
@@ -159,12 +312,19 @@ export default function SmartSuggestionsPanel({
       </View>
       <ScrollView style={styles.scrollArea} nestedScrollEnabled showsVerticalScrollIndicator={false}>
         {visibleSuggestions.map((item, idx) => (
-          <View key={`${item.text}-${idx}`} style={[styles.suggestionRow, { backgroundColor: palette.cardBg }]}>
+          <View key={`${item.type}-${item.text}-${idx}`} style={[styles.suggestionRow, { backgroundColor: palette.cardBg }]}>
             <TouchableOpacity
               style={styles.suggestionMain}
-              onPress={() => handleSpeak(item.text)}
+              onPress={() => {
+                if (item.type === 'topic_suggestion') handleTopicAction(item);
+                else handleSpeak(item.text);
+              }}
               accessibilityRole="button"
-              accessibilityLabel={`Say: ${item.text}. ${item.reason}`}
+              accessibilityLabel={
+                item.type === 'topic_suggestion'
+                  ? `${item.text}. ${item.reason}`
+                  : `Say: ${item.text}. ${item.reason}`
+              }
             >
               <Ionicons name={item.icon} size={16} color={item.color} />
               <View style={styles.suggestionTextArea}>
@@ -178,7 +338,8 @@ export default function SmartSuggestionsPanel({
             </TouchableOpacity>
 
             <View style={styles.suggestionActions}>
-              {item.type !== 'missing_word' && !item.saved && (
+              {/* Favourite action — for speakable items */}
+              {item.type !== 'missing_word' && item.type !== 'topic_suggestion' && !item.saved && (
                 <TouchableOpacity
                   onPress={() => handleSaveToFavourites(item.text)}
                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
@@ -191,18 +352,22 @@ export default function SmartSuggestionsPanel({
               {item.saved && (
                 <Ionicons name="star" size={18} color={palette.warning} />
               )}
+
+              {/* Add to vocab — for missing words with smart category */}
               {item.type === 'missing_word' && onAddWord && (
                 <TouchableOpacity
-                  onPress={() => { onAddWord(item.text); handleDismiss(item.text); }}
+                  onPress={() => handleAddWord(item)}
                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                   accessibilityRole="button"
-                  accessibilityLabel={`Add "${item.text}" to your vocabulary`}
+                  accessibilityLabel={`Add "${item.text}" as ${item.guessedCategory}`}
                 >
                   <Ionicons name="add-circle-outline" size={18} color={palette.success} />
                 </TouchableOpacity>
               )}
+
+              {/* Dismiss */}
               <TouchableOpacity
-                onPress={() => handleDismiss(item.text)}
+                onPress={() => handleDismiss(item.type === 'topic_suggestion' ? `topic:${item.topicId}` : item.text)}
                 hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 accessibilityRole="button"
                 accessibilityLabel={`Dismiss suggestion: ${item.text}`}
@@ -222,7 +387,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    maxHeight: 220,
+    maxHeight: 240,
   },
   panelHeader: {
     flexDirection: 'row',
