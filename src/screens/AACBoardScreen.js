@@ -55,7 +55,9 @@ import {
 } from '../services/favouritesStore';
 import { getAACPhraseSuggestions } from '../services/vertexAISuggestions';
 import DisplayMode from '../components/DisplayMode';
+import SmartSuggestionsPanel from '../components/SmartSuggestionsPanel';
 import VoicePresetPicker from '../components/VoicePresetPicker';
+import { addCustomVocabItem } from '../services/customVocabStore';
 import { applyPreset } from '../services/speechService';
 import {
   setScanItems, setScanMode, setScanSpeed, getScanState,
@@ -75,6 +77,7 @@ export default function AACBoardScreen() {
   const [suggestions, setSuggestions] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [showFavourites, setShowFavourites] = useState(false);
+  const [showSmart, setShowSmart] = useState(false);
   const [history, setHistory] = useState([]);
   const [favourites, setFavourites] = useState([]);
   const [voicePreset, setVoicePreset] = useState('normal');
@@ -510,7 +513,7 @@ export default function AACBoardScreen() {
             <Ionicons name="trash-outline" size={20} color={palette.buttonText} />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => { setShowFavourites(f => !f); setShowHistory(false); }}
+            onPress={() => { setShowFavourites(f => !f); setShowHistory(false); setShowSmart(false); }}
             style={[styles.sentenceActionBtn, { backgroundColor: palette.warning }]}
             accessibilityRole="button"
             accessibilityLabel={showFavourites ? t('hideFavourites') : t('showFavourites')}
@@ -518,12 +521,20 @@ export default function AACBoardScreen() {
             <Ionicons name="star" size={18} color={palette.buttonText} />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => { setShowHistory(h => !h); setShowFavourites(false); }}
+            onPress={() => { setShowHistory(h => !h); setShowFavourites(false); setShowSmart(false); }}
             style={[styles.sentenceActionBtn, { backgroundColor: palette.info }]}
             accessibilityRole="button"
             accessibilityLabel={showHistory ? t('hideHistory') : t('showHistory')}
           >
             <Ionicons name="time-outline" size={18} color={palette.buttonText} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => { setShowSmart(s => !s); setShowFavourites(false); setShowHistory(false); }}
+            style={[styles.sentenceActionBtn, { backgroundColor: showSmart ? palette.warning : palette.chipBg }]}
+            accessibilityRole="button"
+            accessibilityLabel={showSmart ? 'Hide smart suggestions' : 'Show smart suggestions'}
+          >
+            <Ionicons name="bulb-outline" size={18} color={showSmart ? palette.buttonText : palette.text} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => navigation.navigate('Camera')}
@@ -709,6 +720,21 @@ export default function AACBoardScreen() {
           )}
         </View>
       )}
+
+      {/* Smart suggestions panel — learning-based shortcuts */}
+      <SmartSuggestionsPanel
+        visible={showSmart}
+        palette={palette}
+        settings={settings}
+        onSpeakPhrase={(text) => {
+          const words = text.split(' ');
+          setSentenceWords(words);
+        }}
+        onAddWord={(word) => {
+          addCustomVocabItem(word, 'noun', 'smart-suggestion').catch(() => {});
+        }}
+        onRefresh={() => setFavourites([...getFavourites()])}
+      />
 
       {/* AI Suggestions strip */}
       {suggestions.length > 0 && (
