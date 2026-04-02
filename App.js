@@ -25,6 +25,8 @@ import { getPalette } from './src/theme';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import OfflineBanner from './src/components/OfflineBanner';
 import QuickRepairOverlay from './src/components/QuickRepairOverlay';
+import CrisisOverlay from './src/components/CrisisOverlay';
+import ListenerDisplay from './src/components/ListenerDisplay';
 
 // Screens
 import AACBoardScreen from './src/screens/AACBoardScreen';
@@ -40,6 +42,7 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import CameraScreen from './src/screens/CameraScreen';
 import InsightsScreen from './src/screens/InsightsScreen';
 import VocabManagerScreen from './src/screens/VocabManagerScreen';
+import SocialScreen from './src/screens/SocialScreen';
 
 // Non-blocking model load
 import { loadImprovedModel } from './src/services/improvedModelLoader';
@@ -133,6 +136,8 @@ function MainApp() {
         <Tab.Screen name="Profile" component={ProfileScreen} />
       </Tab.Navigator>
       <QuickRepairOverlay />
+      <CrisisOverlay />
+      <ListenerDisplay />
     </>
   );
 }
@@ -211,6 +216,11 @@ function RootNavigator() {
         name="VocabManager"
         component={VocabManagerScreen}
         options={{ title: 'Manage Vocabulary' }}
+      />
+      <RootStack.Screen
+        name="Social"
+        component={SocialScreen}
+        options={{ title: 'Social' }}
       />
       <RootStack.Screen
         name="Login"

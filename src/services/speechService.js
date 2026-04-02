@@ -7,6 +7,17 @@ import * as Speech from 'expo-speech';
 
 let isSpeaking = false;
 
+// ── Speech event listeners ──
+// Components can subscribe to know when text is spoken (e.g. Listener Display).
+const speechListeners = new Set();
+export function onSpeech(callback) {
+  speechListeners.add(callback);
+  return () => speechListeners.delete(callback);
+}
+function notifySpeechListeners(text) {
+  speechListeners.forEach(cb => { try { cb(text); } catch {} });
+}
+
 // ── Expressive Voice Presets ──
 // These adjust rate and pitch to convey different moods/intentions.
 // Users can select a preset from the AAC Board.
@@ -70,6 +81,7 @@ export async function speak(text, options = {}) {
   }
 
   Speech.speak(text, speechOptions);
+  notifySpeechListeners(text);
 }
 
 /**

@@ -533,6 +533,14 @@ export default function AACBoardScreen() {
           >
             <Ionicons name="camera-outline" size={18} color={palette.buttonText} />
           </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Social')}
+            style={[styles.sentenceActionBtn, { backgroundColor: palette.success }]}
+            accessibilityRole="button"
+            accessibilityLabel="Social phrases"
+          >
+            <Ionicons name="chatbubbles-outline" size={18} color={palette.buttonText} />
+          </TouchableOpacity>
           {sentenceWords.length > 0 && (
             <TouchableOpacity
               onPress={handleToggleFavourite}

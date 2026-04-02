@@ -21,6 +21,8 @@ const defaultSettings = {
   aiPersonalisationEnabled: true, // learn from user input to improve suggestions
   scanMode: 'auto',   // 'auto' | 'step'
   scanSpeed: 1500,     // ms between auto-scan steps
+  crisisModeEnabled: true,    // show floating SOS button on all screens
+  listenerModeEnabled: false, // show spoken text large after speaking
 };
 
 export const SettingsContext = createContext({

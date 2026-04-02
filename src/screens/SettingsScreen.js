@@ -230,6 +230,37 @@ export default function SettingsScreen() {
         />
       </View>
 
+      {/* Communication Features */}
+      <Text style={[styles.sectionTitle, { color: palette.text, borderBottomColor: palette.border }]}>
+        Communication Features
+      </Text>
+      <View style={styles.switchContainer}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.label, { color: palette.text, marginTop: 0 }]}>Emergency SOS Button</Text>
+          <Text style={[styles.helperText, { color: palette.textSecondary }]}>
+            Show a floating emergency button on all screens for instant crisis communication.
+          </Text>
+        </View>
+        <Switch
+          value={settings.crisisModeEnabled !== false}
+          onValueChange={(val) => updateSettings({ crisisModeEnabled: val })}
+          accessibilityLabel="Toggle emergency SOS button"
+        />
+      </View>
+      <View style={styles.switchContainer}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.label, { color: palette.text, marginTop: 0 }]}>Listener Display</Text>
+          <Text style={[styles.helperText, { color: palette.textSecondary }]}>
+            Show spoken text in large print after speaking — helps conversation partners read what you said.
+          </Text>
+        </View>
+        <Switch
+          value={settings.listenerModeEnabled === true}
+          onValueChange={(val) => updateSettings({ listenerModeEnabled: val })}
+          accessibilityLabel="Toggle listener display mode"
+        />
+      </View>
+
       {/* AI Personalisation */}
       <Text style={[styles.sectionTitle, { color: palette.text, borderBottomColor: palette.border }]}>
         AI Personalisation
