@@ -388,6 +388,9 @@ export default function CombinedImageScreen() {
                 phrases={aacPhrases.questions} speakPhrase={speakPhrase} onLongPress={handleLongPress} palette={palette} />
             </>
           )}
+
+          {/* Conversation actions — useful prompts for discussing what you see */}
+          <ConversationActions speakPhrase={speakPhrase} onLongPress={handleLongPress} palette={palette} />
         </View>
       )}
       {/* Save menu modal — shown on long press */}
@@ -443,6 +446,43 @@ export default function CombinedImageScreen() {
 
       <StatusBar style={settings.theme === 'dark' ? 'light' : 'dark'} />
     </ScrollView>
+  );
+}
+
+const CONVERSATION_PROMPTS = [
+  { label: 'What is the important part?',  color: '#7C4DFF' },
+  { label: 'Help me choose',              color: '#FF9800' },
+  { label: 'Compare these for me',        color: '#00BCD4' },
+  { label: 'What can I ask about this?',  color: '#4CAF50' },
+  { label: 'Explain this simply',         color: '#2979FF' },
+  { label: 'What should I notice?',       color: '#9C27B0' },
+  { label: 'Read it to me',               color: '#607D8B' },
+  { label: 'I have a question about this', color: '#E91E63' },
+];
+
+function ConversationActions({ speakPhrase, onLongPress, palette }) {
+  return (
+    <View style={styles.phrasesContainer}>
+      <View style={styles.phrasesHeader}>
+        <Ionicons name="bulb-outline" size={14} color={palette.warning} />
+        <Text style={[styles.phrasesLabel, { color: palette.textSecondary }]}>Conversation</Text>
+      </View>
+      <View style={styles.phrasesRow}>
+        {CONVERSATION_PROMPTS.map((item, i) => (
+          <TouchableOpacity
+            key={i}
+            style={[styles.phraseChip, { backgroundColor: item.color }]}
+            onPress={() => speakPhrase(item.label)}
+            onLongPress={() => onLongPress(item.label)}
+            delayLongPress={400}
+            accessibilityRole="button"
+            accessibilityLabel={`Say: ${item.label}. Long press to save.`}
+          >
+            <Text style={[styles.phraseChipText, { color: '#FFF' }]}>{item.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
   );
 }
 

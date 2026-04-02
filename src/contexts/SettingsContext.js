@@ -23,6 +23,7 @@ const defaultSettings = {
   scanSpeed: 1500,     // ms between auto-scan steps
   crisisModeEnabled: true,    // show floating SOS button on all screens
   listenerModeEnabled: false, // show spoken text large after speaking
+  partnerCoachEnabled: true,  // show partner coaching tips button
 };
 
 export const SettingsContext = createContext({

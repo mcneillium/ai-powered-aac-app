@@ -27,6 +27,7 @@ import OfflineBanner from './src/components/OfflineBanner';
 import QuickRepairOverlay from './src/components/QuickRepairOverlay';
 import CrisisOverlay from './src/components/CrisisOverlay';
 import ListenerDisplay from './src/components/ListenerDisplay';
+import PartnerCoachOverlay from './src/components/PartnerCoachOverlay';
 
 // Screens
 import AACBoardScreen from './src/screens/AACBoardScreen';
@@ -137,6 +138,7 @@ function MainApp() {
       </Tab.Navigator>
       <QuickRepairOverlay />
       <CrisisOverlay />
+      <PartnerCoachOverlay />
       <ListenerDisplay />
     </>
   );

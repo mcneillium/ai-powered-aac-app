@@ -260,6 +260,19 @@ export default function SettingsScreen() {
           accessibilityLabel="Toggle listener display mode"
         />
       </View>
+      <View style={styles.switchContainer}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.label, { color: palette.text, marginTop: 0 }]}>Partner Coach Button</Text>
+          <Text style={[styles.helperText, { color: palette.textSecondary }]}>
+            Show a button with communication tips for conversation partners and caregivers.
+          </Text>
+        </View>
+        <Switch
+          value={settings.partnerCoachEnabled !== false}
+          onValueChange={(val) => updateSettings({ partnerCoachEnabled: val })}
+          accessibilityLabel="Toggle partner coaching button"
+        />
+      </View>
 
       {/* AI Personalisation */}
       <Text style={[styles.sectionTitle, { color: palette.text, borderBottomColor: palette.border }]}>
