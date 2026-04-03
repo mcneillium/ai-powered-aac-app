@@ -160,6 +160,17 @@ async function saveDismissed(dismissed) {
 }
 
 /**
+ * Clear all dismissed smart suggestions so they reappear.
+ * Called from Settings when user wants a fresh set of suggestions.
+ */
+export async function clearDismissedSuggestions() {
+  dismissedCache = new Set();
+  try {
+    await AsyncStorage.removeItem(DISMISSED_KEY);
+  } catch {}
+}
+
+/**
  * Build a ranked list of smart suggestions from existing user data.
  */
 function buildSuggestions(dismissed) {

@@ -20,6 +20,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, brand } from '../theme';
 import { speak, getAvailableVoices } from '../services/speechService';
 import { resetAIProfile, hasLearnedData } from '../services/aiProfileStore';
+import { clearDismissedSuggestions } from '../components/SmartSuggestionsPanel';
 
 export default function SettingsScreen() {
   const { settings, loading: settingsLoading, updateSettings } = useSettings();
@@ -319,6 +320,31 @@ export default function SettingsScreen() {
           <Text style={styles.testButtonText}>Reset AI Data</Text>
         </TouchableOpacity>
       )}
+
+      <TouchableOpacity
+        style={[styles.testButton, { backgroundColor: palette.info, marginTop: 8 }]}
+        onPress={() => {
+          Alert.alert(
+            'Reset Dismissed Suggestions',
+            'Smart suggestions you previously dismissed will reappear. Your learned data and favourites are not affected.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Reset',
+                onPress: () => {
+                  clearDismissedSuggestions().then(() => {
+                    Alert.alert('Done', 'Dismissed suggestions have been restored.');
+                  });
+                },
+              },
+            ]
+          );
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Reset dismissed smart suggestions"
+      >
+        <Text style={styles.testButtonText}>Reset Dismissed Suggestions</Text>
+      </TouchableOpacity>
 
       {/* Send Feedback */}
       <TouchableOpacity
