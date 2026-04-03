@@ -287,63 +287,136 @@ export default function SmartSuggestionsPanel({
   const handleTopicAction = useCallback(async (item) => {
     // Build the phrase list: user's own phrases first, then fill from template
     const seen = new Set();
-    const phrases = [];
+    const newPhrases = [];
 
     // User's actual learned phrases (these are the whole point)
     for (const text of (item.userPhrases || [])) {
       const trimmed = text.trim();
       if (trimmed && !seen.has(trimmed.toLowerCase())) {
-        phrases.push({ id: `lrn_${phrases.length}`, label: trimmed, category: 'request' });
+        newPhrases.push({ id: `lrn_${newPhrases.length}`, label: trimmed, category: 'request' });
         seen.add(trimmed.toLowerCase());
       }
     }
 
     // Fill remaining slots from the built-in template (up to 12 total)
     for (const tp of (item.templatePhrases || [])) {
-      if (phrases.length >= 12) break;
+      if (newPhrases.length >= 12) break;
       if (!seen.has(tp.label.toLowerCase())) {
-        phrases.push({ ...tp, id: `tpl_${phrases.length}` });
+        newPhrases.push({ ...tp, id: `tpl_${newPhrases.length}` });
         seen.add(tp.label.toLowerCase());
       }
     }
 
-    if (phrases.length === 0) return;
+    if (newPhrases.length === 0) return;
 
-    const userCount = (item.userPhrases || []).length;
-    const templateCount = phrases.length - userCount;
-
-    // Build the preview message
-    const previewLines = phrases.slice(0, 5).map(p => `• ${p.label}`).join('\n');
-    const moreText = phrases.length > 5 ? `\n...and ${phrases.length - 5} more` : '';
-
-    Alert.alert(
-      `Create "${item.topicLabel}" page?`,
-      `${userCount} phrases from your usage${templateCount > 0 ? ` + ${templateCount} suggested` : ''}:\n\n${previewLines}${moreText}`,
-      [
-        { text: 'Not now', style: 'cancel' },
-        {
-          text: 'Create page',
-          onPress: async () => {
-            const template = quickPageTemplates.find(t => t.id === item.topicId);
-            const page = {
-              id: `learned_${item.topicId}_${Date.now()}`,
-              label: item.topicLabel,
-              icon: template?.icon || 'create-outline',
-              color: template?.color || '#FF6D00',
-              isCustom: true,
-              isLearned: true,
-              phrases,
-            };
-
-            await loadCustomQuickPages();
-            await saveCustomQuickPage(page);
-            await handleDismiss(`topic:${item.topicId}`);
-
-            if (onCreateQuickPage) onCreateQuickPage(page);
-          },
-        },
-      ]
+    // Check for existing custom page with same topic
+    await loadCustomQuickPages();
+    const existingPages = getCustomQuickPages();
+    const existing = existingPages.find(p =>
+      p.label?.toLowerCase() === item.topicLabel.toLowerCase() ||
+      (p.isLearned && p.id?.includes(item.topicId))
     );
+
+    if (existing) {
+      // Compute what's new vs already present
+      const existingLabels = new Set(existing.phrases.map(p => p.label.toLowerCase()));
+      const genuinelyNew = newPhrases.filter(p => !existingLabels.has(p.label.toLowerCase()));
+
+      if (genuinelyNew.length === 0) {
+        Alert.alert(
+          `"${item.topicLabel}" page is up to date`,
+          `Your existing "${existing.label}" page already contains all the relevant phrases.`,
+          [{ text: 'OK' }]
+        );
+        await handleDismiss(`topic:${item.topicId}`);
+        return;
+      }
+
+      const previewLines = genuinelyNew.slice(0, 4).map(p => `• ${p.label}`).join('\n');
+      const moreText = genuinelyNew.length > 4 ? `\n...and ${genuinelyNew.length - 4} more` : '';
+
+      Alert.alert(
+        `"${existing.label}" page already exists`,
+        `${genuinelyNew.length} new phrase${genuinelyNew.length === 1 ? '' : 's'} from your recent usage:\n\n${previewLines}${moreText}`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Update existing',
+            onPress: async () => {
+              // Merge new phrases into existing page (user phrases first, cap at 12)
+              const mergedSeen = new Set();
+              const merged = [];
+
+              // New learned phrases first (highest priority)
+              for (const p of genuinelyNew) {
+                if (merged.length >= 12) break;
+                if (!mergedSeen.has(p.label.toLowerCase())) {
+                  merged.push({ ...p, id: `lrn_${Date.now()}_${merged.length}` });
+                  mergedSeen.add(p.label.toLowerCase());
+                }
+              }
+
+              // Then existing phrases
+              for (const p of existing.phrases) {
+                if (merged.length >= 12) break;
+                if (!mergedSeen.has(p.label.toLowerCase())) {
+                  merged.push(p);
+                  mergedSeen.add(p.label.toLowerCase());
+                }
+              }
+
+              const updated = { ...existing, phrases: merged };
+              await saveCustomQuickPage(updated);
+              await handleDismiss(`topic:${item.topicId}`);
+              if (onCreateQuickPage) onCreateQuickPage(updated);
+            },
+          },
+          {
+            text: 'Create separate',
+            onPress: async () => {
+              await createNewTopicPage(item, newPhrases);
+            },
+          },
+        ]
+      );
+    } else {
+      // No existing page — simple creation flow
+      const userCount = (item.userPhrases || []).length;
+      const templateCount = newPhrases.length - userCount;
+      const previewLines = newPhrases.slice(0, 5).map(p => `• ${p.label}`).join('\n');
+      const moreText = newPhrases.length > 5 ? `\n...and ${newPhrases.length - 5} more` : '';
+
+      Alert.alert(
+        `Create "${item.topicLabel}" page?`,
+        `${userCount} phrases from your usage${templateCount > 0 ? ` + ${templateCount} suggested` : ''}:\n\n${previewLines}${moreText}`,
+        [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Create page',
+            onPress: async () => {
+              await createNewTopicPage(item, newPhrases);
+            },
+          },
+        ]
+      );
+    }
+
+    async function createNewTopicPage(topicItem, phrases) {
+      const template = quickPageTemplates.find(t => t.id === topicItem.topicId);
+      const page = {
+        id: `learned_${topicItem.topicId}_${Date.now()}`,
+        label: topicItem.topicLabel,
+        icon: template?.icon || 'create-outline',
+        color: template?.color || '#FF6D00',
+        isCustom: true,
+        isLearned: true,
+        phrases,
+      };
+
+      await saveCustomQuickPage(page);
+      await handleDismiss(`topic:${topicItem.topicId}`);
+      if (onCreateQuickPage) onCreateQuickPage(page);
+    }
   }, [onCreateQuickPage, handleDismiss]);
 
   if (!visible) return null;
