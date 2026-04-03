@@ -21,6 +21,9 @@ import { isFavourite, addFavourite, getFavourites } from '../services/favourites
 import { speak } from '../services/speechService';
 import { addSentenceToHistory } from '../services/sentenceHistoryStore';
 import { quickPageTemplates } from '../data/quickPageTemplates';
+import {
+  saveCustomQuickPage, getCustomQuickPages, loadCustomQuickPages,
+} from '../services/customQuickPageStore';
 
 const DISMISSED_KEY = '@aac_smart_dismissed';
 
@@ -75,18 +78,31 @@ const TOPIC_KEYWORDS = {
 };
 
 function detectTopicSuggestions(frequentPhrases) {
-  const allText = frequentPhrases.map(p => (p.text || p.phrase || '').toLowerCase()).join(' ');
+  const phraseList = frequentPhrases.map(p => p.text || p.phrase || '');
+  const allText = phraseList.map(p => p.toLowerCase()).join(' ');
   const matches = [];
 
   for (const [topicId, keywords] of Object.entries(TOPIC_KEYWORDS)) {
     const hits = keywords.filter(kw => allText.includes(kw));
     if (hits.length >= 2) {
       const template = quickPageTemplates.find(t => t.id === topicId);
+
+      // Collect the user's actual phrases that contain any matching keyword
+      const userPhrases = [];
+      for (const phrase of phraseList) {
+        const lower = phrase.toLowerCase();
+        if (keywords.some(kw => lower.includes(kw)) && !userPhrases.includes(phrase)) {
+          userPhrases.push(phrase);
+        }
+      }
+
       matches.push({
         topicId,
         label: template?.label || topicId,
         hitCount: hits.length,
         keywords: hits.slice(0, 3),
+        userPhrases: userPhrases.slice(0, 6), // cap at 6 user phrases
+        templatePhrases: template?.phrases || [],
       });
     }
   }
@@ -181,6 +197,8 @@ function buildSuggestions(dismissed) {
         color: '#FF6D00',
         topicId: topic.topicId,
         topicLabel: topic.label,
+        userPhrases: topic.userPhrases,
+        templatePhrases: topic.templatePhrases,
       });
     }
   }
@@ -215,7 +233,7 @@ export default function SmartSuggestionsPanel({
   settings,
   onSpeakPhrase,
   onAddWord,     // (word, category) => void
-  onCreateQuickPage, // (topicId) => void — navigates to quick page
+  onCreateQuickPage, // (page) => void — called after page is created and saved
   onRefresh,
 }) {
   const [suggestions, setSuggestions] = useState([]);
@@ -266,17 +284,62 @@ export default function SmartSuggestionsPanel({
     handleDismiss(item.text);
   }, [onAddWord, handleDismiss]);
 
-  const handleTopicAction = useCallback((item) => {
+  const handleTopicAction = useCallback(async (item) => {
+    // Build the phrase list: user's own phrases first, then fill from template
+    const seen = new Set();
+    const phrases = [];
+
+    // User's actual learned phrases (these are the whole point)
+    for (const text of (item.userPhrases || [])) {
+      const trimmed = text.trim();
+      if (trimmed && !seen.has(trimmed.toLowerCase())) {
+        phrases.push({ id: `lrn_${phrases.length}`, label: trimmed, category: 'request' });
+        seen.add(trimmed.toLowerCase());
+      }
+    }
+
+    // Fill remaining slots from the built-in template (up to 12 total)
+    for (const tp of (item.templatePhrases || [])) {
+      if (phrases.length >= 12) break;
+      if (!seen.has(tp.label.toLowerCase())) {
+        phrases.push({ ...tp, id: `tpl_${phrases.length}` });
+        seen.add(tp.label.toLowerCase());
+      }
+    }
+
+    if (phrases.length === 0) return;
+
+    const userCount = (item.userPhrases || []).length;
+    const templateCount = phrases.length - userCount;
+
+    // Build the preview message
+    const previewLines = phrases.slice(0, 5).map(p => `• ${p.label}`).join('\n');
+    const moreText = phrases.length > 5 ? `\n...and ${phrases.length - 5} more` : '';
+
     Alert.alert(
       `Create "${item.topicLabel}" page?`,
-      `You often use phrases related to "${item.topicLabel}". Open the Quick Pages to create or use this page?`,
+      `${userCount} phrases from your usage${templateCount > 0 ? ` + ${templateCount} suggested` : ''}:\n\n${previewLines}${moreText}`,
       [
         { text: 'Not now', style: 'cancel' },
         {
-          text: 'Open Quick Pages',
-          onPress: () => {
-            handleDismiss(`topic:${item.topicId}`);
-            if (onCreateQuickPage) onCreateQuickPage(item.topicId);
+          text: 'Create page',
+          onPress: async () => {
+            const template = quickPageTemplates.find(t => t.id === item.topicId);
+            const page = {
+              id: `learned_${item.topicId}_${Date.now()}`,
+              label: item.topicLabel,
+              icon: template?.icon || 'create-outline',
+              color: template?.color || '#FF6D00',
+              isCustom: true,
+              isLearned: true,
+              phrases,
+            };
+
+            await loadCustomQuickPages();
+            await saveCustomQuickPage(page);
+            await handleDismiss(`topic:${item.topicId}`);
+
+            if (onCreateQuickPage) onCreateQuickPage(page);
           },
         },
       ]

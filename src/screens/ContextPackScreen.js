@@ -10,6 +10,7 @@ import {
   Modal, TextInput, Alert, Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRoute } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, radii, spacing } from '../theme';
 import { speak } from '../services/speechService';
@@ -53,6 +54,8 @@ export default function ContextPackScreen() {
   const [editorPhrases, setEditorPhrases] = useState([]); // array of strings
   const [editorNewPhrase, setEditorNewPhrase] = useState('');
 
+  const route = useRoute();
+
   const packs = getAllContextPacks();
   const builtInPages = getAllQuickPageTemplates();
   const activePack = activePackId ? getContextPack(activePackId) : null;
@@ -67,6 +70,22 @@ export default function ContextPackScreen() {
   useEffect(() => {
     loadCustomQuickPages().then(setCustomPages);
   }, []);
+
+  // Handle incoming learned quick page from Smart Suggestions
+  useEffect(() => {
+    const page = route.params?.activateQuickPage;
+    if (page && page.id) {
+      // Reload custom pages to include the newly saved one
+      loadCustomQuickPages().then(pages => {
+        setCustomPages(pages);
+        setActiveQuickPage(page);
+        setActivePackId(null);
+        setShowQuickPages(false);
+      });
+      // Clear the param so it doesn't re-trigger
+      if (route.params) route.params.activateQuickPage = undefined;
+    }
+  }, [route.params?.activateQuickPage]);
 
   const speakPhrase = useCallback((phrase) => {
     speak(phrase.label, {

@@ -733,9 +733,9 @@ export default function AACBoardScreen() {
         onAddWord={(word, category) => {
           addCustomVocabItem(word, category || 'noun', 'smart-suggestion').catch(() => {});
         }}
-        onCreateQuickPage={() => {
+        onCreateQuickPage={(page) => {
           setShowSmart(false);
-          navigation.navigate('Contexts');
+          navigation.navigate('Contexts', { activateQuickPage: page });
         }}
         onRefresh={() => setFavourites([...getFavourites()])}
       />
