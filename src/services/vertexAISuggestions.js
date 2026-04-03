@@ -6,6 +6,7 @@ const FUNCTIONS_BASE = 'https://us-central1-commai-b98fe.cloudfunctions.net';
 const PHRASE_ENDPOINT = `${FUNCTIONS_BASE}/aacPhraseSuggestions`;
 const IMAGE_AAC_ENDPOINT = `${FUNCTIONS_BASE}/imageToAACPhrases`;
 const OCR_AAC_ENDPOINT = `${FUNCTIONS_BASE}/ocrToAACPhrases`;
+const QUICK_PAGE_ENDPOINT = `${FUNCTIONS_BASE}/generateQuickPage`;
 const REQUEST_TIMEOUT_MS = 10000;
 
 function getTimeOfDay() {
@@ -121,5 +122,43 @@ export async function getOCRAACPhrases(base64Image) {
       console.warn('OCR AAC request timed out');
     }
     return { extractedText: '', phrases: [] };
+  }
+}
+
+/**
+ * Generate AAC phrases for a situation using AI.
+ * Powers the "AI Quick Page" feature — describe a situation,
+ * get a ready-to-use communication page.
+ *
+ * @param {string} situation - Description of the situation (e.g. "swimming lesson")
+ * @param {string[]} existingPhrases - Optional existing phrases to complement
+ * @returns {Promise<{ situationLabel: string, phrases: string[] }>}
+ */
+export async function generateQuickPagePhrases(situation, existingPhrases = []) {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    const response = await fetch(QUICK_PAGE_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ situation, existingPhrases }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) return { situationLabel: situation, phrases: [] };
+
+    const result = await response.json();
+    return {
+      situationLabel: result.situationLabel || situation,
+      phrases: Array.isArray(result.phrases) ? result.phrases : [],
+    };
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.warn('Quick page generation request timed out');
+    }
+    return { situationLabel: situation, phrases: [] };
   }
 }

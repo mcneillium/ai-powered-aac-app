@@ -113,7 +113,7 @@ exports.aacPhraseSuggestions = functions.https.onRequest(async (req, res) => {
 
   const projectId = functions.config().vertex?.project_id || 'commai-b98fe';
   const location = 'europe-west1';
-  const model = 'gemini-2.0-flash-lite';
+  const model = 'gemini-2.5-flash';
 
   // Build the user prompt
   let userPrompt = 'Suggest AAC phrases';
@@ -222,7 +222,7 @@ exports.imageToAACPhrases = functions.https.onRequest(async (req, res) => {
 
   const projectId = functions.config().vertex?.project_id || 'commai-b98fe';
   const location = 'europe-west1';
-  const model = 'gemini-2.0-flash-lite';
+  const model = 'gemini-2.5-flash';
 
   try {
     const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
@@ -326,7 +326,7 @@ exports.ocrToAACPhrases = functions.https.onRequest(async (req, res) => {
 
   const projectId = functions.config().vertex?.project_id || 'commai-b98fe';
   const location = 'europe-west1';
-  const model = 'gemini-2.0-flash-lite';
+  const model = 'gemini-2.5-flash';
 
   try {
     const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
@@ -390,7 +390,111 @@ exports.ocrToAACPhrases = functions.https.onRequest(async (req, res) => {
 });
 
 // ════════════════════════════════════════════
-// 5. LOG RETENTION — scheduled cleanup
+// 5. AI QUICK PAGE GENERATOR (Vertex AI Gemini)
+// ════════════════════════════════════════════
+//
+// Generates a set of 8-12 AAC phrases for a given situation.
+// Input: situation name (e.g. "dentist", "swimming lesson")
+// Optional: existing user phrases to incorporate
+// Output: { phrases: string[], situationLabel: string }
+//
+// This powers the "AI Quick Page" feature — caregivers or users
+// describe a situation and get a ready-to-use communication page.
+
+const QUICK_PAGE_PROMPT = `You are a communication specialist for an AAC (Augmentative and Alternative Communication) app.
+
+Given a situation or location, generate 10-12 short AAC phrases a user might need there.
+
+Rules:
+- Phrases MUST be 2-6 words each
+- Use simple, clear, everyday vocabulary
+- Include a mix of: requests (3-4), comments (2-3), social phrases (2-3), urgent/safety (1-2)
+- Be practical and realistic for that specific situation
+- Be appropriate for all ages
+- If the user has provided their own phrases, include and complement them (do not duplicate)
+- Return ONLY a JSON object: {"situationLabel": "Clean Name", "phrases": ["phrase1", ...]}
+
+Example for "swimming pool":
+{"situationLabel": "Swimming Pool", "phrases": ["I want to swim", "I need the toilet", "I am cold", "can I have a towel", "that is too deep", "I am tired", "help me", "this is fun", "I want to get out", "where are my clothes"]}`;
+
+exports.generateQuickPage = functions.https.onRequest(async (req, res) => {
+  setCors(res);
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { situation, existingPhrases } = req.body || {};
+  if (!situation || typeof situation !== 'string' || situation.trim().length === 0) {
+    return res.status(400).json({ error: 'Missing "situation" field' });
+  }
+  if (situation.length > 100) {
+    return res.status(400).json({ error: 'Situation description too long (max 100 chars)' });
+  }
+
+  const projectId = functions.config().vertex?.project_id || 'commai-b98fe';
+  const location = 'europe-west1';
+  const model = 'gemini-2.5-flash';
+
+  let userPrompt = `Generate AAC phrases for this situation: "${situation.trim()}"`;
+  if (Array.isArray(existingPhrases) && existingPhrases.length > 0) {
+    const safe = existingPhrases.slice(0, 6).map(p => String(p).slice(0, 50));
+    userPrompt += `\n\nThe user already has these phrases: ${safe.join(', ')}. Complement them — do not repeat.`;
+  }
+  userPrompt += '\n\nReturn a JSON object with "situationLabel" and "phrases".';
+
+  try {
+    const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+    const client = await auth.getClient();
+    const accessToken = await client.getAccessToken();
+
+    const endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
+
+    const vertexResponse = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        systemInstruction: { parts: [{ text: QUICK_PAGE_PROMPT }] },
+        generationConfig: { temperature: 0.7, maxOutputTokens: 512, topP: 0.9 },
+      }),
+    });
+
+    if (!vertexResponse.ok) {
+      const errText = await vertexResponse.text().catch(() => '');
+      console.error('Quick page generation error:', vertexResponse.status, errText);
+      return res.status(502).json({ error: 'AI service error', phrases: [] });
+    }
+
+    const result = await vertexResponse.json();
+    const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+
+    let parsed = {};
+    try {
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+    } catch {
+      console.warn('Failed to parse quick page response:', rawText);
+    }
+
+    const situationLabel = typeof parsed.situationLabel === 'string'
+      ? parsed.situationLabel.slice(0, 30)
+      : situation.trim().slice(0, 30);
+
+    const phrases = Array.isArray(parsed.phrases)
+      ? parsed.phrases.filter(s => typeof s === 'string' && s.length > 0 && s.length <= 50).slice(0, 12)
+      : [];
+
+    return res.status(200).json({ situationLabel, phrases });
+  } catch (error) {
+    console.error('Quick page generation error:', error.message);
+    return res.status(500).json({ error: 'Internal server error', phrases: [] });
+  }
+});
+
+// ════════════════════════════════════════════
+// 6. LOG RETENTION — scheduled cleanup
 // ════════════════════════════════════════════
 //
 // Runs daily. Deletes log entries older than 30 days from

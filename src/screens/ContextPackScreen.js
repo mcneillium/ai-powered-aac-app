@@ -19,6 +19,7 @@ import { getAllQuickPageTemplates } from '../data/quickPageTemplates';
 import { StatusBar } from 'expo-status-bar';
 import { t } from '../i18n/strings';
 import { addSentenceToHistory } from '../services/sentenceHistoryStore';
+import { generateQuickPagePhrases } from '../services/vertexAISuggestions';
 import {
   loadCustomQuickPages, getCustomQuickPages,
   saveCustomQuickPage, deleteCustomQuickPage,
@@ -53,6 +54,7 @@ export default function ContextPackScreen() {
   const [editorName, setEditorName] = useState('');
   const [editorPhrases, setEditorPhrases] = useState([]); // array of strings
   const [editorNewPhrase, setEditorNewPhrase] = useState('');
+  const [editorGenerating, setEditorGenerating] = useState(false);
 
   const route = useRoute();
 
@@ -179,6 +181,30 @@ export default function ContextPackScreen() {
   const removePhraseFromEditor = useCallback((idx) => {
     setEditorPhrases(prev => prev.filter((_, i) => i !== idx));
   }, []);
+
+  const generatePhrasesWithAI = useCallback(async () => {
+    const name = editorName.trim();
+    if (!name) { Alert.alert('Name first', 'Type a page name so AI knows the situation.'); return; }
+    setEditorGenerating(true);
+    try {
+      const result = await generateQuickPagePhrases(name, editorPhrases);
+      if (result.phrases.length === 0) {
+        Alert.alert('Could not generate', 'AI could not generate phrases for this situation. Check your connection and try again.');
+        return;
+      }
+      // Merge: keep existing, add new unique ones up to 12
+      const existing = new Set(editorPhrases.map(p => p.toLowerCase()));
+      const newPhrases = result.phrases.filter(p => !existing.has(p.toLowerCase()));
+      setEditorPhrases(prev => [...prev, ...newPhrases].slice(0, 12));
+      if (result.situationLabel && !editorPageId) {
+        setEditorName(result.situationLabel);
+      }
+    } catch {
+      Alert.alert('Error', 'Could not reach AI service. Try again later.');
+    } finally {
+      setEditorGenerating(false);
+    }
+  }, [editorName, editorPhrases, editorPageId]);
 
   const saveEditorPage = useCallback(async () => {
     const name = editorName.trim();
@@ -416,6 +442,20 @@ export default function ContextPackScreen() {
               accessibilityLabel="Page name"
             />
 
+            {/* AI Generate button */}
+            <TouchableOpacity
+              style={[styles.editorAIBtn, { backgroundColor: palette.primary, opacity: editorGenerating ? 0.6 : 1 }]}
+              onPress={generatePhrasesWithAI}
+              disabled={editorGenerating}
+              accessibilityRole="button"
+              accessibilityLabel={editorGenerating ? 'Generating phrases' : 'Generate phrases with AI'}
+            >
+              <Ionicons name={editorGenerating ? 'hourglass-outline' : 'sparkles'} size={18} color="#FFF" />
+              <Text style={styles.editorAIBtnText}>
+                {editorGenerating ? 'Generating...' : 'AI Generate phrases'}
+              </Text>
+            </TouchableOpacity>
+
             {/* Phrases */}
             <Text style={[styles.editorLabel, { color: palette.textSecondary }]}>
               Phrases ({editorPhrases.length}/12)
@@ -626,6 +666,20 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  editorAIBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    borderRadius: radii.sm,
+    marginTop: spacing.md,
+    gap: spacing.xs,
+  },
+  editorAIBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
   },
   editorSaveBtn: {
     flexDirection: 'row',
