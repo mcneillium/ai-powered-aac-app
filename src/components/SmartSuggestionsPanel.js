@@ -63,6 +63,34 @@ function guessCategory(word) {
   return 'noun'; // safe default
 }
 
+// ── Topic name normalization ──
+// Strips common decorations so "Dentist", "My Dentist", "Dentist Visit",
+// "Dentist Page", "Dentist (2)" all match the same core topic.
+const STRIP_WORDS = new Set(['my', 'the', 'a', 'visit', 'page', 'trip', 'day', 'time', 'learned', 'custom', 'new']);
+function normalizeTopic(label) {
+  if (!label) return '';
+  return label
+    .toLowerCase()
+    .replace(/\s*\(\d+\)\s*$/, '') // strip trailing (2), (3), etc
+    .replace(/\s*-\s*\w+$/, '')     // strip trailing "- learned", "- updated" etc
+    .split(/\s+/)
+    .filter(w => !STRIP_WORDS.has(w))
+    .join(' ')
+    .trim();
+}
+
+// ── Unique page label ──
+// If "Dentist" exists, returns "Dentist (2)", then "Dentist (3)", etc.
+function uniquePageLabel(baseLabel, existingPages) {
+  const labels = new Set(existingPages.map(p => p.label?.toLowerCase()));
+  if (!labels.has(baseLabel.toLowerCase())) return baseLabel;
+  for (let i = 2; i <= 20; i++) {
+    const candidate = `${baseLabel} (${i})`;
+    if (!labels.has(candidate.toLowerCase())) return candidate;
+  }
+  return `${baseLabel} (${Date.now()})`;
+}
+
 // ── Topic detection for quick page suggestions ──
 // Match user's frequent phrases against known situation keywords.
 const TOPIC_KEYWORDS = {
@@ -310,10 +338,12 @@ export default function SmartSuggestionsPanel({
     if (newPhrases.length === 0) return;
 
     // Check for existing custom page with same topic
+    // Normalized matching: strip common suffixes/prefixes, compare core word
     await loadCustomQuickPages();
     const existingPages = getCustomQuickPages();
+    const topicCore = normalizeTopic(item.topicLabel);
     const existing = existingPages.find(p =>
-      p.label?.toLowerCase() === item.topicLabel.toLowerCase() ||
+      normalizeTopic(p.label) === topicCore ||
       (p.isLearned && p.id?.includes(item.topicId))
     );
 
@@ -403,9 +433,10 @@ export default function SmartSuggestionsPanel({
 
     async function createNewTopicPage(topicItem, phrases) {
       const template = quickPageTemplates.find(t => t.id === topicItem.topicId);
+      const label = uniquePageLabel(topicItem.topicLabel, getCustomQuickPages());
       const page = {
         id: `learned_${topicItem.topicId}_${Date.now()}`,
-        label: topicItem.topicLabel,
+        label,
         icon: template?.icon || 'create-outline',
         color: template?.color || '#FF6D00',
         isCustom: true,
