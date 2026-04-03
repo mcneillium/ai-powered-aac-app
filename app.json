@@ -39,7 +39,7 @@
         "RECORD_AUDIO"
       ],
       "package": "com.elpabloawakens.aipoweredaacapp",
-      "versionCode": 2
+      "versionCode": 3
     },
     "web": {
       "favicon": "./assets/favicon.png"
