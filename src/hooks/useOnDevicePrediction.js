@@ -8,8 +8,8 @@ import { word2idx, idx2word } from '../utils/vocab';
 const SEQ_LEN = 4;
 const BATCH_SIZE = 4;
 
-const MODEL_JSON = require('../../assets/tf_model/model.json');
-const MODEL_WEIGHTS = [ require('../../assets/tf_model/group1-shard1of1.bin') ];
+const MODEL_JSON = require('../../assets/tf_model/word_prediction_tfjs/model.json');
+const MODEL_WEIGHTS = [ require('../../assets/tf_model/word_prediction_tfjs/group1-shard1of1.bin') ];
 
 export function useOnDevicePrediction() {
   const modelRef = useRef(null);
