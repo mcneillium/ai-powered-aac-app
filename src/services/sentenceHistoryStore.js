@@ -69,7 +69,7 @@ export function getFrequentSentences(limit = 10) {
 async function saveHistory() {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-  } catch (e) {
-    console.warn('Failed to save sentence history:', e);
+  } catch {
+    // Non-fatal: AsyncStorage write failed — history retained in memory
   }
 }

@@ -45,7 +45,7 @@ export async function loadImprovedModel() {
 
     return model;
   } catch (error) {
-    console.error('Error loading improved model:', error);
+    // Model load failure — signal not-ready and re-throw for caller to handle
     if (_modelReadyResolve) _modelReadyResolve(false);
     throw error;
   }

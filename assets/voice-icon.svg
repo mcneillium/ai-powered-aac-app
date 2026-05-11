@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="#ffffff"/>
+  
+  <!-- 5 sound bars — symmetric equalizer, bottom-aligned -->
+  
+  <!-- Bar 1: V -->
+  <rect x="142" y="450" width="124" height="340" rx="62" ry="62" fill="#1A8CFF" stroke="#0D5FBF" stroke-width="5"/>
+  
+  <!-- Bar 2: O -->
+  <rect x="290" y="310" width="124" height="480" rx="62" ry="62" fill="#1A8CFF" stroke="#0D5FBF" stroke-width="5"/>
+  
+  <!-- Bar 3: I (tallest, center) -->
+  <rect x="438" y="190" width="124" height="600" rx="62" ry="62" fill="#1A8CFF" stroke="#0D5FBF" stroke-width="5"/>
+  
+  <!-- Bar 4: C -->
+  <rect x="586" y="310" width="124" height="480" rx="62" ry="62" fill="#1A8CFF" stroke="#0D5FBF" stroke-width="5"/>
+  
+  <!-- Bar 5: E -->
+  <rect x="734" y="450" width="124" height="340" rx="62" ry="62" fill="#1A8CFF" stroke="#0D5FBF" stroke-width="5"/>
+
+  <!-- VOICE letters — white, bold -->
+  <style>
+    .letter { 
+      font-family: 'Arial Rounded MT Bold', 'Nunito', 'Varela Round', 'Arial', sans-serif; 
+      font-weight: 900; 
+      font-size: 88px; 
+      fill: #ffffff; 
+      text-anchor: middle; 
+      dominant-baseline: central;
+    }
+  </style>
+  
+  <text class="letter" x="204" y="635">V</text>
+  <text class="letter" x="352" y="635">O</text>
+  <text class="letter" x="500" y="635">I</text>
+  <text class="letter" x="648" y="635">C</text>
+  <text class="letter" x="796" y="635">E</text>
+
+  <!-- Microphone — white, overlapping top of center bar -->
+  <!-- Mic head (capsule) -->
+  <rect x="468" y="218" width="64" height="88" rx="32" ry="32" fill="none" stroke="#ffffff" stroke-width="9"/>
+  
+  <!-- Mic cradle arc -->
+  <path d="M458 282 C458 338 542 338 542 282" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round"/>
+  
+  <!-- Mic stand -->
+  <line x1="500" y1="335" x2="500" y2="370" stroke="#ffffff" stroke-width="9" stroke-linecap="round"/>
+  
+  <!-- Mic base -->
+  <line x1="474" y1="370" x2="526" y2="370" stroke="#ffffff" stroke-width="9" stroke-linecap="round"/>
+</svg>

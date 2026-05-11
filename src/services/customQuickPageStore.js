@@ -49,7 +49,7 @@ export async function deleteCustomQuickPage(id) {
 async function persist() {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(pages));
-  } catch (e) {
-    console.warn('Failed to save custom quick pages:', e);
+  } catch {
+    // Non-fatal: AsyncStorage write failed — pages retained in memory
   }
 }

@@ -14,7 +14,8 @@ import { getPalette, spacing, radii, shadows } from '../theme';
 import {
   getVocabularyGapInsights, getTopWords, hasLearnedData,
 } from '../services/aiProfileStore';
-import { getFrequentSentences } from '../services/sentenceHistoryStore';
+import { getFrequentSentences, getSentenceHistory } from '../services/sentenceHistoryStore';
+import { getConversationContext } from '../services/contextAgent';
 import {
   addFavourite, isFavourite, loadFavourites,
 } from '../services/favouritesStore';
@@ -32,6 +33,9 @@ export default function InsightsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [savedPhrases, setSavedPhrases] = useState({});
   const [requestedWords, setRequestedWords] = useState({});
+  const [velocity, setVelocity] = useState(null);
+  const [diversity, setDiversity] = useState(null);
+  const [conversationCtx, setConversationCtx] = useState(null);
 
   const load = async () => {
     setInsights(getVocabularyGapInsights());
@@ -43,6 +47,23 @@ export default function InsightsScreen() {
       const raw = await AsyncStorage.getItem(VOCAB_REQUESTS_KEY);
       if (raw) setRequestedWords(JSON.parse(raw));
     } catch { /* ignore */ }
+
+    const history = getSentenceHistory();
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+    const oneWeek = 7 * oneDay;
+    const todayCount = history.filter(h => now - h.timestamp < oneDay).length;
+    const weekCount = history.filter(h => now - h.timestamp < oneWeek).length;
+    setVelocity({ today: todayCount, thisWeek: weekCount, avgPerDay: weekCount > 0 ? Math.round(weekCount / 7) : 0 });
+
+    const allWords = getTopWords(999);
+    const uniqueCount = allWords.length;
+    const gapData = getVocabularyGapInsights();
+    const totalWords = gapData?.stats?.totalWords || 1;
+    const diversityRatio = totalWords > 0 ? Math.min(1, uniqueCount / Math.sqrt(totalWords)) : 0;
+    setDiversity({ uniqueWords: uniqueCount, ratio: diversityRatio, label: diversityRatio > 0.7 ? 'High' : diversityRatio > 0.4 ? 'Medium' : 'Low' });
+
+    setConversationCtx(getConversationContext());
   };
 
   useEffect(() => { load(); }, []);
@@ -108,6 +129,46 @@ export default function InsightsScreen() {
           <Stat label="Suggestion acceptance" value={stats.suggestionAcceptanceRate || '—'} palette={palette} />
         </View>
       </View>
+
+      {/* ── Communication velocity ── */}
+      {velocity && (
+        <View style={[styles.card, { backgroundColor: palette.cardBg, ...shadows.card }]}>
+          <SectionHeader icon="speedometer-outline" color={palette.accent} title="Communication velocity" palette={palette} />
+          <View style={styles.statsRow}>
+            <Stat label="Today" value={velocity.today} palette={palette} />
+            <Stat label="This week" value={velocity.thisWeek} palette={palette} />
+            <Stat label="Avg/day" value={velocity.avgPerDay} palette={palette} />
+          </View>
+        </View>
+      )}
+
+      {/* ── Vocabulary diversity ── */}
+      {diversity && (
+        <View style={[styles.card, { backgroundColor: palette.cardBg, ...shadows.card }]}>
+          <SectionHeader icon="leaf-outline" color={palette.success} title="Vocabulary diversity" palette={palette} />
+          <View style={styles.statsRow}>
+            <Stat label="Unique words" value={diversity.uniqueWords} palette={palette} />
+            <Stat label="Diversity" value={diversity.label} palette={palette} />
+          </View>
+          <View style={[styles.barRow, { marginTop: spacing.sm }]}>
+            <Text style={[styles.barLabel, { color: palette.text }]}>Diversity score</Text>
+            <View style={[styles.barTrack, { backgroundColor: palette.chipBg }]}>
+              <View style={[styles.barFill, { width: `${Math.round(diversity.ratio * 100)}%`, backgroundColor: palette.success }]} />
+            </View>
+            <Text style={[styles.barValue, { color: palette.textSecondary }]}>{Math.round(diversity.ratio * 100)}%</Text>
+          </View>
+        </View>
+      )}
+
+      {/* ── Conversation context ── */}
+      {conversationCtx && (
+        <View style={[styles.card, { backgroundColor: palette.cardBg, ...shadows.card }]}>
+          <SectionHeader icon="chatbubbles-outline" color={palette.info} title="Recent conversation" palette={palette} />
+          <Row left="Last spoken" right={conversationCtx.lastSpoken || '—'} palette={palette} />
+          <Row left="Conversation mood" right={conversationCtx.mood} palette={palette} />
+          <Row left="Recent utterances" right={`${conversationCtx.recentCount}`} palette={palette} />
+        </View>
+      )}
 
       {/* ── Most used words ── */}
       {topWords.length > 0 && (

@@ -266,7 +266,7 @@ function buildSuggestions(dismissed) {
   return suggestions.slice(0, 10);
 }
 
-export default function SmartSuggestionsPanel({
+function SmartSuggestionsPanelInner({
   visible,
   palette,
   settings,
@@ -283,6 +283,8 @@ export default function SmartSuggestionsPanel({
   useEffect(() => {
     loadDismissed().then(d => {
       setDismissed(d);
+      loaded.current = true;
+    }).catch(() => {
       loaded.current = true;
     });
   }, []);
@@ -559,6 +561,9 @@ export default function SmartSuggestionsPanel({
     </View>
   );
 }
+
+const SmartSuggestionsPanel = React.memo(SmartSuggestionsPanelInner);
+export default SmartSuggestionsPanel;
 
 const styles = StyleSheet.create({
   panel: {

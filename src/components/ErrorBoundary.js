@@ -1,9 +1,6 @@
-// src/components/ErrorBoundary.js
-// Catches JavaScript errors in child components and displays a recovery UI.
-// Critical for AAC: a crash should never permanently silence the user.
-
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { logger } from '../utils/enhancedLogger';
 
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -16,7 +13,11 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('ErrorBoundary caught:', error, errorInfo);
+    logger.error('ErrorBoundary caught', {
+      error: error?.message,
+      componentStack: errorInfo?.componentStack,
+      boundary: this.props.label || 'root',
+    });
   }
 
   handleReset = () => {
@@ -36,6 +37,7 @@ export default class ErrorBoundary extends React.Component {
             onPress={this.handleReset}
             accessibilityRole="button"
             accessibilityLabel="Try again"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Text style={styles.buttonText}>Try Again</Text>
           </TouchableOpacity>
@@ -45,6 +47,14 @@ export default class ErrorBoundary extends React.Component {
 
     return this.props.children;
   }
+}
+
+export function ScreenErrorBoundary({ children, screenName }) {
+  return (
+    <ErrorBoundary label={screenName}>
+      {children}
+    </ErrorBoundary>
+  );
 }
 
 const styles = StyleSheet.create({

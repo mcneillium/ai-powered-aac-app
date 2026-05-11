@@ -255,7 +255,7 @@ export default function SocialScreen() {
 
       {/* Save to favourites modal */}
       <Modal visible={!!saveMenu} transparent animationType="fade" onRequestClose={() => setSaveMenu(null)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setSaveMenu(null)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setSaveMenu(null)} accessibilityRole="button" accessibilityLabel="Close save menu">
           <View style={[styles.saveMenuCard, { backgroundColor: palette.cardBg }]}>
             <Text style={[styles.saveMenuPhrase, { color: palette.text }]} numberOfLines={3}>
               "{saveMenu?.phrase}"

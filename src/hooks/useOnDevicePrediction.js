@@ -23,8 +23,8 @@ export function useOnDevicePrediction() {
         modelRef.current = await tf.loadLayersModel(
           bundleResourceIO(MODEL_JSON, MODEL_WEIGHTS)
         );
-      } catch (err) {
-        console.warn('Failed to load bundled model:', err);
+      } catch {
+        // Non-fatal: model load failed — predictions will be unavailable
         return;
       }
       if (!mounted) return;
@@ -59,8 +59,8 @@ export function useOnDevicePrediction() {
         .map(x => idx2word[x.i]);
       tf.dispose([input, logits]);
       return top;
-    } catch (err) {
-      console.warn('On-device predict error:', err);
+    } catch {
+      // Non-fatal: prediction failed — return empty suggestions
       return [];
     }
   }

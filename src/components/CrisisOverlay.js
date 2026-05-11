@@ -81,7 +81,11 @@ export default function CrisisOverlay() {
         onRequestClose={() => setVisible(false)}
         accessibilityViewIsModal
       >
-        <View style={[styles.fullScreen, { backgroundColor: '#1A1A1A', paddingTop: insets.top }]}>
+        <View
+          style={[styles.fullScreen, { backgroundColor: '#1A1A1A', paddingTop: insets.top }]}
+          accessibilityRole="alert"
+          accessible={true}
+        >
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Emergency</Text>
@@ -177,9 +181,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   closeBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#333333',
     alignItems: 'center',
     justifyContent: 'center',

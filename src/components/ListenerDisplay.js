@@ -76,6 +76,8 @@ export default function ListenerDisplay() {
         },
       ]}
       pointerEvents="box-only"
+      accessibilityRole="alert"
+      accessibilityLiveRegion="assertive"
     >
       <TouchableOpacity
         style={styles.touchArea}

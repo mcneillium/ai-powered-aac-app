@@ -16,6 +16,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAuth } from 'firebase/auth';
 import { getDatabase, ref, set as fbSet, get as fbGet } from 'firebase/database';
+import { DB_PATHS, dbPath } from '../shared/schema';
+import { sanitizeText } from '../utils/sanitize';
 
 const CUSTOM_VOCAB_KEY = '@aac_custom_vocab';
 const DELETED_IDS_KEY = '@aac_custom_vocab_deleted';
@@ -81,7 +83,7 @@ async function mergeRemote() {
     const uid = getAuth().currentUser?.uid;
     if (!uid) return;
     const db = getDatabase();
-    const snap = await fbGet(ref(db, `customVocab/${uid}`));
+    const snap = await fbGet(ref(db, dbPath(DB_PATHS.CUSTOM_VOCAB, uid)));
     if (!snap.exists()) return;
     const remote = snap.val();
 
@@ -159,7 +161,7 @@ export function getCustomButtons() {
 
 export async function addCustomVocabItem(word, category = 'noun', source = 'manual') {
   if (!word || typeof word !== 'string') return null;
-  const trimmed = word.trim().toLowerCase();
+  const trimmed = sanitizeText(word, 100).toLowerCase();
   if (!trimmed) return null;
   if (customItems.some(item => item.word === trimmed)) return null;
 
@@ -184,7 +186,7 @@ export async function updateCustomVocabItem(id, updates) {
   if (!item) return null;
 
   if (updates.word !== undefined) {
-    const trimmed = updates.word.trim().toLowerCase();
+    const trimmed = sanitizeText(updates.word, 100).toLowerCase();
     if (!trimmed) return null;
     if (customItems.some(i => i.id !== id && i.word === trimmed)) return null;
     item.word = trimmed;
@@ -221,7 +223,7 @@ export async function getVocabRequests() {
     const uid = getAuth().currentUser?.uid;
     if (uid) {
       const db = getDatabase();
-      const snap = await fbGet(ref(db, `vocabRequests/${uid}`));
+      const snap = await fbGet(ref(db, dbPath(DB_PATHS.VOCAB_REQUESTS, uid)));
       if (snap.exists()) {
         const remote = snap.val() || {};
         for (const [term, ts] of Object.entries(remote)) {
@@ -249,11 +251,11 @@ export async function dismissVocabRequest(term) {
     const uid = getAuth().currentUser?.uid;
     if (uid) {
       const db = getDatabase();
-      const snap = await fbGet(ref(db, `vocabRequests/${uid}`));
+      const snap = await fbGet(ref(db, dbPath(DB_PATHS.VOCAB_REQUESTS, uid)));
       if (snap.exists()) {
         const remote = snap.val() || {};
         delete remote[term];
-        await fbSet(ref(db, `vocabRequests/${uid}`), remote);
+        await fbSet(ref(db, dbPath(DB_PATHS.VOCAB_REQUESTS, uid)), remote);
       }
     }
   } catch { /* */ }
@@ -265,8 +267,8 @@ async function saveLocal() {
   try {
     await AsyncStorage.setItem(CUSTOM_VOCAB_KEY, JSON.stringify(customItems));
     await AsyncStorage.setItem(DELETED_IDS_KEY, JSON.stringify(deletedIds));
-  } catch (e) {
-    console.warn('Failed to save custom vocab locally:', e);
+  } catch {
+    // Non-fatal: AsyncStorage write failed — vocab retained in memory
   }
 }
 
@@ -275,7 +277,7 @@ function syncToFirebase() {
     const uid = getAuth().currentUser?.uid;
     if (!uid) return;
     const db = getDatabase();
-    fbSet(ref(db, `customVocab/${uid}`), {
+    fbSet(ref(db, dbPath(DB_PATHS.CUSTOM_VOCAB, uid)), {
       items: customItems,
       deletedIds: deletedIds,
     }).catch(() => {});

@@ -7,7 +7,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, FlatList, StyleSheet, ScrollView,
-  Modal, TextInput, Alert, Pressable,
+  Modal, TextInput, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
@@ -70,7 +70,7 @@ export default function ContextPackScreen() {
   const displayPack = activeQuickPage || activePack;
 
   useEffect(() => {
-    loadCustomQuickPages().then(setCustomPages);
+    loadCustomQuickPages().then(setCustomPages).catch(() => {});
   }, []);
 
   // Handle incoming learned quick page from Smart Suggestions
@@ -83,7 +83,7 @@ export default function ContextPackScreen() {
         setActiveQuickPage(page);
         setActivePackId(null);
         setShowQuickPages(false);
-      });
+      }).catch(() => {});
       // Clear the param so it doesn't re-trigger
       if (route.params) route.params.activateQuickPage = undefined;
     }

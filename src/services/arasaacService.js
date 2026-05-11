@@ -23,11 +23,11 @@ export const searchPictograms = async (language, searchText) => {
     if (response.status === 200) {
       return response.data; // Expected to be an array of Pictogram objects.
     } else {
-      console.error(`Unexpected response status: ${response.status}`);
+      // Non-fatal: unexpected HTTP status — return null to let caller handle gracefully
       return null;
     }
-  } catch (error) {
-    console.error('Error fetching pictograms:', error);
+  } catch {
+    // Non-fatal: network error or timeout — return null to let caller handle gracefully
     return null;
   }
 };
@@ -44,7 +44,7 @@ export const getPictogramUrl = (id, resolution = 300) => {
   return `https://static.arasaac.org/pictograms/${id}/${id}_${resolution}.png`;
 };
 
-/* 
+/*
 // Optionally, if you need to retrieve detailed data for a pictogram, you could add a function like this:
 
 export const getPictogramDetails = async (language, id) => {
@@ -54,11 +54,11 @@ export const getPictogramDetails = async (language, id) => {
     if (response.status === 200) {
       return response.data;
     } else {
-      console.error(`Unexpected response status: ${response.status}`);
+      // Non-fatal: unexpected HTTP status
       return null;
     }
-  } catch (error) {
-    console.error('Error fetching pictogram details:', error);
+  } catch {
+    // Non-fatal: network error or timeout
     return null;
   }
 };

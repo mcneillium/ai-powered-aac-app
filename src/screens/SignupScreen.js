@@ -9,9 +9,11 @@ import {
 } from 'react-native';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getDatabase, ref, set } from 'firebase/database';
+import { DB_PATHS, dbPath } from '../shared/schema';
 import { useNavigation } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, radii, spacing } from '../theme';
+import { sanitizeText } from '../utils/sanitize';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -61,15 +63,16 @@ export default function SignupScreen() {
       // Write user profile to database
       try {
         const db = getDatabase();
-        await set(ref(db, `users/${user.uid}`), {
-          name: trimmedName || trimmedEmail.split('@')[0],
+        const safeName = sanitizeText(trimmedName, 100) || trimmedEmail.split('@')[0];
+        await set(ref(db, dbPath(DB_PATHS.USERS, user.uid)), {
+          name: safeName,
           email: trimmedEmail,
           role,
           createdAt: Date.now(),
         });
       } catch (dbError) {
         // Auth succeeded but DB write failed — user can still use the app
-        console.warn('Profile DB write failed:', dbError);
+        // Profile DB write failed — user can still use app
       }
 
       // Auth state change triggers context — navigate back
@@ -105,6 +108,7 @@ export default function SignupScreen() {
           value={name}
           accessibilityLabel="Name input"
           returnKeyType="next"
+          maxLength={100}
         />
         <TextInput
           style={[styles.input, { borderColor: palette.inputBorder, color: palette.text, backgroundColor: palette.inputBg }]}

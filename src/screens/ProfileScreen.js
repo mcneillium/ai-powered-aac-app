@@ -9,9 +9,11 @@ import {
 } from 'react-native';
 import { getAuth, signOut, deleteUser } from 'firebase/auth';
 import { getDatabase, ref, remove } from 'firebase/database';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
+import { DB_PATHS, dbPath } from '../shared/schema';
 import { getPalette, shadows, radii, spacing } from '../theme';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -49,15 +51,15 @@ export default function ProfileScreen() {
               try {
                 const db = getDatabase();
                 await Promise.all([
-                  remove(ref(db, `users/${uid}`)),
-                  remove(ref(db, `userSettings/${uid}`)),
-                  remove(ref(db, `userLogs/${uid}`)),
-                  remove(ref(db, `userSync/${uid}`)),
-                  remove(ref(db, `customVocab/${uid}`)),
-                  remove(ref(db, `vocabRequests/${uid}`)),
+                  remove(ref(db, dbPath(DB_PATHS.USERS, uid))),
+                  remove(ref(db, dbPath(DB_PATHS.USER_SETTINGS, uid))),
+                  remove(ref(db, dbPath(DB_PATHS.USER_LOGS, uid))),
+                  remove(ref(db, dbPath(DB_PATHS.USER_SYNC, uid))),
+                  remove(ref(db, dbPath(DB_PATHS.CUSTOM_VOCAB, uid))),
+                  remove(ref(db, dbPath(DB_PATHS.VOCAB_REQUESTS, uid))),
                 ]);
               } catch (dbErr) {
-                console.warn('Could not remove some user data:', dbErr);
+                // Could not remove some user data — non-fatal
               }
 
               // Clear all user-related local data
@@ -80,7 +82,7 @@ export default function ProfileScreen() {
                   'savedEmotion',
                 ]);
               } catch (localErr) {
-                console.warn('Could not clear some local data:', localErr);
+                // Could not clear some local data — non-fatal
               }
 
               // Delete auth account

@@ -3,7 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAuth } from 'firebase/auth';
 import { ref, push, set, serverTimestamp } from 'firebase/database';
 import { db } from '../../firebaseConfig';
+import { Platform } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
+import { DB_PATHS, dbPath } from '../shared/schema';
 
 // Maximum number of logs to store locally before auto-sync
 const MAX_CACHED_LOGS = 50;
@@ -24,31 +26,28 @@ let logQueue = [];
 let isProcessingQueue = false;
 let isOnline = true;
 
-// Initialize connectivity listener
+let _loggerInitialised = false;
+
 export function initLogger() {
-  // Set up network state listener
+  if (_loggerInitialised) return true;
+  _loggerInitialised = true;
+
   NetInfo.addEventListener(state => {
     const previousState = isOnline;
     isOnline = state.isConnected && state.isInternetReachable;
-    
-    // If we just came back online, try to sync logs
     if (!previousState && isOnline) {
-      console.log('📶 Network connection restored. Attempting to sync logs...');
-      syncLogsToFirebase().catch(err => 
-        console.error('Failed to sync logs after reconnection:', err)
-      );
+      syncLogsToFirebase().catch(() => {});
     }
   });
-  
-  // Set log level from storage if available
+
   AsyncStorage.getItem('logLevel')
     .then(level => {
       if (level !== null) {
         currentLogLevel = parseInt(level);
       }
     })
-    .catch(err => console.error('Error loading log level:', err));
-    
+    .catch(() => {});
+
   return true;
 }
 
@@ -61,7 +60,7 @@ export function setLogLevel(level) {
   if (LOG_LEVELS[levelUpper] !== undefined) {
     currentLogLevel = LOG_LEVELS[levelUpper];
     AsyncStorage.setItem('logLevel', currentLogLevel.toString())
-      .catch(err => console.error('Error saving log level:', err));
+      .catch(() => {});
   }
 }
 
@@ -73,13 +72,14 @@ async function processLogQueue() {
   
   isProcessingQueue = true;
   
+  let logsToAdd = [];
   try {
     // Get current logs
     const storedLogsString = await AsyncStorage.getItem('userInteractionLog');
     let storedLogs = storedLogsString ? JSON.parse(storedLogsString) : [];
-    
+
     // Add queued logs
-    const logsToAdd = [...logQueue];
+    logsToAdd = [...logQueue];
     logQueue = []; // Clear the queue
     
     storedLogs = [...storedLogs, ...logsToAdd];
@@ -99,9 +99,9 @@ async function processLogQueue() {
       await syncLogsToFirebase();
     }
   } catch (error) {
-    console.error('Error processing log queue:', error);
+    // Error processing log queue — items preserved in queue
     // Put the logs back in the queue if operation failed
-    logQueue = [...logQueue, ...logQueue];
+    logQueue = [...logsToAdd, ...logQueue];
   } finally {
     isProcessingQueue = false;
   }
@@ -154,7 +154,7 @@ export async function logEvent(action, metadata = {}, level = 'info') {
     // Try to add log immediately to Firebase if online
     if (isOnline && currentUser) {
       try {
-        const logsRef = ref(db, `userLogs/${currentUser.uid}`);
+        const logsRef = ref(db, dbPath(DB_PATHS.USER_LOGS, currentUser.uid));
         await push(logsRef, {
           ...logEntry,
           serverTimestamp: serverTimestamp()
@@ -163,19 +163,17 @@ export async function logEvent(action, metadata = {}, level = 'info') {
         // Successfully logged to Firebase, no need to queue
         return logEntry;
       } catch (firebaseError) {
-        console.log('Failed to log directly to Firebase, queueing for later:', firebaseError.message);
+        // Firebase write failed — will be queued locally
         // Continue to process the queue and store locally
       }
     }
     
     // Process the queue (store in AsyncStorage)
-    processLogQueue().catch(err => 
-      console.error('Error in processLogQueue:', err)
-    );
+    processLogQueue().catch(() => {});
     
     return logEntry;
   } catch (error) {
-    console.error('Error in logEvent:', error);
+    // Error in logEvent — swallowed to prevent cascading failures
     return null;
   }
 }
@@ -195,7 +193,7 @@ async function getSessionId() {
     
     return sessionId;
   } catch (error) {
-    console.error('Error getting session ID:', error);
+    // Error getting session ID — using fallback
     return 'unknown_session';
   }
 }
@@ -205,15 +203,12 @@ async function getSessionId() {
  */
 async function getDeviceInfo() {
   try {
-    // This would typically use React Native's Platform and other APIs
-    // to get actual device info, but we'll use a placeholder for now
     return {
-      platform: 'React Native',
-      appVersion: '1.0.0',
-      // Add more device info as needed
+      platform: Platform.OS,
+      appVersion: '1.3.0',
     };
   } catch (error) {
-    console.error('Error getting device info:', error);
+    // Error getting device info — using fallback
     return { platform: 'unknown' };
   }
 }
@@ -225,21 +220,18 @@ export async function syncLogsToFirebase() {
   try {
     const auth = getAuth();
     if (!auth.currentUser) {
-      console.log('Not logged in, skipping sync');
       return false;
     }
     
     // Check network status before attempting sync
     const networkState = await NetInfo.fetch();
     if (!networkState.isConnected || !networkState.isInternetReachable) {
-      console.log('No network connection, skipping sync');
       return false;
     }
     
     // Get logs from AsyncStorage
     const storedLogsString = await AsyncStorage.getItem('userInteractionLog');
     if (!storedLogsString) {
-      console.log('No logs to sync');
       return true;
     }
     
@@ -248,10 +240,8 @@ export async function syncLogsToFirebase() {
       return true;
     }
     
-    console.log(`Syncing ${storedLogs.length} logs to Firebase...`);
-    
     // Create a batch of logs in Firebase
-    const logsRef = ref(db, `userLogs/${auth.currentUser.uid}`);
+    const logsRef = ref(db, dbPath(DB_PATHS.USER_LOGS, auth.currentUser.uid));
     const promises = storedLogs.map(log => {
       const newLogRef = push(logsRef);
       return set(newLogRef, {
@@ -266,10 +256,8 @@ export async function syncLogsToFirebase() {
     // Clear local logs after successful sync
     await AsyncStorage.setItem('userInteractionLog', JSON.stringify([]));
     
-    console.log('✅ Logs successfully synced to Firebase');
-    
     // Log the sync itself (directly to Firebase)
-    const syncLogRef = push(ref(db, `userLogs/${auth.currentUser.uid}`));
+    const syncLogRef = push(ref(db, dbPath(DB_PATHS.USER_LOGS, auth.currentUser.uid)));
     await set(syncLogRef, {
       action: 'logs_synced',
       count: storedLogs.length,
@@ -280,7 +268,7 @@ export async function syncLogsToFirebase() {
     
     return true;
   } catch (error) {
-    console.error('Error syncing logs to Firebase:', error);
+    // Error syncing logs to Firebase — logs preserved locally
     
     // If there was an error, keep the logs locally
     return false;
@@ -312,7 +300,7 @@ export async function getLocalLogs(limit = 100, level = 'info') {
       .slice(0, limit);
       
   } catch (error) {
-    console.error('Error getting local logs:', error);
+    // Error getting local logs
     return [];
   }
 }
@@ -325,7 +313,7 @@ export async function clearLocalLogs() {
     await AsyncStorage.setItem('userInteractionLog', JSON.stringify([]));
     return true;
   } catch (error) {
-    console.error('Error clearing local logs:', error);
+    // Error clearing local logs
     return false;
   }
 }

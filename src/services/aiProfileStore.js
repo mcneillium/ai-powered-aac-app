@@ -11,7 +11,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PROFILE_KEY = '@aac_ai_profile';
-const SAVE_INTERVAL = 10; // Save every N updates
+const SAVE_INTERVAL = 5;
+
+const MAX_WORD_FREQUENCIES = 500;
+const MAX_BIGRAMS = 500;
+const MAX_PHRASE_FREQUENCIES = 300;
+const MAX_FAILED_SEARCHES = 100;
 
 let profile = null;
 let updatesSinceLastSave = 0;
@@ -74,8 +79,8 @@ export async function loadAIProfile() {
       profile = createDefaultProfile();
     }
     return profile;
-  } catch (error) {
-    console.warn('Error loading AI profile:', error);
+  } catch {
+    // Non-fatal: AsyncStorage read failed — start with fresh profile
     profile = createDefaultProfile();
     return profile;
   }
@@ -84,13 +89,26 @@ export async function loadAIProfile() {
 /**
  * Save the current profile to AsyncStorage.
  */
+function pruneMap(map, max) {
+  const entries = Object.entries(map);
+  if (entries.length <= max) return map;
+  entries.sort((a, b) => b[1] - a[1]);
+  const pruned = {};
+  for (let i = 0; i < max; i++) pruned[entries[i][0]] = entries[i][1];
+  return pruned;
+}
+
 async function saveProfile() {
   if (!profile) return;
   try {
+    profile.wordFrequencies = pruneMap(profile.wordFrequencies, MAX_WORD_FREQUENCIES);
+    profile.bigrams = pruneMap(profile.bigrams, MAX_BIGRAMS);
+    profile.phraseFrequencies = pruneMap(profile.phraseFrequencies, MAX_PHRASE_FREQUENCIES);
+    profile.failedSearches = pruneMap(profile.failedSearches, MAX_FAILED_SEARCHES);
     profile.updatedAt = Date.now();
     await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
-  } catch (error) {
-    console.warn('Error saving AI profile:', error);
+  } catch {
+    // Non-fatal: AsyncStorage write failed — profile retained in memory
   }
 }
 

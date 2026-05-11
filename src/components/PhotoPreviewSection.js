@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
-import * as Speech from 'expo-speech';
+import { speak } from '../services/speechService';
 
 export default function PhotoPreviewSection({ photo, handleRetakePhoto }) {
   const speakDescription = () => {
     if (photo.description) {
-      Speech.speak(photo.description);
+      speak(photo.description);
     }
   };
 
@@ -15,15 +15,27 @@ export default function PhotoPreviewSection({ photo, handleRetakePhoto }) {
         source={{ uri: photo.uri }}
         style={styles.image}
         resizeMode="contain"
+        accessible={true}
+        accessibilityLabel={photo.description || 'Photo preview'}
       />
       <Text style={styles.description}>
         {photo.description || 'No description available'}
       </Text>
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.button} onPress={speakDescription}>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={speakDescription}
+          accessibilityRole="button"
+          accessibilityLabel="Speak photo description"
+        >
           <Text style={styles.buttonText}>Speak Description</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={handleRetakePhoto}>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={handleRetakePhoto}
+          accessibilityRole="button"
+          accessibilityLabel="Retake photo"
+        >
           <Text style={styles.buttonText}>Retake Photo</Text>
         </TouchableOpacity>
       </View>

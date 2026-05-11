@@ -64,7 +64,7 @@ export function isFavourite(phrase) {
 async function saveFavourites() {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(favourites));
-  } catch (e) {
-    console.warn('Failed to save favourites:', e);
+  } catch {
+    // Non-fatal: AsyncStorage write failed — favourites retained in memory
   }
 }

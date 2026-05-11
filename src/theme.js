@@ -30,6 +30,54 @@ export const radii = {
   pill: 999,
 };
 
+// Category color coding for word types (child-friendly, high contrast)
+export const CATEGORY_COLORS = {
+  people: '#5BB5B5',    // teal
+  actions: '#FF7043',   // orange
+  things: '#42A5F5',    // blue
+  places: '#66BB6A',    // green
+  feelings: '#EF5350',  // red
+  food: '#FFA726',      // amber
+  social: '#AB47BC',    // purple
+  questions: '#78909C', // blue-grey
+  pronoun: '#FFD54F',   // warm yellow
+  verb: '#81C784',      // green
+  noun: '#FFB74D',      // orange
+  adjective: '#64B5F6', // blue
+  important: '#E57373', // red
+  misc: '#BDBDBD',      // grey
+  nav: '#90CAF9',       // light blue
+};
+
+// Emotion background tints (pastel, behind large emoji faces)
+export const EMOTION_COLORS = {
+  happy: '#FFF9C4',
+  sad: '#BBDEFB',
+  angry: '#FFCDD2',
+  worried: '#E1BEE7',
+  frustrated: '#FFE0B2',
+  excited: '#FFF9C4',
+  overwhelmed: '#D7CCC8',
+  tired: '#CFD8DC',
+  lonely: '#C5CAE9',
+  proud: '#C8E6C9',
+  embarrassed: '#F8BBD0',
+  scared: '#E1BEE7',
+  calm: '#B2DFDB',
+  sick: '#D7CCC8',
+  in_pain: '#FFCDD2',
+  confused: '#FFE0B2',
+};
+
+// Child-friendly typography sizes
+export const childFonts = {
+  body: 18,
+  label: 16,
+  title: 24,
+  wordLabel: 14,
+  tabLabel: 12,
+};
+
 export const shadows = {
   card: {
     shadowColor: '#2E2E3A',

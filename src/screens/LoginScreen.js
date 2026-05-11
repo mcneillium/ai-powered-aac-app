@@ -4,12 +4,12 @@
 
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
+  Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../firebaseConfig';
-import { logEvent } from '../utils/logger';
+import { logEvent } from '../utils/enhancedLogger';
 import { useNavigation } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, brand, radii, spacing } from '../theme';

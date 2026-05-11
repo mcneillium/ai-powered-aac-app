@@ -12,19 +12,18 @@ import { DB_PATHS, dbPath } from '../shared/schema';
  * Updates the lastActivity timestamp locally and in Firebase.
  */
 export const updateLastActivity = async () => {
-  const user = getAuth().currentUser;
-  const timestamp = new Date().toISOString();
-
   try {
+    const user = getAuth().currentUser;
+    const timestamp = new Date().toISOString();
+
     await AsyncStorage.setItem('lastActivity', timestamp);
     if (user) {
       await set(ref(db, dbPath(DB_PATHS.USER_SYNC, user.uid)), {
         lastActivity: timestamp,
       });
     }
-  } catch (err) {
-    // Non-blocking — local timestamp is the priority
-    console.warn('Failed to update sync timestamp:', err.message);
+  } catch {
+    // Non-fatal: sync timestamp update failed — local timestamp is the priority
   }
 };
 
@@ -34,8 +33,8 @@ export const updateLastActivity = async () => {
 export const getLastActivity = async () => {
   try {
     return await AsyncStorage.getItem('lastActivity');
-  } catch (err) {
-    console.warn('Failed to read sync timestamp:', err.message);
+  } catch {
+    // Non-fatal: AsyncStorage read failed
     return null;
   }
 };

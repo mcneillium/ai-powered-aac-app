@@ -41,8 +41,7 @@ export async function getVisionLabels(imageUri) {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Vision API error:', errorText);
+      // Vision API returned an error — fall through to catch block for HF fallback
       throw new Error('Vision API request failed');
     }
 
@@ -61,9 +60,8 @@ export async function getVisionLabels(imageUri) {
     if (unique.length === 0) return 'No objects detected';
 
     return `I see: ${unique.join(', ')}`;
-  } catch (error) {
-    console.error('Vision labeling error:', error);
-    // Fall back to HuggingFace
+  } catch {
+    // Non-fatal: Vision API failed — fall back to HuggingFace captioning
     return hfCaption(imageUri);
   }
 }

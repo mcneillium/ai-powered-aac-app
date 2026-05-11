@@ -2,12 +2,60 @@
 // Client-side service for calling Vertex AI-powered AAC suggestions
 // via Firebase Cloud Functions. No secrets on the client.
 
+import { getAuth } from 'firebase/auth';
+
 const FUNCTIONS_BASE = 'https://us-central1-commai-b98fe.cloudfunctions.net';
 const PHRASE_ENDPOINT = `${FUNCTIONS_BASE}/aacPhraseSuggestions`;
 const IMAGE_AAC_ENDPOINT = `${FUNCTIONS_BASE}/imageToAACPhrases`;
 const OCR_AAC_ENDPOINT = `${FUNCTIONS_BASE}/ocrToAACPhrases`;
 const QUICK_PAGE_ENDPOINT = `${FUNCTIONS_BASE}/generateQuickPage`;
 const REQUEST_TIMEOUT_MS = 10000;
+
+// Circuit breaker: stop calling Vertex if it fails repeatedly
+const CIRCUIT_BREAKER_THRESHOLD = 3;
+const CIRCUIT_BREAKER_RESET_MS = 5 * 60 * 1000;
+let _consecutiveFailures = 0;
+let _circuitOpenUntil = 0;
+
+function isCircuitOpen() {
+  if (_consecutiveFailures < CIRCUIT_BREAKER_THRESHOLD) return false;
+  if (Date.now() > _circuitOpenUntil) {
+    _consecutiveFailures = 0;
+    return false;
+  }
+  return true;
+}
+
+function recordSuccess() { _consecutiveFailures = 0; }
+function recordFailure() {
+  _consecutiveFailures++;
+  if (_consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
+    _circuitOpenUntil = Date.now() + CIRCUIT_BREAKER_RESET_MS;
+  }
+}
+
+// LRU response cache for phrase suggestions
+const _phraseCache = new Map();
+const MAX_CACHE = 50;
+function cacheGet(key) { return _phraseCache.get(key); }
+function cacheSet(key, value) {
+  if (_phraseCache.has(key)) _phraseCache.delete(key);
+  _phraseCache.set(key, value);
+  if (_phraseCache.size > MAX_CACHE) {
+    _phraseCache.delete(_phraseCache.keys().next().value);
+  }
+}
+
+async function getAuthHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  try {
+    const user = getAuth().currentUser;
+    if (user) {
+      headers['Authorization'] = `Bearer ${await user.getIdToken()}`;
+    }
+  } catch {}
+  return headers;
+}
 
 function getTimeOfDay() {
   const hour = new Date().getHours();
@@ -27,13 +75,19 @@ function getTimeOfDay() {
  * @returns {Promise<string[]>} Array of phrase suggestions
  */
 export async function getAACPhraseSuggestions(currentWords = [], recentPhrases = []) {
+  if (isCircuitOpen()) return [];
+
+  const cacheKey = currentWords.join(' ');
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     const response = await fetch(PHRASE_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({
         currentWords,
         recentPhrases,
@@ -44,14 +98,18 @@ export async function getAACPhraseSuggestions(currentWords = [], recentPhrases =
 
     clearTimeout(timeout);
 
-    if (!response.ok) return [];
+    if (!response.ok) {
+      recordFailure();
+      return [];
+    }
 
     const result = await response.json();
-    return Array.isArray(result.suggestions) ? result.suggestions : [];
+    const suggestions = Array.isArray(result.suggestions) ? result.suggestions : [];
+    recordSuccess();
+    if (suggestions.length > 0) cacheSet(cacheKey, suggestions);
+    return suggestions;
   } catch (error) {
-    if (error.name === 'AbortError') {
-      console.warn('Vertex AI suggestion request timed out');
-    }
+    recordFailure();
     return [];
   }
 }
@@ -70,7 +128,7 @@ export async function getImageAACPhrases(base64Image) {
 
     const response = await fetch(IMAGE_AAC_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ image: base64Image }),
       signal: controller.signal,
     });
@@ -81,10 +139,8 @@ export async function getImageAACPhrases(base64Image) {
 
     const result = await response.json();
     return Array.isArray(result.phrases) ? result.phrases : [];
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      console.warn('Image AAC request timed out');
-    }
+  } catch {
+    // Non-fatal: network error or timeout — return empty results
     return [];
   }
 }
@@ -103,7 +159,7 @@ export async function getOCRAACPhrases(base64Image) {
 
     const response = await fetch(OCR_AAC_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ image: base64Image }),
       signal: controller.signal,
     });
@@ -117,10 +173,8 @@ export async function getOCRAACPhrases(base64Image) {
       extractedText: result.extractedText || '',
       phrases: Array.isArray(result.phrases) ? result.phrases : [],
     };
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      console.warn('OCR AAC request timed out');
-    }
+  } catch {
+    // Non-fatal: network error or timeout — return empty results
     return { extractedText: '', phrases: [] };
   }
 }
@@ -141,7 +195,7 @@ export async function generateQuickPagePhrases(situation, existingPhrases = []) 
 
     const response = await fetch(QUICK_PAGE_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ situation, existingPhrases }),
       signal: controller.signal,
     });
@@ -155,10 +209,8 @@ export async function generateQuickPagePhrases(situation, existingPhrases = []) 
       situationLabel: result.situationLabel || situation,
       phrases: Array.isArray(result.phrases) ? result.phrases : [],
     };
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      console.warn('Quick page generation request timed out');
-    }
+  } catch {
+    // Non-fatal: network error or timeout — return empty results
     return { situationLabel: situation, phrases: [] };
   }
 }

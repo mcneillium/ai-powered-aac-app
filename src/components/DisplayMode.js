@@ -45,6 +45,7 @@ export default function DisplayMode({ visible, onClose, text, mode = 'display' }
       animationType="fade"
       onRequestClose={onClose}
       supportedOrientations={['portrait', 'landscape']}
+      accessibilityViewIsModal={true}
     >
       <StatusBar hidden />
       <TouchableOpacity

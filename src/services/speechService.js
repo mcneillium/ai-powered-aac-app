@@ -112,7 +112,7 @@ export async function getAvailableVoices() {
     cachedVoices = await Speech.getAvailableVoicesAsync();
     return cachedVoices;
   } catch (e) {
-    console.warn('Failed to get available voices:', e);
+    // Failed to get available voices — using empty list
     return [];
   }
 }

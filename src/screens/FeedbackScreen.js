@@ -5,11 +5,13 @@ import {
 } from 'react-native';
 import { getDatabase, ref, push } from 'firebase/database';
 import { getAuth } from 'firebase/auth';
+import { DB_PATHS, dbPath } from '../shared/schema';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { useNetwork } from '../contexts/NetworkContext';
 import { getPalette } from '../theme';
+import { sanitizeText } from '../utils/sanitize';
 
 const FEEDBACK_QUEUE_KEY = '@aac_feedback_queue';
 
@@ -37,17 +39,17 @@ export default function FeedbackScreen() {
     }
     setSubmitting(true);
     const entry = {
-      name,
-      email,
-      role,
-      feedback,
+      name: sanitizeText(name, 100),
+      email: sanitizeText(email, 254),
+      role: sanitizeText(role, 20),
+      feedback: sanitizeText(feedback, 2000),
       timestamp: Date.now(),
     };
 
     try {
       if (isOnline) {
         const uid = getAuth().currentUser?.uid || 'anonymous';
-        await push(ref(getDatabase(), `feedback/${uid}`), entry);
+        await push(ref(getDatabase(), dbPath(DB_PATHS.FEEDBACK, uid)), entry);
         Alert.alert('Thank you!', 'Your feedback has been submitted.');
       } else {
         // Queue for later sync
@@ -99,6 +101,7 @@ export default function FeedbackScreen() {
         onChangeText={setName}
         accessibilityLabel="Your name"
         autoComplete="name"
+        maxLength={100}
       />
       <TextInput
         style={[styles.input, { color: palette.text, borderColor: palette.inputBorder, backgroundColor: palette.inputBg }]}
@@ -110,6 +113,7 @@ export default function FeedbackScreen() {
         accessibilityLabel="Your email"
         autoComplete="email"
         autoCapitalize="none"
+        maxLength={254}
       />
       <TextInput
         style={[styles.input, { color: palette.text, borderColor: palette.inputBorder, backgroundColor: palette.inputBg }]}
@@ -118,6 +122,7 @@ export default function FeedbackScreen() {
         value={role}
         onChangeText={setRole}
         accessibilityLabel="Your role"
+        maxLength={20}
       />
       <TextInput
         style={[styles.input, { height: 120, color: palette.text, borderColor: palette.inputBorder, backgroundColor: palette.inputBg }]}
@@ -129,6 +134,7 @@ export default function FeedbackScreen() {
         onChangeText={setFeedback}
         accessibilityLabel="Your feedback"
         textAlignVertical="top"
+        maxLength={2000}
       />
 
       {submitting ? (

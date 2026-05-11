@@ -26,8 +26,8 @@ export async function getAISuggestions(currentSentence) {
       4,    // sequenceLength
       4     // topK
     );
-  } catch (error) {
-    console.warn('AI suggestion error:', error.message);
+  } catch {
+    // Non-fatal: model prediction failed — return empty suggestions
     return [];
   }
 }

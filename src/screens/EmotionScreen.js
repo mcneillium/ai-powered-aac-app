@@ -1,193 +1,116 @@
 // src/screens/EmotionScreen.js
-// Emotion communication builder: feel → intensity → cause → need.
-// Produces complete AAC sentences like:
-//   "I feel frustrated a lot because it is loud. I need quiet."
-//
-// Design: step-by-step guided flow with big tappable cards.
-// Each step is optional — user can speak at any point.
-// Low cognitive load: calm colors, large targets, minimal text.
+// Emotion communication: big OpenMoji faces in a visual grid.
+// Tap an emotion → speak it immediately via TTS.
+// Guided flow: feel → intensity → cause → need → speak full sentence.
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useSettings } from '../contexts/SettingsContext';
-import { getPalette, spacing, radii } from '../theme';
+import { getPalette, spacing, radii, EMOTION_COLORS } from '../theme';
 import { speak } from '../services/speechService';
 import { addSentenceToHistory } from '../services/sentenceHistoryStore';
 import { recordWordSelection } from '../services/aiProfileStore';
+import { recordEmotionSelection } from '../services/caregiverAlerts';
+import SymbolImage from '../components/SymbolImage';
 import DisplayMode from '../components/DisplayMode';
 import { StatusBar } from 'expo-status-bar';
+import { emotionToHexcode } from '../data/symbolAssetMap';
+import {
+  setScanItems, setScanMode, setScanSpeed,
+  onScanChange, onScanSelect, startScan, stopScan,
+  cleanup as cleanupScan,
+} from '../services/switchScanService';
 
 const EMOTIONS = [
-  { id: 'happy', label: 'Happy', emoji: '😊', color: '#4CAF50' },
-  { id: 'sad', label: 'Sad', emoji: '😢', color: '#5C6BC0' },
-  { id: 'angry', label: 'Angry', emoji: '😠', color: '#E53935' },
-  { id: 'worried', label: 'Worried', emoji: '😟', color: '#7E57C2' },
-  { id: 'frustrated', label: 'Frustrated', emoji: '😤', color: '#FF7043' },
-  { id: 'excited', label: 'Excited', emoji: '🤩', color: '#FFB300' },
-  { id: 'overwhelmed', label: 'Overwhelmed', emoji: '😵', color: '#8D6E63' },
-  { id: 'tired', label: 'Tired', emoji: '😴', color: '#78909C' },
-  { id: 'lonely', label: 'Lonely', emoji: '😔', color: '#5C6BC0' },
-  { id: 'proud', label: 'Proud', emoji: '😊', color: '#66BB6A' },
-  { id: 'embarrassed', label: 'Embarrassed', emoji: '😳', color: '#EC407A' },
-  { id: 'scared', label: 'Scared', emoji: '😱', color: '#7E57C2' },
-  { id: 'calm', label: 'Calm', emoji: '😌', color: '#26A69A' },
-  { id: 'sick', label: 'Sick', emoji: '🤢', color: '#8D6E63' },
-  { id: 'in_pain', label: 'In pain', emoji: '😣', color: '#E53935' },
-  { id: 'confused', label: 'Confused', emoji: '😕', color: '#FF7043' },
+  { id: 'happy', label: 'Happy', color: '#4CAF50', bg: EMOTION_COLORS.happy },
+  { id: 'sad', label: 'Sad', color: '#5C6BC0', bg: EMOTION_COLORS.sad },
+  { id: 'angry', label: 'Angry', color: '#E53935', bg: EMOTION_COLORS.angry },
+  { id: 'scared', label: 'Scared', color: '#7E57C2', bg: EMOTION_COLORS.scared },
+  { id: 'excited', label: 'Excited', color: '#FFB300', bg: EMOTION_COLORS.excited },
+  { id: 'tired', label: 'Tired', color: '#78909C', bg: EMOTION_COLORS.tired },
+  { id: 'confused', label: 'Confused', color: '#FF7043', bg: EMOTION_COLORS.confused },
+  { id: 'sick', label: 'Sick', color: '#8D6E63', bg: EMOTION_COLORS.sick },
+];
+
+const EMOTIONS_EXTENDED = [
+  { id: 'worried', label: 'Worried', color: '#7E57C2', bg: EMOTION_COLORS.worried },
+  { id: 'frustrated', label: 'Frustrated', color: '#FF7043', bg: EMOTION_COLORS.frustrated },
+  { id: 'overwhelmed', label: 'Overwhelmed', color: '#8D6E63', bg: EMOTION_COLORS.overwhelmed },
+  { id: 'lonely', label: 'Lonely', color: '#5C6BC0', bg: EMOTION_COLORS.lonely },
+  { id: 'proud', label: 'Proud', color: '#66BB6A', bg: EMOTION_COLORS.proud },
+  { id: 'embarrassed', label: 'Embarrassed', color: '#EC407A', bg: EMOTION_COLORS.embarrassed },
+  { id: 'calm', label: 'Calm', color: '#26A69A', bg: EMOTION_COLORS.calm },
+  { id: 'in_pain', label: 'In pain', color: '#E53935', bg: EMOTION_COLORS.in_pain },
 ];
 
 const INTENSITIES = [
-  { id: 'little', label: 'A little', size: 28 },
-  { id: 'medium', label: 'Medium', size: 36 },
-  { id: 'lot', label: 'A lot', size: 44 },
-  { id: 'worst', label: 'The worst', size: 52 },
+  { id: 'little', label: 'A little', scale: 0.6 },
+  { id: 'medium', label: 'Medium', scale: 0.8 },
+  { id: 'lot', label: 'A lot', scale: 1.0 },
 ];
 
 const CAUSES = [
-  { id: 'loud', label: 'It is loud' },
-  { id: 'tired', label: 'I am tired' },
-  { id: 'pain', label: 'I am in pain' },
-  { id: 'no_understand', label: 'I do not understand' },
-  { id: 'too_close', label: 'They are too close' },
-  { id: 'need_break', label: 'I need a break' },
-  { id: 'said_no', label: 'They said no' },
-  { id: 'hungry', label: 'I am hungry' },
-  { id: 'miss', label: 'I miss someone' },
-  { id: 'excited_cause', label: 'I am excited' },
-  { id: 'waiting', label: 'I am waiting' },
+  { id: 'loud', label: 'It is loud', icon: '1F50A' },
+  { id: 'tired', label: 'I am tired', icon: '1F634' },
+  { id: 'pain', label: 'I am in pain', icon: '1F915' },
+  { id: 'no_understand', label: "Don't understand", icon: '1F615' },
+  { id: 'too_close', label: 'Too close', icon: null },
+  { id: 'need_break', label: 'Need a break', icon: null },
+  { id: 'said_no', label: 'They said no', icon: '1F44E' },
+  { id: 'hungry', label: 'I am hungry', icon: null },
+  { id: 'miss', label: 'I miss someone', icon: '1F614' },
+  { id: 'waiting', label: 'I am waiting', icon: '23F0' },
 ];
 
 const NEEDS = [
-  { id: 'help', label: 'Help', icon: 'hand-left-outline' },
-  { id: 'break', label: 'Break', icon: 'pause-outline' },
-  { id: 'quiet', label: 'Quiet', icon: 'volume-mute-outline' },
-  { id: 'water', label: 'Water', icon: 'water-outline' },
-  { id: 'toilet', label: 'Toilet', icon: 'navigate-outline' },
-  { id: 'food', label: 'Food', icon: 'restaurant-outline' },
-  { id: 'hug', label: 'Hug', icon: 'heart-outline' },
-  { id: 'space', label: 'Space', icon: 'expand-outline' },
-  { id: 'headphones', label: 'Headphones', icon: 'headset-outline' },
-  { id: 'stop', label: 'Stop', icon: 'close-circle-outline' },
-  { id: 'slower', label: 'Slower please', icon: 'speedometer-outline' },
-  { id: 'explain', label: 'Explain again', icon: 'refresh-outline' },
-  { id: 'breathe', label: 'Deep breaths', icon: 'leaf-outline' },
-  { id: 'dark_room', label: 'Dark room', icon: 'moon-outline' },
-  { id: 'medicine', label: 'Medicine', icon: 'medkit-outline' },
-  { id: 'sensory', label: 'Sensory toy', icon: 'cube-outline' },
+  { id: 'help', label: 'Help', icon: 'hand-left-outline', color: '#E53935' },
+  { id: 'break', label: 'Break', icon: 'pause-outline', color: '#66BB6A' },
+  { id: 'quiet', label: 'Quiet', icon: 'volume-mute-outline', color: '#78909C' },
+  { id: 'water', label: 'Water', icon: 'water-outline', color: '#42A5F5' },
+  { id: 'toilet', label: 'Toilet', icon: 'navigate-outline', color: '#8D6E63' },
+  { id: 'food', label: 'Food', icon: 'restaurant-outline', color: '#FFA726' },
+  { id: 'hug', label: 'Hug', icon: 'heart-outline', color: '#EC407A' },
+  { id: 'space', label: 'Space', icon: 'expand-outline', color: '#78909C' },
+  { id: 'headphones', label: 'Headphones', icon: 'headset-outline', color: '#5C6BC0' },
+  { id: 'stop', label: 'Stop', icon: 'close-circle-outline', color: '#E53935' },
+  { id: 'medicine', label: 'Medicine', icon: 'medkit-outline', color: '#D32F2F' },
+  { id: 'breathe', label: 'Breathe', icon: 'leaf-outline', color: '#26A69A' },
 ];
-
-const REGULATION = [
-  { id: 'breathe', label: 'Breathe', phrase: 'I need to breathe', icon: 'leaf-outline', color: '#26A69A' },
-  { id: 'count', label: 'Count', phrase: 'I need to count', icon: 'calculator-outline', color: '#5C6BC0' },
-  { id: 'squeeze', label: 'Squeeze', phrase: 'I need to squeeze something', icon: 'hand-left-outline', color: '#7E57C2' },
-  { id: 'music', label: 'Music', phrase: 'I want to listen to music', icon: 'musical-notes-outline', color: '#42A5F5' },
-  { id: 'quiet_time', label: 'Quiet time', phrase: 'I need quiet time', icon: 'volume-mute-outline', color: '#78909C' },
-  { id: 'headphones', label: 'Headphones', phrase: 'I need my headphones', icon: 'headset-outline', color: '#5C6BC0' },
-  { id: 'reg_break', label: 'Break', phrase: 'I need a break', icon: 'pause-outline', color: '#66BB6A' },
-];
-
-// ── Pain / Body / Discomfort data ──
 
 const BODY_LOCATIONS = [
-  { id: 'head',      label: 'Head',          icon: 'ellipse-outline' },
-  { id: 'face',      label: 'Face',          icon: 'happy-outline' },
-  { id: 'mouth',     label: 'Mouth / Teeth', icon: 'nutrition-outline', spoken: 'mouth' },
-  { id: 'throat',    label: 'Throat',        icon: 'mic-outline' },
-  { id: 'neck',      label: 'Neck',          icon: 'remove-outline' },
-  { id: 'chest',     label: 'Chest',         icon: 'heart-outline' },
-  { id: 'stomach',   label: 'Stomach',       icon: 'ellipse-outline' },
-  { id: 'back',      label: 'Back',          icon: 'body-outline' },
-  { id: 'shoulder',  label: 'Shoulder',      icon: 'arrow-up-outline' },
-  { id: 'arm',       label: 'Arm',           icon: 'hand-left-outline' },
-  { id: 'hand',      label: 'Hand',          icon: 'hand-right-outline' },
-  { id: 'hip',       label: 'Hip',           icon: 'resize-outline' },
-  { id: 'leg',       label: 'Leg',           icon: 'walk-outline' },
-  { id: 'knee',      label: 'Knee',          icon: 'ellipse-outline' },
-  { id: 'foot',      label: 'Foot',          icon: 'footsteps-outline' },
-  { id: 'everywhere', label: 'Everywhere',   icon: 'body-outline' },
+  { id: 'head', label: 'Head', icon: 'ellipse-outline' },
+  { id: 'mouth', label: 'Mouth', icon: 'nutrition-outline', spoken: 'mouth' },
+  { id: 'throat', label: 'Throat', icon: 'mic-outline' },
+  { id: 'chest', label: 'Chest', icon: 'heart-outline' },
+  { id: 'stomach', label: 'Stomach', icon: 'ellipse-outline' },
+  { id: 'back', label: 'Back', icon: 'body-outline' },
+  { id: 'arm', label: 'Arm', icon: 'hand-left-outline' },
+  { id: 'leg', label: 'Leg', icon: 'walk-outline' },
+  { id: 'foot', label: 'Foot', icon: 'footsteps-outline' },
+  { id: 'everywhere', label: 'Everywhere', icon: 'body-outline' },
 ];
 
 const PAIN_INTENSITIES = [
-  { id: 1, label: 'A little',  spoken: 'It hurts a little',       bars: 1, color: '#66BB6A' },
-  { id: 2, label: 'Moderate',  spoken: 'It hurts moderately',     bars: 2, color: '#FFB300' },
-  { id: 3, label: 'A lot',     spoken: 'It hurts a lot',          bars: 3, color: '#FF9800' },
-  { id: 4, label: 'Very bad',  spoken: 'It is really bad',        bars: 4, color: '#F4511E' },
-  { id: 5, label: 'The worst', spoken: 'It is the worst pain',    bars: 5, color: '#D32F2F' },
-];
-
-const PAIN_TYPES = [
-  { id: 'sharp',     label: 'Sharp',     spoken: 'It is a sharp pain' },
-  { id: 'dull',      label: 'Dull',      spoken: 'It is a dull pain' },
-  { id: 'burning',   label: 'Burning',   spoken: 'It is a burning pain' },
-  { id: 'throbbing', label: 'Throbbing', spoken: 'It is a throbbing pain' },
-  { id: 'aching',    label: 'Aching',    spoken: 'It is an aching pain' },
-  { id: 'cramping',  label: 'Cramping',  spoken: 'It is a cramping pain' },
-  { id: 'pressure',  label: 'Pressure',  spoken: 'It feels like pressure' },
-  { id: 'stiff',     label: 'Stiff',     spoken: 'It feels stiff' },
-  { id: 'sore',      label: 'Sore',      spoken: 'It feels sore' },
-  { id: 'numb',      label: 'Numb',      spoken: 'It feels numb' },
-  { id: 'tingling',  label: 'Tingling',  spoken: 'It feels tingly' },
-  { id: 'itchy',     label: 'Itchy',     spoken: 'It feels itchy' },
-];
-
-const DISCOMFORT_TYPES = [
-  { id: 'nausea',   label: 'Nauseous',   icon: 'warning-outline',       color: '#8D6E63' },
-  { id: 'dizzy',    label: 'Dizzy',      icon: 'sync-outline',          color: '#7E57C2' },
-  { id: 'tired',    label: 'Very tired', icon: 'moon-outline',          color: '#78909C' },
-  { id: 'hot',      label: 'Too hot',    icon: 'flame-outline',         color: '#F4511E' },
-  { id: 'cold',     label: 'Too cold',   icon: 'snow-outline',          color: '#42A5F5' },
-  { id: 'weak',     label: 'Weak',       icon: 'trending-down-outline', color: '#78909C' },
-  { id: 'shaking',  label: 'Shaky',      icon: 'pulse-outline',         color: '#7E57C2' },
+  { id: 1, label: 'A little', spoken: 'It hurts a little', bars: 1, color: '#66BB6A' },
+  { id: 2, label: 'Medium', spoken: 'It hurts moderately', bars: 2, color: '#FFB300' },
+  { id: 3, label: 'A lot', spoken: 'It hurts a lot', bars: 3, color: '#FF9800' },
+  { id: 4, label: 'Very bad', spoken: 'It is really bad', bars: 4, color: '#F4511E' },
+  { id: 5, label: 'The worst', spoken: 'It is the worst pain', bars: 5, color: '#D32F2F' },
 ];
 
 const PAIN_NEEDS = [
-  { id: 'medicine', label: 'Medicine',    icon: 'medkit-outline',     color: '#E53935', spoken: 'my medicine' },
-  { id: 'doctor',   label: 'Doctor',      icon: 'medical-outline',    color: '#D32F2F', spoken: 'a doctor' },
-  { id: 'rest',     label: 'Lie down',    icon: 'bed-outline',        color: '#5C6BC0', spoken: 'to lie down' },
-  { id: 'water',    label: 'Water',       icon: 'water-outline',      color: '#42A5F5' },
-  { id: 'toilet',   label: 'Toilet',      icon: 'navigate-outline',   color: '#8D6E63', spoken: 'the toilet' },
-  { id: 'help',     label: 'Help',        icon: 'hand-left-outline',  color: '#E53935' },
-  { id: 'ice',      label: 'Ice',         icon: 'snow-outline',       color: '#42A5F5' },
-  { id: 'heat',     label: 'Heat',        icon: 'flame-outline',      color: '#FF9800', spoken: 'something warm' },
-  { id: 'sit',      label: 'Sit down',    icon: 'log-in-outline',     color: '#78909C', spoken: 'to sit down' },
-  { id: 'home',     label: 'Go home',     icon: 'home-outline',       color: '#5D4037', spoken: 'to go home' },
-  { id: 'hospital', label: 'Hospital',    icon: 'fitness-outline',    color: '#D32F2F', spoken: 'to go to hospital' },
+  { id: 'medicine', label: 'Medicine', icon: 'medkit-outline', color: '#E53935', spoken: 'my medicine' },
+  { id: 'doctor', label: 'Doctor', icon: 'medical-outline', color: '#D32F2F', spoken: 'a doctor' },
+  { id: 'rest', label: 'Lie down', icon: 'bed-outline', color: '#5C6BC0', spoken: 'to lie down' },
+  { id: 'water', label: 'Water', icon: 'water-outline', color: '#42A5F5' },
+  { id: 'help', label: 'Help', icon: 'hand-left-outline', color: '#E53935' },
+  { id: 'home', label: 'Go home', icon: 'home-outline', color: '#5D4037', spoken: 'to go home' },
+  { id: 'hospital', label: 'Hospital', icon: 'fitness-outline', color: '#D32F2F', spoken: 'to go to hospital' },
 ];
-
-function buildPainSentence(location, painIntensity, painType, discomfort, painNeed) {
-  const parts = [];
-
-  if (location) {
-    if (location.id === 'everywhere') {
-      parts.push('I hurt everywhere');
-    } else {
-      const bodyWord = (location.spoken || location.label).toLowerCase();
-      parts.push(`My ${bodyWord} hurts`);
-    }
-  }
-
-  if (discomfort) {
-    parts.push(`I feel ${discomfort.label.toLowerCase()}`);
-  }
-
-  if (painType) {
-    parts.push(painType.spoken);
-  }
-
-  if (painIntensity) {
-    parts.push(painIntensity.spoken);
-  }
-
-  if (painNeed) {
-    const needWord = (painNeed.spoken || painNeed.label).toLowerCase();
-    parts.push(`I need ${needWord}`);
-  }
-
-  return parts.join('. ') + (parts.length > 0 ? '.' : '');
-}
 
 const CRISIS = [
   { id: 'help_now', label: 'HELP', phrase: 'I need help right now', icon: 'alert-circle', color: '#D32F2F' },
@@ -195,6 +118,15 @@ const CRISIS = [
   { id: 'stop_now', label: 'STOP', phrase: 'Stop. Please stop.', icon: 'close-circle', color: '#C62828' },
   { id: 'cant_breathe', label: "CAN'T BREATHE", phrase: 'I cannot breathe', icon: 'alert-circle-outline', color: '#D32F2F' },
   { id: 'sick_now', label: 'SICK', phrase: 'I am going to be sick', icon: 'warning-outline', color: '#E65100' },
+];
+
+const REGULATION = [
+  { id: 'breathe', label: 'Breathe', phrase: 'I need to breathe', icon: 'leaf-outline', color: '#26A69A' },
+  { id: 'count', label: 'Count', phrase: 'I need to count', icon: 'calculator-outline', color: '#5C6BC0' },
+  { id: 'squeeze', label: 'Squeeze', phrase: 'I need to squeeze something', icon: 'hand-left-outline', color: '#7E57C2' },
+  { id: 'music', label: 'Music', phrase: 'I want to listen to music', icon: 'musical-notes-outline', color: '#42A5F5' },
+  { id: 'quiet_time', label: 'Quiet', phrase: 'I need quiet time', icon: 'volume-mute-outline', color: '#78909C' },
+  { id: 'reg_break', label: 'Break', phrase: 'I need a break', icon: 'pause-outline', color: '#66BB6A' },
 ];
 
 function buildSentence(emotion, intensity, cause, need) {
@@ -212,6 +144,64 @@ function buildSentence(emotion, intensity, cause, need) {
   return sentence || '';
 }
 
+function buildPainSentence(location, painIntensity, painNeed) {
+  const parts = [];
+  if (location) {
+    if (location.id === 'everywhere') {
+      parts.push('I hurt everywhere');
+    } else {
+      parts.push(`My ${(location.spoken || location.label).toLowerCase()} hurts`);
+    }
+  }
+  if (painIntensity) parts.push(painIntensity.spoken);
+  if (painNeed) {
+    const needWord = (painNeed.spoken || painNeed.label).toLowerCase();
+    parts.push(`I need ${needWord}`);
+  }
+  return parts.join('. ') + (parts.length > 0 ? '.' : '');
+}
+
+function EmotionCell({ emotion, selected, onPress, size, scanFocused, palette }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const hex = emotionToHexcode[emotion.id];
+
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    Animated.sequence([
+      Animated.timing(scaleAnim, { toValue: 1.15, duration: 100, useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 1.0, duration: 100, useNativeDriver: true }),
+    ]).start();
+    onPress();
+  };
+
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        style={[
+          styles.emotionCell,
+          {
+            backgroundColor: emotion.bg,
+            borderColor: scanFocused ? '#FF6600' : (selected ? emotion.color : 'transparent'),
+            borderWidth: (scanFocused || selected) ? 4 : 0,
+            width: size,
+            height: size,
+          },
+        ]}
+        onPress={handlePress}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={`I feel ${emotion.label}`}
+        accessibilityState={{ selected }}
+      >
+        <SymbolImage hexcode={hex} size={size * 0.55} />
+        <Text style={[styles.emotionCellLabel, palette && { color: palette.text }]} numberOfLines={1}>
+          {emotion.label}
+        </Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
 export default function EmotionScreen() {
   const { settings } = useSettings();
   const palette = getPalette(settings.theme);
@@ -219,36 +209,83 @@ export default function EmotionScreen() {
   const [intensity, setIntensity] = useState(null);
   const [cause, setCause] = useState(null);
   const [need, setNeed] = useState(null);
+  const [showMore, setShowMore] = useState(false);
   const [showDisplay, setShowDisplay] = useState(false);
 
-  // Pain / body flow state
+  // Pain flow
   const [bodyLocation, setBodyLocation] = useState(null);
   const [painIntensity, setPainIntensity] = useState(null);
-  const [painType, setPainType] = useState(null);
-  const [discomfort, setDiscomfort] = useState(null);
   const [painNeed, setPainNeed] = useState(null);
+
+  // Switch scanning
+  const [scanActive, setScanActive] = useState(false);
+  const [scanFocusIndex, setScanFocusIndex] = useState(-1);
+  const scanItemsRef = useRef([]);
+
+  useEffect(() => {
+    const allEmotions = showMore ? [...EMOTIONS, ...EMOTIONS_EXTENDED] : EMOTIONS;
+    const emotionItems = allEmotions.map(e => ({ type: 'emotion', id: e.id, emotion: e, label: e.label }));
+    const crisisItems = CRISIS.map(c => ({ type: 'crisis', id: c.id, crisis: c, label: c.label }));
+    const actionItems = [{ type: 'action', id: 'speak', label: 'Speak' }];
+    scanItemsRef.current = [...crisisItems, ...emotionItems, ...actionItems];
+    if (scanActive) setScanItems(scanItemsRef.current);
+  }, [showMore, scanActive]);
+
+  useEffect(() => {
+    onScanChange(({ currentIndex, isRunning }) => setScanFocusIndex(isRunning ? currentIndex : -1));
+    onScanSelect(({ item }) => {
+      if (!item) return;
+      if (item.type === 'emotion') handleEmotionTap(item.emotion);
+      else if (item.type === 'crisis') speakDirect(item.crisis.phrase);
+      else if (item.type === 'action' && item.id === 'speak') speakNow();
+    });
+    return () => cleanupScan();
+  }, []);
+
+  useEffect(() => {
+    if (settings.scanMode) setScanMode(settings.scanMode);
+    if (settings.scanSpeed) setScanSpeed(settings.scanSpeed);
+  }, []);
+
+  const toggleScan = useCallback(() => {
+    if (scanActive) { stopScan(); setScanActive(false); }
+    else {
+      setScanMode(settings.scanMode || 'auto');
+      setScanSpeed(settings.scanSpeed || 1500);
+      setScanItems(scanItemsRef.current);
+      startScan();
+      setScanActive(true);
+    }
+  }, [scanActive, settings.scanMode, settings.scanSpeed]);
+
+  const isScanFocused = useCallback((type, id) => {
+    if (!scanActive || scanFocusIndex < 0) return false;
+    const focused = scanItemsRef.current[scanFocusIndex];
+    return focused && focused.type === type && focused.id === id;
+  }, [scanActive, scanFocusIndex]);
 
   const isPainMode = emotion?.id === 'in_pain' || emotion?.id === 'sick';
   const sentence = isPainMode
-    ? buildPainSentence(bodyLocation, painIntensity, painType, discomfort, painNeed)
+    ? buildPainSentence(bodyLocation, painIntensity, painNeed)
     : buildSentence(emotion, intensity, cause, need);
 
   const speakNow = useCallback(() => {
     if (!sentence) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     speak(sentence, {
       rate: settings.speechRate,
       pitch: settings.speechPitch,
       voice: settings.speechVoice,
+      language: settings.communicationLanguage,
     });
-    // Save to sentence history so it appears in AAC Board history panel
     addSentenceToHistory(sentence).catch(() => {});
-    // Track emotion word for AI profile learning
     if (emotion) {
       recordWordSelection(emotion.label.toLowerCase(), ['i', 'feel'], false).catch(() => {});
     }
   }, [sentence, settings, emotion]);
 
   const speakDirect = useCallback((phrase) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
     speak(phrase, { rate: settings.speechRate, pitch: settings.speechPitch, voice: settings.speechVoice });
     addSentenceToHistory(phrase).catch(() => {});
   }, [settings]);
@@ -260,22 +297,41 @@ export default function EmotionScreen() {
     setNeed(null);
     setBodyLocation(null);
     setPainIntensity(null);
-    setPainType(null);
-    setDiscomfort(null);
     setPainNeed(null);
   };
 
-  const numCols = settings.gridSize || 3;
+  const handleEmotionTap = (e) => {
+    const alreadySelected = emotion?.id === e.id;
+    if (alreadySelected) {
+      setEmotion(null);
+      setIntensity(null);
+      setCause(null);
+      setNeed(null);
+      setBodyLocation(null);
+      setPainIntensity(null);
+      setPainNeed(null);
+    } else {
+      setEmotion(e);
+      recordEmotionSelection(e.id, null).catch(() => {});
+      speak(`I feel ${e.label.toLowerCase()}`, {
+        rate: settings.speechRate,
+        pitch: settings.speechPitch,
+        voice: settings.speechVoice,
+      });
+    }
+  };
+
+  const cellSize = 140;
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
-      {/* Sentence preview — always visible at top */}
+      {/* Sentence preview bar */}
       <View style={[styles.preview, { backgroundColor: palette.surface, borderColor: palette.border }]}>
         <Text
           style={[styles.previewText, { color: sentence ? palette.text : palette.textSecondary }]}
-          numberOfLines={3}
+          numberOfLines={2}
         >
-          {sentence || 'Tap below to say how you feel'}
+          {sentence || 'How do you feel?'}
         </Text>
         <View style={styles.previewActions}>
           <TouchableOpacity
@@ -284,29 +340,38 @@ export default function EmotionScreen() {
             disabled={!sentence}
             accessibilityRole="button"
             accessibilityLabel={sentence ? `Speak: ${sentence}` : 'Build a sentence first'}
+            accessibilityHint="Reads aloud how you feel"
           >
-            <Ionicons name="volume-high" size={22} color={palette.buttonText} />
+            <Ionicons name="volume-high" size={24} color={palette.buttonText} />
           </TouchableOpacity>
           {sentence ? (
             <>
               <TouchableOpacity
                 onPress={() => setShowDisplay(true)}
-                style={[styles.resetBtn, { backgroundColor: palette.chipBg }]}
+                style={[styles.actionBtn, { backgroundColor: palette.chipBg }]}
                 accessibilityRole="button"
-                accessibilityLabel="Show on screen for conversation partner"
+                accessibilityLabel="Show on screen"
               >
-                <Ionicons name="tv-outline" size={18} color={palette.text} />
+                <Ionicons name="tv-outline" size={20} color={palette.text} />
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={reset}
-                style={[styles.resetBtn, { backgroundColor: palette.chipBg }]}
+                style={[styles.actionBtn, { backgroundColor: palette.chipBg }]}
                 accessibilityRole="button"
                 accessibilityLabel="Start over"
               >
-                <Ionicons name="refresh" size={18} color={palette.text} />
+                <Ionicons name="refresh" size={20} color={palette.text} />
               </TouchableOpacity>
             </>
           ) : null}
+          <TouchableOpacity
+            onPress={toggleScan}
+            style={[styles.actionBtn, { backgroundColor: scanActive ? '#FF6600' : palette.chipBg }]}
+            accessibilityRole="button"
+            accessibilityLabel={scanActive ? 'Stop scanning' : 'Start scanning'}
+          >
+            <Ionicons name={scanActive ? 'stop' : 'scan-outline'} size={20} color={scanActive ? '#FFF' : palette.text} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -318,7 +383,7 @@ export default function EmotionScreen() {
       />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        {/* Crisis — always at top, 1-tap emergency phrases */}
+        {/* Crisis buttons — always visible */}
         <View style={styles.crisisRow}>
           {CRISIS.map(c => (
             <TouchableOpacity
@@ -328,47 +393,60 @@ export default function EmotionScreen() {
               accessibilityRole="button"
               accessibilityLabel={c.phrase}
             >
-              <Ionicons name={c.icon} size={20} color="#FFF" />
+              <Ionicons name={c.icon} size={22} color="#FFF" />
               <Text style={styles.crisisLabel}>{c.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Step 1: How do you feel? */}
-        <Text style={[styles.stepLabel, { color: palette.text }]}>How do you feel?</Text>
-        <View style={styles.chipGrid}>
-          {EMOTIONS.map(e => {
-            const sel = emotion?.id === e.id;
-            return (
-              <TouchableOpacity
-                key={e.id}
-                style={[
-                  styles.emotionChip,
-                  { backgroundColor: sel ? e.color : palette.cardBg, borderColor: e.color,
-                    width: `${Math.floor(100 / numCols) - 2}%` },
-                ]}
-                onPress={() => {
-                  setEmotion(sel ? null : e);
-                  if (sel) { setIntensity(null); setCause(null); setNeed(null); }
-                  // Reset pain state when switching emotions
-                  setBodyLocation(null); setPainIntensity(null); setPainType(null); setDiscomfort(null); setPainNeed(null);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`I feel ${e.label}`}
-                accessibilityState={{ selected: sel }}
-              >
-                <Text style={styles.emotionEmoji}>{e.emoji}</Text>
-                <Text style={[styles.emotionLabel, { color: sel ? '#FFF' : palette.text }]}>{e.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
+        {/* Main emotion grid — big OpenMoji faces */}
+        <View style={styles.emotionGrid}>
+          {EMOTIONS.map(e => (
+            <EmotionCell
+              key={e.id}
+              emotion={e}
+              selected={emotion?.id === e.id}
+              onPress={() => handleEmotionTap(e)}
+              size={cellSize}
+              scanFocused={isScanFocused('emotion', e.id)}
+              palette={palette}
+            />
+          ))}
         </View>
 
-        {/* Pain / Body flow — shown when "In pain" or "Sick" is selected */}
+        {/* "More feelings" toggle */}
+        <TouchableOpacity
+          style={[styles.moreBtn, { backgroundColor: palette.chipBg }]}
+          onPress={() => setShowMore(!showMore)}
+          accessibilityRole="button"
+          accessibilityLabel={showMore ? 'Show fewer feelings' : 'Show more feelings'}
+        >
+          <Ionicons name={showMore ? 'chevron-up' : 'chevron-down'} size={20} color={palette.text} />
+          <Text style={[styles.moreBtnText, { color: palette.text }]}>
+            {showMore ? 'Less' : 'More'}
+          </Text>
+        </TouchableOpacity>
+
+        {showMore && (
+          <View style={styles.emotionGrid}>
+            {EMOTIONS_EXTENDED.map(e => (
+              <EmotionCell
+                key={e.id}
+                emotion={e}
+                selected={emotion?.id === e.id}
+                onPress={() => handleEmotionTap(e)}
+                size={cellSize}
+                scanFocused={isScanFocused('emotion', e.id)}
+                palette={palette}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* Pain / body flow */}
         {isPainMode && (
           <>
-            {/* Where does it hurt? */}
-            <Text style={[styles.stepLabel, { color: palette.text }]}>Where does it hurt?</Text>
+            <Text style={[styles.stepLabel, { color: palette.text }]}>Where?</Text>
             <View style={styles.chipGrid}>
               {BODY_LOCATIONS.map(loc => {
                 const sel = bodyLocation?.id === loc.id;
@@ -377,65 +455,23 @@ export default function EmotionScreen() {
                     key={loc.id}
                     style={[
                       styles.needChip,
-                      { backgroundColor: sel ? '#E53935' : palette.cardBg, borderColor: sel ? '#E53935' : palette.border,
-                        width: `${Math.floor(100 / numCols) - 2}%` },
+                      { backgroundColor: sel ? '#E53935' : palette.cardBg, borderColor: sel ? '#E53935' : palette.border },
                     ]}
-                    onPress={() => setBodyLocation(sel ? null : loc)}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      setBodyLocation(sel ? null : loc);
+                    }}
                     accessibilityRole="button"
                     accessibilityLabel={loc.id === 'everywhere' ? 'I hurt everywhere' : `My ${loc.label.toLowerCase()} hurts`}
                     accessibilityState={{ selected: sel }}
                   >
-                    <Ionicons name={loc.icon} size={22} color={sel ? '#FFF' : palette.text} />
+                    <Ionicons name={loc.icon} size={24} color={sel ? '#FFF' : palette.text} />
                     <Text style={[styles.needLabel, { color: sel ? '#FFF' : palette.text }]}>{loc.label}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            {/* Also feeling... (non-pain discomfort) */}
-            <Text style={[styles.stepLabel, { color: palette.text }]}>I also feel...</Text>
-            <View style={styles.chipGrid}>
-              {DISCOMFORT_TYPES.map(d => {
-                const sel = discomfort?.id === d.id;
-                return (
-                  <TouchableOpacity
-                    key={d.id}
-                    style={[styles.causeChip, { backgroundColor: sel ? d.color : palette.cardBg, borderColor: sel ? d.color : palette.border }]}
-                    onPress={() => setDiscomfort(sel ? null : d)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`I feel ${d.label.toLowerCase()}`}
-                    accessibilityState={{ selected: sel }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Ionicons name={d.icon} size={16} color={sel ? '#FFF' : palette.text} />
-                      <Text style={[styles.causeText, { color: sel ? '#FFF' : palette.text }]}>{d.label}</Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* What kind of pain? */}
-            <Text style={[styles.stepLabel, { color: palette.text }]}>What kind of pain?</Text>
-            <View style={styles.chipGrid}>
-              {PAIN_TYPES.map(pt => {
-                const sel = painType?.id === pt.id;
-                return (
-                  <TouchableOpacity
-                    key={pt.id}
-                    style={[styles.causeChip, { backgroundColor: sel ? palette.primary : palette.cardBg, borderColor: palette.border }]}
-                    onPress={() => setPainType(sel ? null : pt)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${pt.label} pain`}
-                    accessibilityState={{ selected: sel }}
-                  >
-                    <Text style={[styles.causeText, { color: sel ? palette.buttonText : palette.text }]}>{pt.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* How bad? */}
             <Text style={[styles.stepLabel, { color: palette.text }]}>How bad?</Text>
             <View style={styles.intensityRow}>
               {PAIN_INTENSITIES.map(pi => {
@@ -444,14 +480,17 @@ export default function EmotionScreen() {
                   <TouchableOpacity
                     key={pi.id}
                     style={[styles.intensityChip, { backgroundColor: sel ? pi.color : palette.cardBg, borderColor: sel ? pi.color : palette.border }]}
-                    onPress={() => setPainIntensity(sel ? null : pi)}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      setPainIntensity(sel ? null : pi);
+                    }}
                     accessibilityRole="button"
                     accessibilityLabel={`Pain is ${pi.label.toLowerCase()}`}
                     accessibilityState={{ selected: sel }}
                   >
                     <View style={{ flexDirection: 'row', gap: 2 }}>
                       {Array.from({ length: pi.bars }).map((_, idx) => (
-                        <View key={idx} style={{ width: 6, height: 16 + idx * 4, backgroundColor: sel ? '#FFF' : pi.color, borderRadius: 2 }} />
+                        <View key={idx} style={{ width: 7, height: 16 + idx * 4, backgroundColor: sel ? '#FFF' : pi.color, borderRadius: 2 }} />
                       ))}
                     </View>
                     <Text style={[styles.intensityLabel, { color: sel ? '#FFF' : palette.text }]}>{pi.label}</Text>
@@ -460,7 +499,6 @@ export default function EmotionScreen() {
               })}
             </View>
 
-            {/* I need... (pain-specific) */}
             <Text style={[styles.stepLabel, { color: palette.text }]}>I need...</Text>
             <View style={styles.chipGrid}>
               {PAIN_NEEDS.map(pn => {
@@ -470,15 +508,17 @@ export default function EmotionScreen() {
                     key={pn.id}
                     style={[
                       styles.needChip,
-                      { backgroundColor: sel ? pn.color : palette.cardBg, borderColor: sel ? pn.color : palette.border,
-                        width: `${Math.floor(100 / numCols) - 2}%` },
+                      { backgroundColor: sel ? pn.color : palette.cardBg, borderColor: sel ? pn.color : palette.border },
                     ]}
-                    onPress={() => setPainNeed(sel ? null : pn)}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      setPainNeed(sel ? null : pn);
+                    }}
                     accessibilityRole="button"
                     accessibilityLabel={`I need ${pn.label.toLowerCase()}`}
                     accessibilityState={{ selected: sel }}
                   >
-                    <Ionicons name={pn.icon} size={22} color={sel ? '#FFF' : palette.text} />
+                    <Ionicons name={pn.icon} size={24} color={sel ? '#FFF' : palette.text} />
                     <Text style={[styles.needLabel, { color: sel ? '#FFF' : palette.text }]}>{pn.label}</Text>
                   </TouchableOpacity>
                 );
@@ -487,31 +527,36 @@ export default function EmotionScreen() {
           </>
         )}
 
-        {/* Standard emotion flow — hidden when in pain mode */}
+        {/* Standard emotion flow */}
         {emotion && !isPainMode && (
           <>
-            {/* Step 2: How much? */}
+            {/* How much? — 3 sizes of the same emoji */}
             <Text style={[styles.stepLabel, { color: palette.text }]}>How much?</Text>
             <View style={styles.intensityRow}>
               {INTENSITIES.map(i => {
                 const sel = intensity?.id === i.id;
+                const hex = emotionToHexcode[emotion.id];
                 return (
                   <TouchableOpacity
                     key={i.id}
                     style={[styles.intensityChip, { backgroundColor: sel ? palette.primary : palette.cardBg, borderColor: palette.border }]}
-                    onPress={() => setIntensity(sel ? null : i)}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      setIntensity(sel ? null : i);
+                      if (!sel) recordEmotionSelection(emotion.id, i.id).catch(() => {});
+                    }}
                     accessibilityRole="button"
                     accessibilityLabel={i.label}
                     accessibilityState={{ selected: sel }}
                   >
-                    <Text style={{ fontSize: i.size }}>{emotion.emoji}</Text>
+                    <SymbolImage hexcode={hex} size={40 * i.scale} />
                     <Text style={[styles.intensityLabel, { color: sel ? palette.buttonText : palette.text }]}>{i.label}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            {/* Step 3: Because... */}
+            {/* Because... */}
             <Text style={[styles.stepLabel, { color: palette.text }]}>Because...</Text>
             <View style={styles.chipGrid}>
               {CAUSES.map(c => {
@@ -520,7 +565,10 @@ export default function EmotionScreen() {
                   <TouchableOpacity
                     key={c.id}
                     style={[styles.causeChip, { backgroundColor: sel ? palette.primary : palette.cardBg, borderColor: palette.border }]}
-                    onPress={() => setCause(sel ? null : c)}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      setCause(sel ? null : c);
+                    }}
                     accessibilityRole="button"
                     accessibilityLabel={`Because ${c.label.toLowerCase()}`}
                     accessibilityState={{ selected: sel }}
@@ -533,11 +581,11 @@ export default function EmotionScreen() {
           </>
         )}
 
-        {/* I need... (general — shown when NOT in pain mode) */}
+        {/* I need... (general) */}
         {!isPainMode && (
           <>
             <Text style={[styles.stepLabel, { color: palette.text }]}>
-              {emotion ? 'I need...' : 'Or just say what you need:'}
+              {emotion ? 'I need...' : 'What do you need?'}
             </Text>
             <View style={styles.chipGrid}>
               {NEEDS.map(n => {
@@ -547,16 +595,18 @@ export default function EmotionScreen() {
                     key={n.id}
                     style={[
                       styles.needChip,
-                      { backgroundColor: sel ? palette.primary : palette.cardBg, borderColor: palette.border,
-                        width: `${Math.floor(100 / numCols) - 2}%` },
+                      { backgroundColor: sel ? n.color : palette.cardBg, borderColor: sel ? n.color : palette.border },
                     ]}
-                    onPress={() => setNeed(sel ? null : n)}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      setNeed(sel ? null : n);
+                    }}
                     accessibilityRole="button"
                     accessibilityLabel={`I need ${n.label.toLowerCase()}`}
                     accessibilityState={{ selected: sel }}
                   >
-                    <Ionicons name={n.icon} size={22} color={sel ? palette.buttonText : palette.text} />
-                    <Text style={[styles.needLabel, { color: sel ? palette.buttonText : palette.text }]}>{n.label}</Text>
+                    <Ionicons name={n.icon} size={24} color={sel ? '#FFF' : n.color} />
+                    <Text style={[styles.needLabel, { color: sel ? '#FFF' : palette.text }]}>{n.label}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -564,8 +614,8 @@ export default function EmotionScreen() {
           </>
         )}
 
-        {/* Step 5: Coping / regulation */}
-        <Text style={[styles.stepLabel, { color: palette.text }]}>To help me calm down:</Text>
+        {/* Coping / regulation */}
+        <Text style={[styles.stepLabel, { color: palette.text }]}>To calm down:</Text>
         <View style={styles.chipGrid}>
           {REGULATION.map(r => (
             <TouchableOpacity
@@ -573,9 +623,9 @@ export default function EmotionScreen() {
               style={[styles.regChip, { backgroundColor: r.color }]}
               onPress={() => speakDirect(r.phrase)}
               accessibilityRole="button"
-              accessibilityLabel={`I want to ${r.label.toLowerCase()}`}
+              accessibilityLabel={r.phrase}
             >
-              <Ionicons name={r.icon} size={22} color="#FFF" />
+              <Ionicons name={r.icon} size={24} color="#FFF" />
               <Text style={styles.regLabel}>{r.label}</Text>
             </TouchableOpacity>
           ))}
@@ -597,80 +647,117 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: 2,
-    minHeight: 56,
+    minHeight: 60,
   },
-  previewText: { flex: 1, fontSize: 18, fontWeight: '500' },
+  previewText: { flex: 1, fontSize: 20, fontWeight: '600' },
   previewActions: { flexDirection: 'row', gap: spacing.sm, marginLeft: spacing.sm },
-  speakBtn: { padding: spacing.sm, borderRadius: radii.sm, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  resetBtn: { padding: spacing.sm, borderRadius: radii.sm, minWidth: 36, minHeight: 36, alignItems: 'center', justifyContent: 'center' },
+  speakBtn: {
+    padding: spacing.md,
+    borderRadius: radii.lg,
+    minWidth: 52,
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBtn: {
+    padding: spacing.sm,
+    borderRadius: radii.md,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.md },
-  stepLabel: { fontSize: 16, fontWeight: '700', marginTop: spacing.lg, marginBottom: spacing.sm },
-  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  emotionChip: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    borderWidth: 2,
-    marginBottom: spacing.sm,
-    minHeight: 70,
-  },
-  emotionEmoji: { fontSize: 28 },
-  emotionLabel: { fontSize: 13, fontWeight: '600', marginTop: 2 },
-  intensityRow: { flexDirection: 'row', gap: spacing.sm },
-  intensityChip: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-    borderWidth: 1,
-  },
-  intensityLabel: { fontSize: 11, fontWeight: '600', marginTop: 2 },
-  causeChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-  },
-  causeText: { fontSize: 14, fontWeight: '500' },
-  needChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    marginBottom: spacing.sm,
-    gap: spacing.xs,
-    minHeight: 52,
-  },
-  needLabel: { fontSize: 13, fontWeight: '600' },
-  regChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: radii.pill,
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  regLabel: { color: '#FFF', fontSize: 14, fontWeight: '700' },
   crisisRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.lg,
   },
   crisisBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderRadius: radii.sm,
+    borderRadius: radii.lg,
     gap: spacing.xs,
-    minHeight: 48,
+    minHeight: 52,
   },
-  crisisLabel: { color: '#FFF', fontSize: 14, fontWeight: '800', letterSpacing: 0.5 },
+  crisisLabel: { color: '#FFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.5 },
+  emotionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  emotionCell: {
+    borderRadius: radii.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.sm,
+  },
+  emotionCellLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  moreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.sm,
+    borderRadius: radii.pill,
+    alignSelf: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.xl,
+  },
+  moreBtnText: { fontSize: 15, fontWeight: '600' },
+  stepLabel: { fontSize: 18, fontWeight: '700', marginTop: spacing.lg, marginBottom: spacing.sm },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  intensityRow: { flexDirection: 'row', gap: spacing.sm },
+  intensityChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderRadius: radii.lg,
+    borderWidth: 2,
+    minHeight: 80,
+    justifyContent: 'center',
+  },
+  intensityLabel: { fontSize: 13, fontWeight: '600', marginTop: 4 },
+  causeChip: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radii.pill,
+    borderWidth: 2,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  causeText: { fontSize: 15, fontWeight: '600' },
+  needChip: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    borderRadius: radii.lg,
+    borderWidth: 2,
+    width: '30%',
+    minHeight: 80,
+    gap: spacing.xs,
+  },
+  needLabel: { fontSize: 13, fontWeight: '700' },
+  regChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: radii.pill,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+    minHeight: 52,
+  },
+  regLabel: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 });

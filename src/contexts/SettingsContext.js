@@ -17,13 +17,16 @@ const defaultSettings = {
   contrast: false,
   speechRate: 1.0,
   speechPitch: 1.0,
-  speechVoice: null, // null = system default
-  aiPersonalisationEnabled: true, // learn from user input to improve suggestions
-  scanMode: 'auto',   // 'auto' | 'step'
-  scanSpeed: 1500,     // ms between auto-scan steps
-  crisisModeEnabled: true,    // show floating SOS button on all screens
-  listenerModeEnabled: false, // show spoken text large after speaking
-  partnerCoachEnabled: true,  // show partner coaching tips button
+  speechVoice: null,
+  aiPersonalisationEnabled: true,
+  scanMode: 'auto',
+  scanSpeed: 1500,
+  crisisModeEnabled: true,
+  listenerModeEnabled: false,
+  partnerCoachEnabled: true,
+  showSymbols: true,
+  preferredSymbolSource: 'auto',
+  communicationLanguage: 'en',
 };
 
 export const SettingsContext = createContext({
@@ -47,7 +50,7 @@ export function SettingsProvider({ children }) {
           setSettings(prev => ({ ...prev, ...parsed }));
         }
       } catch (e) {
-        console.warn('Failed to load local settings:', e);
+        // Failed to load local settings — non-fatal
       }
       // Always finish loading after local read, even if it fails
       setLoading(false);
@@ -74,9 +77,8 @@ export function SettingsProvider({ children }) {
           });
         }
       },
-      (error) => {
+      (_error) => {
         // Firebase errors are non-fatal — local settings are already loaded
-        console.warn('Firebase settings sync error (non-blocking):', error.message);
       }
     );
 
@@ -92,7 +94,7 @@ export function SettingsProvider({ children }) {
     try {
       await AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
     } catch (e) {
-      console.warn('Failed to save settings locally:', e);
+      // Failed to save settings locally — non-fatal
     }
 
     // Try Firebase sync (non-blocking)
@@ -103,7 +105,7 @@ export function SettingsProvider({ children }) {
       }
     } catch (e) {
       // Firebase sync failure is acceptable — local is source of truth
-      console.warn('Firebase settings sync failed (will retry later):', e.message);
+      // Firebase settings sync failed — will retry on next change
     }
   }, [settings, user]);
 

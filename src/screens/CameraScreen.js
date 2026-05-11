@@ -19,11 +19,11 @@ import { speak } from '../services/speechService';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
+import { getAuth } from 'firebase/auth';
 import { addSentenceToHistory, loadSentenceHistory } from '../services/sentenceHistoryStore';
 import { addFavourite, isFavourite, loadFavourites } from '../services/favouritesStore';
 
-// Cloud Function endpoints
-const FUNCTIONS_BASE = 'https://us-central1-commai-b98fe.cloudfunctions.net';
+const FUNCTIONS_BASE = process.env.EXPO_PUBLIC_FUNCTIONS_BASE || 'https://us-central1-commai-b98fe.cloudfunctions.net';
 const CAPTION_ENDPOINT = `${FUNCTIONS_BASE}/imageCaptionProxy`;
 const IMAGE_AAC_ENDPOINT = `${FUNCTIONS_BASE}/imageToAACPhrases`;
 const OCR_AAC_ENDPOINT = `${FUNCTIONS_BASE}/ocrToAACPhrases`;
@@ -39,51 +39,58 @@ function withTimeout(promise, ms, label) {
 }
 
 // Read file as base64 with a timeout. Returns null on failure.
+// Rejects images over ~5MB base64 (server limit is 7MB).
+const MAX_BASE64_SIZE = 5_500_000;
 async function readBase64(uri, timeoutMs = 8000) {
   try {
-    console.log('[Camera] base64 read start');
     const result = await withTimeout(
       FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }),
       timeoutMs,
       'base64 read'
     );
-    console.log('[Camera] base64 read done, length:', result?.length || 0);
+    if (result && result.length > MAX_BASE64_SIZE) {
+      // Image exceeds server limit
+      return null;
+    }
     return result;
   } catch (e) {
-    console.warn('[Camera] base64 read failed:', e.message);
+    // base64 read failed — non-fatal
     return null;
   }
 }
 
 // Call a Cloud Function with base64 image. Returns parsed JSON or null.
-async function callCloudFunction(endpoint, body, timeoutMs, label) {
+async function callCloudFunction(endpoint, body, timeoutMs, _label) {
   try {
-    console.log(`[Camera] ${label} call start`);
+    const headers = { 'Content-Type': 'application/json' };
+    try {
+      const user = getAuth().currentUser;
+      if (user) headers['Authorization'] = `Bearer ${await user.getIdToken()}`;
+    } catch {}
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(body),
       signal: controller.signal,
     });
     clearTimeout(timer);
     if (!response.ok) {
-      console.warn(`[Camera] ${label} HTTP ${response.status}`);
+      // Cloud function HTTP error — non-fatal
       return null;
     }
     const json = await response.json();
-    console.log(`[Camera] ${label} call done`);
     return json;
   } catch (e) {
-    console.warn(`[Camera] ${label} failed:`, e.message);
+    // Cloud function call failed — non-fatal
     return null;
   }
 }
 
 export default function CombinedImageScreen() {
   const { settings, loading: settingsLoading } = useSettings();
-  const [cameraPerm, requestPerm] = useCameraPermissions();
+  const [, requestPerm] = useCameraPermissions();
   const [selected, setSelected] = useState(null);
   const [openCam, setOpenCam] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -99,15 +106,21 @@ export default function CombinedImageScreen() {
 
   useEffect(() => {
     (async () => {
-      await requestPerm();
-      const media = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!media.granted) {
-        Alert.alert('Permission needed', 'Need permission to access library');
+      try {
+        await requestPerm();
+        const media = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!media.granted) {
+          Alert.alert('Permission needed', 'Need permission to access library');
+        }
+      } catch {
+        // Permissions may throw on some devices — non-fatal
       }
-      // Pre-load stores so isFavourite() works synchronously
       await loadSentenceHistory();
       await loadFavourites();
     })();
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
   }, []);
 
   const showToast = useCallback((msg) => {
@@ -154,15 +167,12 @@ export default function CombinedImageScreen() {
 
   const takePicture = async () => {
     if (!cameraRef.current) return;
-    console.log('[Camera] takePicture start');
     const photo = await cameraRef.current.takePictureAsync({ quality: 0.5 });
-    console.log('[Camera] takePicture done, uri:', photo.uri?.slice(0, 50));
     setOpenCam(false);
     handleImage(photo.uri);
   };
 
   const handleImage = async (uri) => {
-    console.log('[Camera] handleImage start, mode:', mode);
     setSelected({ uri, name: '' });
     setAacPhrases(null);
     setOcrResult(null);
@@ -179,15 +189,13 @@ export default function CombinedImageScreen() {
       }
     } catch (e) {
       // Catch-all: if anything unexpected throws, always clear loading
-      console.error('[Camera] handleImage unexpected error:', e);
+      // handleImage unexpected error — non-fatal
       setSelected({ uri, name: 'Something went wrong — try again' });
       setProcessing(false);
     }
   };
 
   const processDescribe = async (uri, base64) => {
-    console.log('[Camera] processDescribe start, has base64:', !!base64);
-
     if (!base64) {
       // Can't send to any backend without base64
       setSelected({ uri, name: 'Could not process this image — try again' });
@@ -213,10 +221,6 @@ export default function CombinedImageScreen() {
     const summary = phrasesResult?.summary || [];
     const hasAny = comments.length + requests.length + questions.length + summary.length > 0;
 
-    console.log('[Camera] processDescribe results — caption:', !!caption,
-      'comments:', comments.length, 'requests:', requests.length,
-      'questions:', questions.length, 'summary:', summary.length);
-
     if (summary.length > 0) {
       setSelected({ uri, name: summary[0] });
       speakPhrase(summary[0]);
@@ -231,12 +235,9 @@ export default function CombinedImageScreen() {
 
     if (hasAny) setAacPhrases({ comments, requests, questions, summary });
     setProcessing(false);
-    console.log('[Camera] processDescribe done, processing=false');
   };
 
   const processOCR = async (uri, base64) => {
-    console.log('[Camera] processOCR start, has base64:', !!base64);
-
     if (!base64) {
       setOcrResult({ extractedText: '', phrases: [] });
       setSelected({ uri, name: 'Could not process this image — try again' });
@@ -257,7 +258,6 @@ export default function CombinedImageScreen() {
     }
 
     setProcessing(false);
-    console.log('[Camera] processOCR done, processing=false');
   };
 
   if (settingsLoading) {
@@ -395,7 +395,7 @@ export default function CombinedImageScreen() {
       )}
       {/* Save menu modal — shown on long press */}
       <Modal visible={!!saveMenu} transparent animationType="fade" onRequestClose={() => setSaveMenu(null)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setSaveMenu(null)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setSaveMenu(null)} accessibilityRole="button" accessibilityLabel="Close save menu">
           <View style={[styles.saveMenuCard, { backgroundColor: palette.cardBg }]}>
             <Text style={[styles.saveMenuPhrase, { color: palette.text }]} numberOfLines={3}>
               "{saveMenu?.phrase}"

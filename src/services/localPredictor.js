@@ -85,10 +85,8 @@ function sampleTopK(logits, { temperature = 0.8, topK = 8 }) {
 export async function ensureImprovedModelLoaded() {
   if (_model && _wordIndex && _indexWord) return true;
 
-  console.log('[TFJS] Initializing backend…');
   await tf.ready();
   try { await tf.setBackend('rn-webgl'); } catch { await tf.setBackend('cpu'); }
-  console.log('[TFJS] Backend:', tf.getBackend());
 
   // ---------------------------
   // TFJS model.json & weights
@@ -125,9 +123,8 @@ export async function ensureImprovedModelLoaded() {
   // ---------------------------
   try {
     _model = await tf.loadLayersModel(bundleResourceIO(modelJson, weights));
-    console.log('[TFJS] Model loaded.');
   } catch (err) {
-    console.error('[TFJS] Model load failed:', err);
+    // Model load failure — re-throw for caller to handle
     throw err;
   }
 
@@ -136,7 +133,6 @@ export async function ensureImprovedModelLoaded() {
     const shape = _model?.inputs?.[0]?.shape;
     if (Array.isArray(shape) && Number.isInteger(shape[1])) {
       _seqLen = shape[1];
-      console.log('[TFJS] Detected SEQ_LEN =', _seqLen);
     }
   } catch {}
 
@@ -156,10 +152,8 @@ export async function ensureImprovedModelLoaded() {
     if (typeof cfg.pad_token_id === 'number') _padToken = cfg.pad_token_id;
     if (typeof cfg.oov_token_id === 'number') _oovToken = cfg.oov_token_id;
 
-    console.log('[Tokenizer] word_index size:', Object.keys(_wordIndex).length);
-    console.log('[Tokenizer] index_word size:', Object.keys(_indexWord).length);
-  } catch (e) {
-    console.warn('[Tokenizer] Failed to load tokenizer.json:', e?.message || e);
+  } catch {
+    // Non-fatal: tokenizer load failed — predictions will use empty vocab
     _wordIndex = {};
     _indexWord = {};
   }
@@ -170,7 +164,6 @@ export async function ensureImprovedModelLoaded() {
     _model.predict(warm);
   });
 
-  console.log('[TFJS] Warm-up complete.');
   return true;
 }
 
@@ -207,63 +200,4 @@ export async function predictTopKWordsWithImprovedModel(
 
   _remember(key, candidates);
   return candidates;
-}
-
-// -------------------------------------------------------------
-// Personalized prediction: blends model output with user profile
-// -------------------------------------------------------------
-export async function predictPersonalized(sentence, topK = 7) {
-  let aiProfileStore;
-  try {
-    aiProfileStore = require('./aiProfileStore');
-  } catch {
-    // AI profile not available — fall back to model-only predictions
-    return predictTopKWordsWithImprovedModel(sentence, topK);
-  }
-
-  const words = safeSplit(sentence);
-  const prevWord = words.length > 0 ? words[words.length - 1] : null;
-
-  // Get model predictions
-  let modelCandidates = [];
-  try {
-    modelCandidates = await predictTopKWordsWithImprovedModel(sentence, topK * 2);
-  } catch {
-    // Model failed — use profile-only predictions
-  }
-
-  // Get bigram predictions from user profile
-  const bigramPreds = prevWord
-    ? aiProfileStore.getBigramPredictions(prevWord, 5)
-    : [];
-
-  // Merge: model candidates + bigram predictions (deduplicated)
-  const seen = new Set();
-  const merged = [];
-
-  // Bigram predictions first (user's own patterns are highest signal)
-  for (const w of bigramPreds) {
-    const lw = w.toLowerCase();
-    if (!seen.has(lw)) {
-      seen.add(lw);
-      merged.push(lw);
-    }
-  }
-
-  // Then model predictions
-  for (const w of modelCandidates) {
-    const lw = (typeof w === 'string' ? w : '').toLowerCase();
-    if (lw && !seen.has(lw)) {
-      seen.add(lw);
-      merged.push(lw);
-    }
-  }
-
-  // Score by frequency + recency and sort
-  if (merged.length > 0 && typeof aiProfileStore.scoreByFrequencyAndRecency === 'function') {
-    const scored = aiProfileStore.scoreByFrequencyAndRecency(merged);
-    return scored.slice(0, topK).map(s => s.word);
-  }
-
-  return merged.slice(0, topK);
 }

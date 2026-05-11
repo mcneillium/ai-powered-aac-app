@@ -8,6 +8,7 @@ const config = getDefaultConfig(__dirname);
 const assetExts = new Set(config.resolver.assetExts);
 assetExts.add('bin');   // TFJS weight shards
 assetExts.add('json');  // TFJS model.json must be served raw
+assetExts.add('svg');   // Mulberry symbol SVGs
 config.resolver.assetExts = Array.from(assetExts);
 
 // ---------- Don't parse .json as JS modules ----------

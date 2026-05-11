@@ -16,6 +16,8 @@
  *   feedback/{uid}/{pushId}  - User feedback submissions
  *   fineTuneMetrics/{pushId} - AI model fine-tune metrics
  *   userSync/{uid}           - Last activity timestamps for sync status
+ *   favorites/{uid}/{pushId} - Saved favorite sentences (NEW: Phase 6B)
+ *   customBoards/{uid}/{boardId} - Caregiver-configurable word boards (NEW: Phase 6C)
  */
 
 // ── Firebase Realtime Database Paths ──
@@ -29,6 +31,11 @@ export const DB_PATHS = {
   FEEDBACK: 'feedback',                  // feedback/{uid}/{pushId}
   FINE_TUNE_METRICS: 'fineTuneMetrics',  // fineTuneMetrics/{pushId}
   USER_SYNC: 'userSync',                // userSync/{uid}
+  CUSTOM_VOCAB: 'customVocab',          // customVocab/{uid}
+  VOCAB_REQUESTS: 'vocabRequests',      // vocabRequests/{uid}
+  ALERTS: 'alerts',                     // alerts/{caregiverId}/{pushId} — caregiver alert system
+  FAVORITES: 'favorites',               // favorites/{uid}/{pushId} — saved favorite sentences (dashboard: read)
+  CUSTOM_BOARDS: 'customBoards',        // customBoards/{uid}/{boardId} — caregiver-configurable boards (dashboard: read/write)
 };
 
 // Legacy alias — prefer DB_PATHS for new code
@@ -63,6 +70,15 @@ export const SETTINGS_DEFAULTS = {
   speechRate: 1.0,        // 0.5 - 1.5
   speechPitch: 1.0,       // 0.5 - 1.5
   speechVoice: null,      // string | null (system default)
+  aiPersonalisationEnabled: true,
+  scanMode: 'auto',       // 'auto' | 'manual'
+  scanSpeed: 1500,        // ms between scan steps
+  crisisModeEnabled: true,
+  listenerModeEnabled: false,
+  partnerCoachEnabled: true,
+  showSymbols: true,
+  preferredSymbolSource: 'auto', // 'auto' | 'openmoji' | 'mulberry' | 'arasaac'
+  communicationLanguage: 'en',
 };
 
 // ── Log Entry Schema ──

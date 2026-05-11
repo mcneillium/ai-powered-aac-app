@@ -16,6 +16,9 @@ import {
   removeCustomVocabItem, updateCustomVocabItem,
   getVocabRequests, dismissVocabRequest, refreshFromFirebase,
 } from '../services/customVocabStore';
+import {
+  getFrequentFailedSearches,
+} from '../services/aiProfileStore';
 import { StatusBar } from 'expo-status-bar';
 
 const CATEGORIES = [
@@ -39,11 +42,15 @@ export default function VocabManagerScreen() {
   const [editingId, setEditingId] = useState(null);
   const [editWord, setEditWord] = useState('');
   const [editCategory, setEditCategory] = useState('noun');
+  const [aiSuggested, setAiSuggested] = useState([]);
 
   const load = useCallback(async () => {
     await loadCustomVocab();
     setVocab([...getCustomVocab()]);
     setRequests(await getVocabRequests());
+    const gaps = getFrequentFailedSearches(2);
+    const currentWords = new Set(getCustomVocab().map(v => v.word.toLowerCase()));
+    setAiSuggested(gaps.filter(g => !currentWords.has(g.term.toLowerCase())).slice(0, 10));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -198,6 +205,38 @@ export default function VocabManagerScreen() {
           </>
         )}
       </View>
+
+      {/* ── AI-suggested words (from failed searches) ── */}
+      {aiSuggested.length > 0 && (
+        <View style={[styles.card, { backgroundColor: palette.cardBg, ...shadows.card }]}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="sparkles-outline" size={18} color={palette.accent} />
+            <Text style={[styles.sectionTitle, { color: palette.text }]}>Suggested words</Text>
+          </View>
+          <Text style={[styles.hint, { color: palette.textSecondary }]}>
+            Words the user searched for multiple times but couldn't find. Consider adding them.
+          </Text>
+          {aiSuggested.map(({ term, count }) => (
+            <View key={term} style={[styles.requestRow, { borderBottomColor: palette.border }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.requestWord, { color: palette.text }]}>{term}</Text>
+                <Text style={[styles.vocabMeta, { color: palette.textSecondary }]}>
+                  Searched {count} times
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => handleApprove(term)}
+                style={[styles.actionChip, { backgroundColor: palette.success }]}
+                accessibilityRole="button"
+                accessibilityLabel={`Add "${term}" to vocabulary`}
+              >
+                <Ionicons name="add" size={16} color="#FFF" />
+                <Text style={styles.actionChipText}>Add</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* ── Add word manually ── */}
       <View style={[styles.card, { backgroundColor: palette.cardBg, ...shadows.card }]}>

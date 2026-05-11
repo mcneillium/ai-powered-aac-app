@@ -22,6 +22,23 @@ function setCors(res) {
   res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
+// ── Auth helper ──
+// Verifies Firebase ID token if present. Returns uid or null.
+// Does not reject unauthenticated requests (app supports offline/guest use),
+// but rejects requests with invalid tokens to prevent spoofing.
+async function getCallerUid(req, res) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  try {
+    const token = authHeader.split('Bearer ')[1];
+    const decoded = await admin.auth().verifyIdToken(token);
+    return decoded.uid;
+  } catch {
+    res.status(401).json({ error: 'Invalid authentication token' });
+    return false; // signals caller to stop processing
+  }
+}
+
 // ════════════════════════════════════════════
 // 1. IMAGE CAPTION PROXY (Hugging Face)
 // ════════════════════════════════════════════
@@ -30,8 +47,14 @@ exports.imageCaptionProxy = functions.https.onRequest(async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(204).send('');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  const uid = await getCallerUid(req, res);
+  if (uid === false) return;
+
   const { image } = req.body || {};
   if (!image) return res.status(400).json({ error: 'Missing "image" field (base64)' });
+  if (typeof image !== 'string' || image.length > 7_000_000) {
+    return res.status(400).json({ error: 'Image too large (max ~5MB)', caption: '' });
+  }
 
   const hfToken = functions.config().hf?.token;
   if (!hfToken) {
@@ -101,6 +124,9 @@ exports.aacPhraseSuggestions = functions.https.onRequest(async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(204).send('');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  const uid = await getCallerUid(req, res);
+  if (uid === false) return;
+
   const { currentWords, recentPhrases, timeOfDay } = req.body || {};
 
   // Input validation: limit array sizes to prevent abuse
@@ -111,6 +137,9 @@ exports.aacPhraseSuggestions = functions.https.onRequest(async (req, res) => {
     return res.status(400).json({ error: 'recentPhrases too long', suggestions: [] });
   }
 
+  // Sanitize text inputs: strip control characters and limit length per word
+  const sanitize = (s) => String(s).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 50);
+
   const projectId = functions.config().vertex?.project_id || 'commai-b98fe';
   const location = 'europe-west1';
   const model = 'gemini-2.5-flash';
@@ -118,13 +147,14 @@ exports.aacPhraseSuggestions = functions.https.onRequest(async (req, res) => {
   // Build the user prompt
   let userPrompt = 'Suggest AAC phrases';
   if (currentWords && currentWords.length > 0) {
-    userPrompt += `. Current sentence so far: "${currentWords.join(' ')}"`;
+    userPrompt += `. Current sentence so far: "${currentWords.map(sanitize).join(' ')}"`;
   }
   if (recentPhrases && recentPhrases.length > 0) {
-    userPrompt += `. Recently spoken: ${recentPhrases.slice(0, 3).join(', ')}`;
+    userPrompt += `. Recently spoken: ${recentPhrases.slice(0, 3).map(sanitize).join(', ')}`;
   }
   if (timeOfDay) {
-    userPrompt += `. Time of day: ${timeOfDay}`;
+    const safeTime = sanitize(timeOfDay);
+    userPrompt += `. Time of day: ${safeTime}`;
   }
   userPrompt += '. Return a JSON array of 4-6 short phrase suggestions.';
 
@@ -211,6 +241,9 @@ exports.imageToAACPhrases = functions.https.onRequest(async (req, res) => {
   setCors(res);
   if (req.method === 'OPTIONS') return res.status(204).send('');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const uid = await getCallerUid(req, res);
+  if (uid === false) return;
 
   const { image } = req.body || {};
   if (!image) return res.status(400).json({ error: 'Missing "image" field (base64)' });
@@ -318,6 +351,9 @@ exports.ocrToAACPhrases = functions.https.onRequest(async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(204).send('');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  const uid = await getCallerUid(req, res);
+  if (uid === false) return;
+
   const { image } = req.body || {};
   if (!image) return res.status(400).json({ error: 'Missing "image" field (base64)' });
   if (typeof image !== 'string' || image.length > 7_000_000) {
@@ -422,6 +458,9 @@ exports.generateQuickPage = functions.https.onRequest(async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(204).send('');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  const uid = await getCallerUid(req, res);
+  if (uid === false) return;
+
   const { situation, existingPhrases } = req.body || {};
   if (!situation || typeof situation !== 'string' || situation.trim().length === 0) {
     return res.status(400).json({ error: 'Missing "situation" field' });
@@ -434,9 +473,10 @@ exports.generateQuickPage = functions.https.onRequest(async (req, res) => {
   const location = 'europe-west1';
   const model = 'gemini-2.5-flash';
 
-  let userPrompt = `Generate AAC phrases for this situation: "${situation.trim()}"`;
+  const safeSituation = situation.trim().replace(/[\x00-\x1f\x7f]/g, '');
+  let userPrompt = `Generate AAC phrases for this situation: "${safeSituation}"`;
   if (Array.isArray(existingPhrases) && existingPhrases.length > 0) {
-    const safe = existingPhrases.slice(0, 6).map(p => String(p).slice(0, 50));
+    const safe = existingPhrases.slice(0, 6).map(p => String(p).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 50));
     userPrompt += `\n\nThe user already has these phrases: ${safe.join(', ')}. Complement them — do not repeat.`;
   }
   userPrompt += '\n\nReturn a JSON object with "situationLabel" and "phrases".';

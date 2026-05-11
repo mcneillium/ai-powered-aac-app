@@ -16,7 +16,7 @@ const PRESET_LIST = Object.entries(voicePresets).map(([id, preset]) => ({
   ...preset,
 }));
 
-export default function VoicePresetPicker({ activePreset, onSelect }) {
+function VoicePresetPickerInner({ activePreset, onSelect }) {
   const { settings } = useSettings();
   const palette = getPalette(settings.theme);
 
@@ -44,6 +44,7 @@ export default function VoicePresetPicker({ activePreset, onSelect }) {
               accessibilityRole="button"
               accessibilityLabel={`${t('voiceStyle')}: ${item.label}`}
               accessibilityState={{ selected: isActive }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Ionicons
                 name={item.icon}
@@ -66,6 +67,9 @@ export default function VoicePresetPicker({ activePreset, onSelect }) {
   );
 }
 
+const VoicePresetPicker = React.memo(VoicePresetPickerInner);
+export default VoicePresetPicker;
+
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
@@ -78,12 +82,13 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: radii.pill,
     borderWidth: 1,
     marginHorizontal: 3,
     gap: 4,
+    minHeight: 48,
   },
   chipText: {
     fontSize: 12,

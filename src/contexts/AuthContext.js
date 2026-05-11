@@ -6,6 +6,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getDatabase, ref, get } from 'firebase/database';
 import { auth } from '../../firebaseConfig';
+import { DB_PATHS, dbPath } from '../shared/schema';
 
 const AuthContext = createContext();
 
@@ -24,7 +25,7 @@ export function AuthProvider({ children }) {
           // Fetch role from database (non-blocking on failure)
           try {
             const db = getDatabase();
-            const snap = await get(ref(db, `users/${u.uid}/role`));
+            const snap = await get(ref(db, dbPath(DB_PATHS.USERS, u.uid, 'role')));
             setRole(snap.exists() ? snap.val() : 'user');
           } catch {
             setRole('user'); // default if DB unreachable
