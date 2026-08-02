@@ -7,6 +7,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAuth, signOut, deleteUser } from 'firebase/auth';
 import { getDatabase, ref, remove } from 'firebase/database';
 import { useNavigation } from '@react-navigation/native';

@@ -11,7 +11,7 @@
 // 7. Favourites: Users can pin frequently-used phrases
 // 8. Persistent history: Sentence history survives app restarts
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette } from '../theme';
 import { speak, stop } from '../services/speechService';
@@ -84,7 +84,16 @@ export default function AACBoardScreen() {
   const [scanFocusIndex, setScanFocusIndex] = useState(-1);
   const sentenceBarRef = useRef(null);
 
-  const currentPage = getPage(currentPageId) || getHomePage();
+  // Memoized: getPage builds a fresh object per call, and a new identity on
+  // every render would reset the switch-scanning item list (and scan position).
+  // isFocused is a dependency so custom-vocab edits made on other screens are
+  // picked up when the user returns to the board.
+  const isFocused = useIsFocused();
+  const currentPage = useMemo(
+    () => getPage(currentPageId) || getHomePage(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currentPageId, isFocused]
+  );
   const aiEnabled = settings.aiPersonalisationEnabled !== false;
 
   // Load persistent data on mount
@@ -98,17 +107,14 @@ export default function AACBoardScreen() {
   // This puts the most-used items at the start of the scan cycle.
   const scanItemList = useRef([]);
 
-  // Use refs for action callbacks to avoid stale closures in scan select handler
-  const speakRef = useRef(speakSentence);
-  const backspaceRef = useRef(removeLastWord);
-  const clearRef = useRef(clearSentence);
-  const buttonPressRef = useRef(handleButtonPress);
-  const suggestionPressRef = useRef(handleSuggestionPress);
-  useEffect(() => { speakRef.current = speakSentence; }, [speakSentence]);
-  useEffect(() => { backspaceRef.current = removeLastWord; }, [removeLastWord]);
-  useEffect(() => { clearRef.current = clearSentence; }, [clearSentence]);
-  useEffect(() => { buttonPressRef.current = handleButtonPress; }, [handleButtonPress]);
-  useEffect(() => { suggestionPressRef.current = handleSuggestionPress; }, [handleSuggestionPress]);
+  // Use refs for action callbacks to avoid stale closures in scan select handler.
+  // The callbacks are declared with `const` further down, so the refs start
+  // empty and are populated by the effects below (which run after render).
+  const speakRef = useRef(null);
+  const backspaceRef = useRef(null);
+  const clearRef = useRef(null);
+  const buttonPressRef = useRef(null);
+  const suggestionPressRef = useRef(null);
 
   useEffect(() => {
     // Rebuild scan items: vocab → suggestions → actions
@@ -137,13 +143,13 @@ export default function AACBoardScreen() {
     onScanSelect(({ item }) => {
       if (!item) return;
       if (item.type === 'action') {
-        if (item.id === 'speak') speakRef.current();
-        else if (item.id === 'backspace') backspaceRef.current();
-        else if (item.id === 'clear') clearRef.current();
+        if (item.id === 'speak') speakRef.current?.();
+        else if (item.id === 'backspace') backspaceRef.current?.();
+        else if (item.id === 'clear') clearRef.current?.();
       } else if (item.type === 'vocab') {
-        buttonPressRef.current(item.button);
+        buttonPressRef.current?.(item.button);
       } else if (item.type === 'suggestion') {
-        suggestionPressRef.current(item.word);
+        suggestionPressRef.current?.(item.word);
       }
     });
     return () => { cleanupScan(); };
@@ -367,6 +373,13 @@ export default function AACBoardScreen() {
     setSentenceWords([]);
     stop();
   }, []);
+
+  // Keep the scan-select refs pointing at the latest callbacks.
+  useEffect(() => { speakRef.current = speakSentence; }, [speakSentence]);
+  useEffect(() => { backspaceRef.current = removeLastWord; }, [removeLastWord]);
+  useEffect(() => { clearRef.current = clearSentence; }, [clearSentence]);
+  useEffect(() => { buttonPressRef.current = handleButtonPress; }, [handleButtonPress]);
+  useEffect(() => { suggestionPressRef.current = handleSuggestionPress; }, [handleSuggestionPress]);
 
   const repeatFromHistory = useCallback((text) => {
     const words = text.split(' ');

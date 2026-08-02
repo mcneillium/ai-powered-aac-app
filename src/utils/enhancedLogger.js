@@ -1,6 +1,8 @@
 // src/utils/enhancedLogger.js
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAuth } from 'firebase/auth';
+import packageJson from '../../package.json';
 import { ref, push, set, serverTimestamp } from 'firebase/database';
 import { db } from '../../firebaseConfig';
 import NetInfo from '@react-native-community/netinfo';
@@ -72,14 +74,15 @@ async function processLogQueue() {
   if (isProcessingQueue || logQueue.length === 0) return;
   
   isProcessingQueue = true;
-  
+
+  let logsToAdd = [];
   try {
     // Get current logs
     const storedLogsString = await AsyncStorage.getItem('userInteractionLog');
     let storedLogs = storedLogsString ? JSON.parse(storedLogsString) : [];
-    
+
     // Add queued logs
-    const logsToAdd = [...logQueue];
+    logsToAdd = [...logQueue];
     logQueue = []; // Clear the queue
     
     storedLogs = [...storedLogs, ...logsToAdd];
@@ -100,8 +103,8 @@ async function processLogQueue() {
     }
   } catch (error) {
     console.error('Error processing log queue:', error);
-    // Put the logs back in the queue if operation failed
-    logQueue = [...logQueue, ...logQueue];
+    // Put the unwritten logs back at the front of the queue so they retry
+    logQueue = [...logsToAdd, ...logQueue];
   } finally {
     isProcessingQueue = false;
   }
@@ -201,21 +204,14 @@ async function getSessionId() {
 }
 
 /**
- * Get basic device info to include with logs
+ * Get basic device info to include with logs.
+ * Intentionally coarse — no device identifiers, only platform + app version.
  */
 async function getDeviceInfo() {
-  try {
-    // This would typically use React Native's Platform and other APIs
-    // to get actual device info, but we'll use a placeholder for now
-    return {
-      platform: 'React Native',
-      appVersion: '1.0.0',
-      // Add more device info as needed
-    };
-  } catch (error) {
-    console.error('Error getting device info:', error);
-    return { platform: 'unknown' };
-  }
+  return {
+    platform: Platform.OS,
+    appVersion: packageJson.version,
+  };
 }
 
 /**

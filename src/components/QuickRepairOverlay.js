@@ -20,8 +20,9 @@ import { getPalette, radii, spacing } from '../theme';
 import { t } from '../i18n/strings';
 import {
   setScanItems, onScanChange, onScanSelect,
-  startScan, stopScan, cleanup as cleanupScan,
+  startScan, stopScan,
   getScanState, advanceScan, selectCurrent,
+  saveScanContext, restoreScanContext,
 } from '../services/switchScanService';
 
 const REPAIR_PHRASES = [
@@ -57,44 +58,51 @@ export default function QuickRepairOverlay() {
     });
   }, [settings]);
 
-  // When modal opens, take over scan with repair phrases.
-  // When modal closes, restore previous scan state.
+  // When the modal opens, save the underlying screen's scan context and take
+  // over scanning with the repair phrases. When it closes (or this component
+  // unmounts), hand scanning back exactly as it was — items, callbacks, and
+  // running state.
+  const savedScanContext = useRef(null);
+
   useEffect(() => {
-    if (visible) {
-      wasScanningBefore.current = getScanState().isRunning;
-      if (wasScanningBefore.current) {
-        stopScan();
-      }
-      const items = REPAIR_PHRASES.map(p => ({ type: 'repair', id: p.id, phrase: p }));
-      // Add close button as last scan item
-      items.push({ type: 'close', id: 'close_repair', label: 'Close' });
-      setScanItems(items);
+    if (!visible) return undefined;
 
-      onScanChange(({ currentIndex, isRunning }) => {
-        if (!isRunning || currentIndex < 0) {
-          setScanFocusId(null);
-        } else {
-          setScanFocusId(items[currentIndex]?.id || null);
-        }
-      });
-      onScanSelect(({ item }) => {
-        if (!item) return;
-        if (item.type === 'repair') {
-          handlePhrase(item.phrase);
-        } else if (item.type === 'close') {
-          setVisible(false);
-        }
-      });
-
-      if (wasScanningBefore.current) {
-        startScan();
-      }
-    } else {
-      // Modal closed — stop scanning repair items
-      setScanFocusId(null);
+    savedScanContext.current = saveScanContext();
+    wasScanningBefore.current = getScanState().isRunning;
+    if (wasScanningBefore.current) {
       stopScan();
-      // AACBoard will re-register its own items when it re-renders
     }
+
+    const items = REPAIR_PHRASES.map(p => ({ type: 'repair', id: p.id, phrase: p }));
+    // Add close button as last scan item
+    items.push({ type: 'close', id: 'close_repair', label: 'Close' });
+    setScanItems(items);
+
+    onScanChange(({ currentIndex, isRunning }) => {
+      if (!isRunning || currentIndex < 0) {
+        setScanFocusId(null);
+      } else {
+        setScanFocusId(items[currentIndex]?.id || null);
+      }
+    });
+    onScanSelect(({ item }) => {
+      if (!item) return;
+      if (item.type === 'repair') {
+        handlePhrase(item.phrase);
+      } else if (item.type === 'close') {
+        setVisible(false);
+      }
+    });
+
+    if (wasScanningBefore.current) {
+      startScan();
+    }
+
+    return () => {
+      setScanFocusId(null);
+      restoreScanContext(savedScanContext.current);
+      savedScanContext.current = null;
+    };
   }, [visible, handlePhrase]);
 
   const screenWidth = Dimensions.get('window').width;

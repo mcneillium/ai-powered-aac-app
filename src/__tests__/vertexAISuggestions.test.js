@@ -1,6 +1,10 @@
 // Tests for vertexAISuggestions client service
 // Tests the pure logic and error handling — network calls are mocked.
 
+// aiBackend reads the Firebase auth instance for ID tokens; stub it so the
+// suite doesn't initialise the real Firebase SDK.
+jest.mock('../../firebaseConfig', () => ({ auth: { currentUser: null } }));
+
 import { getAACPhraseSuggestions, getImageAACPhrases } from '../services/vertexAISuggestions';
 
 // Mock global fetch

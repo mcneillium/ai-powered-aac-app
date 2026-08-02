@@ -4,12 +4,12 @@
 
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
+  Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../firebaseConfig';
-import { logEvent } from '../utils/logger';
+import { logEvent } from '../utils/enhancedLogger';
 import { useNavigation } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, brand, radii, spacing } from '../theme';
@@ -50,13 +50,14 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, trimmedEmail, password);
-      logEvent('User logged in', { email: trimmedEmail });
+      // Do not log the email address — logs sync to Firebase and must not hold PII.
+      logEvent('User logged in');
       // Auth state change triggers context update — navigate back to app
       if (navigation.canGoBack()) {
         navigation.goBack();
       }
     } catch (error) {
-      logEvent('Login error', { email: trimmedEmail, error: error.code });
+      logEvent('Login error', { error: error.code });
       Alert.alert('Login Failed', friendlyAuthError(error.code));
     } finally {
       setLoading(false);
