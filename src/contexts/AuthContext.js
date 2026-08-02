@@ -3,7 +3,7 @@
 // Role is read from Realtime Database at /users/{uid}/role on auth change.
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { getDatabase, ref, get } from 'firebase/database';
 import { auth } from '../../firebaseConfig';
 
@@ -21,16 +21,25 @@ export function AuthProvider({ children }) {
       async (u) => {
         setUser(u);
         if (u) {
-          // Fetch role from database (non-blocking on failure)
-          try {
-            const db = getDatabase();
-            const snap = await get(ref(db, `users/${u.uid}/role`));
-            setRole(snap.exists() ? snap.val() : 'user');
-          } catch {
-            setRole('user'); // default if DB unreachable
+          if (u.isAnonymous) {
+            setRole(null);
+          } else {
+            // Fetch role from database (non-blocking on failure)
+            try {
+              const db = getDatabase();
+              const snap = await get(ref(db, `users/${u.uid}/role`));
+              setRole(snap.exists() ? snap.val() : 'user');
+            } catch {
+              setRole('user'); // default if DB unreachable
+            }
           }
         } else {
           setRole(null);
+          // Guests get an anonymous Firebase session so the AI Cloud Function
+          // endpoints (which require an ID token) still work without an
+          // account. Fails quietly offline or if the provider is disabled —
+          // the app remains fully usable, only cloud AI features are gated.
+          signInAnonymously(auth).catch(() => {});
         }
         setLoading(false);
       },

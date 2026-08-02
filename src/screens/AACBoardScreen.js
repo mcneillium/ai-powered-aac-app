@@ -18,8 +18,6 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  Platform,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
@@ -37,7 +35,6 @@ import {
   getBigramPredictions,
   getTopWords,
   scoreWithExplanation,
-  recordSuggestionAccepted,
   recordSourceShown,
 } from '../services/aiProfileStore';
 import {
@@ -95,6 +92,7 @@ export default function AACBoardScreen() {
     [currentPageId, isFocused]
   );
   const aiEnabled = settings.aiPersonalisationEnabled !== false;
+  const cloudEnabled = settings.cloudSuggestionsEnabled !== false;
 
   // Load persistent data on mount
   useEffect(() => {
@@ -264,8 +262,10 @@ export default function AACBoardScreen() {
         // Bigram + personal results are already showing
       }
 
-      // Also try Vertex AI for richer phrase suggestions (async, non-blocking)
-      if (aiEnabled && sentenceWords.length >= 2) {
+      // Also try Vertex AI for richer phrase suggestions (async, non-blocking).
+      // Gated on the "Online suggestions" privacy setting — this is the only
+      // suggestion path that sends sentence content off-device.
+      if (aiEnabled && cloudEnabled && sentenceWords.length >= 2) {
         try {
           const recentTexts = getSentenceHistory().slice(0, 3).map(h => h.text);
           const vertexPhrases = await getAACPhraseSuggestions(sentenceWords, recentTexts);
@@ -285,7 +285,8 @@ export default function AACBoardScreen() {
       }
     })();
     return () => { cancelled = true; };
-  }, [sentenceWords, aiEnabled]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sentenceWords, aiEnabled, cloudEnabled]);
 
   const navigateToPage = useCallback((pageId) => {
     setPageHistory(prev => [...prev, currentPageId]);

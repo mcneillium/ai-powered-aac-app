@@ -19,7 +19,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { getPalette } from '../theme';
 import { t } from '../i18n/strings';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const { width: SCREEN_W } = Dimensions.get('window');
 
 export default function DisplayMode({ visible, onClose, text, mode = 'display' }) {
   const { settings } = useSettings();

@@ -132,8 +132,8 @@ export default function EmotionScreen() {
     });
     // Save to sentence history so it appears in AAC Board history panel
     addSentenceToHistory(sentence).catch(() => {});
-    // Track emotion word for AI profile learning
-    if (emotion) {
+    // Track emotion word for AI profile learning (respects the AI opt-out)
+    if (emotion && settings.aiPersonalisationEnabled !== false) {
       recordWordSelection(emotion.label.toLowerCase(), ['i', 'feel'], false).catch(() => {});
     }
   }, [sentence, settings, emotion]);

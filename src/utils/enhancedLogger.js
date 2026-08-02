@@ -154,8 +154,9 @@ export async function logEvent(action, metadata = {}, level = 'info') {
     // Add to in-memory queue
     logQueue.push(logEntry);
     
-    // Try to add log immediately to Firebase if online
-    if (isOnline && currentUser) {
+    // Try to add log immediately to Firebase if online.
+    // Anonymous (guest) sessions never sync logs — guest data stays local.
+    if (isOnline && currentUser && !currentUser.isAnonymous) {
       try {
         const logsRef = ref(db, `userLogs/${currentUser.uid}`);
         await push(logsRef, {
@@ -220,7 +221,7 @@ async function getDeviceInfo() {
 export async function syncLogsToFirebase() {
   try {
     const auth = getAuth();
-    if (!auth.currentUser) {
+    if (!auth.currentUser || auth.currentUser.isAnonymous) {
       console.log('Not logged in, skipping sync');
       return false;
     }

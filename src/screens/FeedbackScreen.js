@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollView, View, Text, TextInput, TouchableOpacity,
   Alert, StyleSheet, ActivityIndicator,
@@ -13,6 +13,29 @@ import { getPalette } from '../theme';
 
 const FEEDBACK_QUEUE_KEY = '@aac_feedback_queue';
 
+async function sendEntry(entry) {
+  const uid = getAuth().currentUser?.uid;
+  if (!uid) throw new Error('Not signed in');
+  await push(ref(getDatabase(), `feedback/${uid}`), entry);
+}
+
+// Send any feedback saved while offline. Entries that fail stay queued.
+async function flushFeedbackQueue() {
+  const stored = await AsyncStorage.getItem(FEEDBACK_QUEUE_KEY);
+  const queue = stored ? JSON.parse(stored) : [];
+  if (queue.length === 0) return;
+
+  const remaining = [];
+  for (const entry of queue) {
+    try {
+      await sendEntry(entry);
+    } catch {
+      remaining.push(entry);
+    }
+  }
+  await AsyncStorage.setItem(FEEDBACK_QUEUE_KEY, JSON.stringify(remaining));
+}
+
 export default function FeedbackScreen() {
   const { settings, loading: settingsLoading } = useSettings();
   const { isOnline } = useNetwork();
@@ -22,6 +45,13 @@ export default function FeedbackScreen() {
   const [role, setRole] = useState('user');
   const [submitting, setSubmitting] = useState(false);
   const palette = getPalette(settings.theme);
+
+  // Deliver feedback queued while offline whenever we come back online.
+  useEffect(() => {
+    if (isOnline) {
+      flushFeedbackQueue().catch(() => {});
+    }
+  }, [isOnline]);
 
   if (settingsLoading) {
     return (
@@ -46,9 +76,9 @@ export default function FeedbackScreen() {
 
     try {
       if (isOnline) {
-        const uid = getAuth().currentUser?.uid || 'anonymous';
-        await push(ref(getDatabase(), `feedback/${uid}`), entry);
+        await sendEntry(entry);
         Alert.alert('Thank you!', 'Your feedback has been submitted.');
+        flushFeedbackQueue().catch(() => {});
       } else {
         // Queue for later sync
         const stored = await AsyncStorage.getItem(FEEDBACK_QUEUE_KEY);
