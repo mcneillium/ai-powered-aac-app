@@ -59,13 +59,13 @@ Plus the now-empty `archive/unused/` and `Old_models/` directories.
 
 The following tokens have been exposed in git history and **must be rotated**:
 
-1. **Hugging Face token** `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`
+1. **Hugging Face token** `hf_NHyU…[REDACTED — full value removed from repo; revoke if not already done]`
    - Go to: https://huggingface.co/settings/tokens
    - Revoke the old token
    - Create a new token
    - Set it server-side: `firebase functions:config:set hf.token="hf_NEW_TOKEN"`
 
-2. **Google Cloud Vision key** `AIzaSyD4WZGLy8Zt5VsF6v2LmnikM4j7hcWoo9g`
+2. **Google Cloud Vision key** `AIzaSyD4WZ…[REDACTED — full value removed from repo; revoke if not already done]`
    - Go to: Google Cloud Console → APIs & Services → Credentials
    - Delete or restrict the key
    - No new key needed (feature removed from mobile app; re-add via Cloud Function if needed later)

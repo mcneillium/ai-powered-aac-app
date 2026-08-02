@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
   previewText: { flex: 1, fontSize: 18, fontWeight: '500' },
   previewActions: { flexDirection: 'row', gap: spacing.sm, marginLeft: spacing.sm },
   speakBtn: { padding: spacing.sm, borderRadius: radii.sm, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  resetBtn: { padding: spacing.sm, borderRadius: radii.sm, minWidth: 36, minHeight: 36, alignItems: 'center', justifyContent: 'center' },
+  resetBtn: { padding: spacing.sm, borderRadius: radii.sm, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.md },
   stepLabel: { fontSize: 16, fontWeight: '700', marginTop: spacing.lg, marginBottom: spacing.sm },

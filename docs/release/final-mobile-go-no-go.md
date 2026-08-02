@@ -1,3 +1,8 @@
+> **SUPERSEDED (2026-08-02):** This document contains claims that did not
+> match the codebase (e.g. "Zero code changes remain", teal palette). See
+> `docs/audit/production-readiness-audit-2026-08.md` for the verified,
+> current status.
+
 # Final Mobile Go / No-Go — Voice v1.1.0
 
 **Date:** 2026-03-23

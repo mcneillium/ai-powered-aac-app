@@ -284,6 +284,10 @@ export default function VocabManagerScreen() {
                           key={cat.id}
                           style={[styles.catChipSmall, { backgroundColor: editCategory === cat.id ? palette.primary : palette.chipBg }]}
                           onPress={() => setEditCategory(cat.id)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Category ${cat.label}`}
+                          accessibilityState={{ selected: editCategory === cat.id }}
+                          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                         >
                           <Text style={[styles.catChipSmallText, { color: editCategory === cat.id ? palette.buttonText : palette.text }]}>
                             {cat.label}
@@ -379,7 +383,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm, fontSize: 15, marginBottom: spacing.xs,
   },
   editCategories: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: spacing.xs },
-  catChipSmall: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radii.pill },
-  catChipSmallText: { fontSize: 11, fontWeight: '600' },
+  catChipSmall: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: radii.pill },
+  catChipSmallText: { fontSize: 13, fontWeight: '600' },
   editActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
 });
