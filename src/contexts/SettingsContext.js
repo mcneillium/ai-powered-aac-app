@@ -19,6 +19,7 @@ const defaultSettings = {
   speechPitch: 1.0,
   speechVoice: null, // null = system default
   aiPersonalisationEnabled: true, // learn from user input to improve suggestions
+  cloudSuggestionsEnabled: true,  // allow sending sentence context to the AI backend
   scanMode: 'auto',   // 'auto' | 'step'
   scanSpeed: 1500,     // ms between auto-scan steps
 };
@@ -54,7 +55,8 @@ export function SettingsProvider({ children }) {
   // Subscribe to Firebase as secondary sync (non-blocking)
   // Re-subscribes when the user changes (login/logout)
   useEffect(() => {
-    const uid = user?.uid;
+    // Anonymous (guest) sessions stay local-only — no cloud settings sync.
+    const uid = user && !user.isAnonymous ? user.uid : null;
     if (!uid) return;
 
     const settingsRef = ref(db, dbPath(DB_PATHS.USER_SETTINGS, uid));
@@ -92,9 +94,9 @@ export function SettingsProvider({ children }) {
       console.warn('Failed to save settings locally:', e);
     }
 
-    // Try Firebase sync (non-blocking)
+    // Try Firebase sync (non-blocking; guests stay local-only)
     try {
-      const uid = user?.uid;
+      const uid = user && !user.isAnonymous ? user.uid : null;
       if (uid) {
         await set(ref(db, dbPath(DB_PATHS.USER_SETTINGS, uid)), newSettings);
       }

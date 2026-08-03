@@ -8,8 +8,13 @@ import { word2idx, idx2word } from '../utils/vocab';
 const SEQ_LEN = 4;
 const BATCH_SIZE = 4;
 
-const MODEL_JSON = require('../../assets/tf_model/model.json');
-const MODEL_WEIGHTS = [ require('../../assets/tf_model/group1-shard1of1.bin') ];
+// The bundled model's embedding layer only covers this many token ids;
+// any vocab index at or above it must be clamped to <UNK> before predict/fit,
+// otherwise the embedding lookup is out of range.
+const MODEL_VOCAB_SIZE = 21;
+
+const MODEL_JSON = require('../../assets/tf_model/word_prediction_tfjs/model.json');
+const MODEL_WEIGHTS = [ require('../../assets/tf_model/word_prediction_tfjs/group1-shard1of1.bin') ];
 
 export function useOnDevicePrediction() {
   const modelRef = useRef(null);
@@ -41,7 +46,9 @@ export function useOnDevicePrediction() {
     const data = new Array(SEQ_LEN).fill(word2idx['<PAD>']);
     const start = Math.max(0, words.length - SEQ_LEN);
     words.slice(start).forEach((w, i) => {
-      data[SEQ_LEN - (words.length - start) + i] = word2idx[w] ?? word2idx['<UNK>'];
+      let idx = word2idx[w] ?? word2idx['<UNK>'];
+      if (idx >= MODEL_VOCAB_SIZE) idx = word2idx['<UNK>'];
+      data[SEQ_LEN - (words.length - start) + i] = idx;
     });
     return tf.tensor2d([data], [1, SEQ_LEN]);
   }
@@ -55,8 +62,10 @@ export function useOnDevicePrediction() {
       const top = Array.from(values)
         .map((v, i) => ({ v, i }))
         .sort((a, b) => b.v - a.v)
-        .slice(0, k)
-        .map(x => idx2word[x.i]);
+        .slice(0, k * 2)
+        .map(x => idx2word[x.i])
+        .filter(w => w && w !== '<PAD>' && w !== '<UNK>')
+        .slice(0, k);
       tf.dispose([input, logits]);
       return top;
     } catch (err) {
@@ -68,7 +77,9 @@ export function useOnDevicePrediction() {
   async function recordTap(words, nextWord) {
     if (!modelRef.current) return;
     const xs = encodeSequence(words);
-    const ys = tf.tensor1d([ word2idx[nextWord] ?? word2idx['<UNK>'] ], 'float32');
+    let labelIdx = word2idx[nextWord] ?? word2idx['<UNK>'];
+    if (labelIdx >= MODEL_VOCAB_SIZE) labelIdx = word2idx['<UNK>'];
+    const ys = tf.tensor1d([labelIdx], 'float32');
     if (bufferRef.current.xs.length > 0 && bufferRef.current.xs[0].shape[1] !== xs.shape[1]) {
       bufferRef.current.xs.forEach(t => t.dispose());
       bufferRef.current.ys.forEach(t => t.dispose());

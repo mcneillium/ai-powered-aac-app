@@ -3,6 +3,7 @@ import {
   setScanItems, setScanMode, setScanSpeed, getScanState,
   onScanChange, onScanSelect, startScan, stopScan,
   advanceScan, selectCurrent, handleScanKeyEvent, cleanup,
+  saveScanContext, restoreScanContext,
 } from '../services/switchScanService';
 
 beforeEach(() => {
@@ -103,6 +104,63 @@ describe('switchScanService', () => {
   test('does not start with empty items', () => {
     setScanItems([]);
     startScan();
+    expect(getScanState().isRunning).toBe(false);
+  });
+
+  test('setScanItems preserves scan position when item ids are unchanged', () => {
+    setScanItems([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
+    setScanMode('step');
+    startScan();
+    advanceScan(); // index 1
+    // Re-render rebuilds the list with new object identities but same ids
+    setScanItems([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
+    expect(getScanState().currentIndex).toBe(1);
+  });
+
+  test('setScanItems resets scan position when item ids change', () => {
+    setScanItems([{ id: 'a' }, { id: 'b' }]);
+    setScanMode('step');
+    startScan();
+    advanceScan(); // index 1
+    setScanItems([{ id: 'x' }, { id: 'y' }]);
+    expect(getScanState().currentIndex).toBe(-1);
+  });
+
+  test('save/restore hands scanning back to the previous owner', () => {
+    // Board registers its items and select handler
+    let boardSelected = null;
+    setScanItems([{ id: 'board-1' }, { id: 'board-2' }]);
+    setScanMode('step');
+    onScanSelect(({ item }) => { boardSelected = item; });
+    startScan();
+
+    // Overlay takes over
+    const saved = saveScanContext();
+    expect(saved.wasRunning).toBe(true);
+    stopScan();
+    let overlaySelected = null;
+    setScanItems([{ id: 'overlay-1' }]);
+    onScanSelect(({ item }) => { overlaySelected = item; });
+    startScan();
+    selectCurrent();
+    expect(overlaySelected).toEqual({ id: 'overlay-1' });
+    expect(boardSelected).toBeNull();
+
+    // Overlay closes — board's items, handler, and running state come back
+    restoreScanContext(saved);
+    const state = getScanState();
+    expect(state.isRunning).toBe(true);
+    expect(state.itemCount).toBe(2);
+    selectCurrent();
+    expect(boardSelected).toEqual({ id: 'board-1' });
+  });
+
+  test('restoreScanContext with resume=false does not restart scanning', () => {
+    setScanItems([{ id: 'a' }]);
+    startScan();
+    const saved = saveScanContext();
+    stopScan();
+    restoreScanContext(saved, { resume: false });
     expect(getScanState().isRunning).toBe(false);
   });
 });

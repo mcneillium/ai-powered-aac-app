@@ -27,8 +27,43 @@ let onChangeCallback = null;
 let onSelectCallback = null;
 
 export function setScanItems(items) {
+  // Preserve the scan position when the item list is materially unchanged
+  // (same ids in the same order). Without this, any re-render that rebuilds
+  // the list resets auto-scan to the start and the scan never advances.
+  const sameIds =
+    items.length === scanItems.length &&
+    items.every((it, i) => it?.id === scanItems[i]?.id);
   scanItems = items;
+  if (!sameIds) {
+    currentIndex = -1;
+  }
+}
+
+/**
+ * Save the current scan context (items + callbacks + running state) so an
+ * overlay can temporarily take over scanning and hand control back afterwards.
+ * Used by QuickRepairOverlay; without save/restore the overlay would
+ * permanently steal the AAC board's scan callbacks.
+ */
+export function saveScanContext() {
+  return {
+    items: scanItems,
+    onChange: onChangeCallback,
+    onSelect: onSelectCallback,
+    wasRunning: isRunning,
+  };
+}
+
+export function restoreScanContext(ctx, { resume = true } = {}) {
+  if (!ctx) return;
+  stopScan();
+  scanItems = ctx.items || [];
+  onChangeCallback = ctx.onChange || null;
+  onSelectCallback = ctx.onSelect || null;
   currentIndex = -1;
+  if (resume && ctx.wasRunning && scanItems.length > 0) {
+    startScan();
+  }
 }
 
 export function setScanMode(mode) {

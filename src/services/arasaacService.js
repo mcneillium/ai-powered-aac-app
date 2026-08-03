@@ -16,8 +16,10 @@ export const searchPictograms = async (language, searchText) => {
     // Construct the endpoint URL using the provided language and search text.
     const endpoint = `${BASE_URL}/pictograms/${language}/search/${encodeURIComponent(searchText)}`;
     
-    // Make the GET request using axios.
-    const response = await axios.get(endpoint);
+    // Make the GET request using axios. The timeout prevents a stalled
+    // connection (captive portal, flaky network) from leaving screens in a
+    // permanent loading state — callers treat null as "offline".
+    const response = await axios.get(endpoint, { timeout: 8000 });
     
     // Check if the response status is OK.
     if (response.status === 200) {

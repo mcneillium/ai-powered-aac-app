@@ -14,11 +14,11 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { ActivityIndicator, AppState, View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { AuthProvider } from './src/contexts/AuthContext';
 import { SettingsProvider, useSettings } from './src/contexts/SettingsContext';
 import { NetworkProvider } from './src/contexts/NetworkContext';
 import { getPalette } from './src/theme';
@@ -43,7 +43,7 @@ import VocabManagerScreen from './src/screens/VocabManagerScreen';
 
 // Non-blocking model load
 import { loadImprovedModel } from './src/services/improvedModelLoader';
-import { loadAIProfile, recordSessionStart } from './src/services/aiProfileStore';
+import { loadAIProfile, recordSessionStart, flushAIProfile } from './src/services/aiProfileStore';
 import { loadCustomVocab } from './src/services/customVocabStore';
 
 const Tab = createBottomTabNavigator();
@@ -147,13 +147,25 @@ function AuthStackScreen() {
 }
 
 function AppNavigator() {
-  const { user, loading: authLoading } = useAuth();
   const [hasLaunched, setHasLaunched] = useState(null);
 
   useEffect(() => {
-    AsyncStorage.getItem('hasLaunched').then(val => {
-      setHasLaunched(val === 'true');
+    AsyncStorage.getItem('hasLaunched')
+      .then(val => setHasLaunched(val === 'true'))
+      // On read failure, skip onboarding rather than trapping the user on
+      // the loading spinner forever.
+      .catch(() => setHasLaunched(true));
+  }, []);
+
+  // Persist any unsaved AI-profile learning when the app goes to background —
+  // the profile store only writes every N updates otherwise.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background' || state === 'inactive') {
+        flushAIProfile().catch(() => {});
+      }
     });
+    return () => sub.remove();
   }, []);
 
   if (hasLaunched === null) {

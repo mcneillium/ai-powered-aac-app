@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View, Text, TextInput, Button, Alert, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity, Image } from 'react-native';
+import { ScrollView, View, Text, TextInput, Button, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity, Image } from 'react-native';
 import { speak } from '../services/speechService';
 import { StatusBar } from 'expo-status-bar';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { searchPictograms } from '../services/arasaacService';
 import { getAISuggestions } from '../services/getAISuggestions';
 import { updateLastActivity } from '../utils/syncStatus';
@@ -39,71 +38,85 @@ export default function EasySentenceBuilderScreen() {
   const categories = Object.keys(OFFLINE_CATEGORIES);
   const palette = getPalette(settings.theme);
   const [offlineMode, setOfflineMode] = useState(false);
+  const aiEnabled = settings.aiPersonalisationEnabled !== false;
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       const reps = {};
       for (let cat of categories) {
         try {
           const data = await searchPictograms('en', cat);
           if (data?.length) reps[cat] = data[0];
-        } catch {}
+        } catch { /* offline — category renders as a text chip */ }
       }
-      setCategoryImages(reps);
+      if (!cancelled) setCategoryImages(reps);
     })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Debounced, cancellable pictogram search: one in-flight request wins,
+  // stale responses are dropped so results always match the current input.
   useEffect(() => {
-    (async () => {
+    let cancelled = false;
+    const timer = setTimeout(async () => {
       setLoadingPictures(true);
       try {
         const pics = wordSearch ? await searchPictograms('en', wordSearch) : await searchPictograms('en', selectedCategory);
-        wordSearch ? setSearchResults(pics || []) : setCategoryPictures(pics || []);
+        if (cancelled) return;
+        if (wordSearch) setSearchResults(pics || []);
+        else setCategoryPictures(pics || []);
         setOfflineMode(false);
       } catch (e) {
+        if (cancelled) return;
         // Fall back to offline word list — no disruptive alert
         setOfflineMode(true);
-        wordSearch ? setSearchResults([]) : setCategoryPictures([]);
-        if (wordSearch) recordFailedSearch(wordSearch).catch(() => {});
+        if (wordSearch) setSearchResults([]);
+        else setCategoryPictures([]);
+        if (wordSearch && aiEnabled) recordFailedSearch(wordSearch).catch(() => {});
       } finally {
-        setLoadingPictures(false);
+        if (!cancelled) setLoadingPictures(false);
       }
-    })();
+    }, wordSearch ? 300 : 0);
+    return () => { cancelled = true; clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory, wordSearch]);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       let local = [];
       try {
         local = await predictNext(sentenceWords, 5);
-      } catch {}
+      } catch { /* on-device model unavailable — fall through to remote */ }
+      let next = local;
       if (local.length === 0) {
-        const remote = await getAISuggestions(sentenceWords.join(' '));
-        setSuggestions(remote || []);
-      } else {
-        setSuggestions(local);
+        try {
+          next = (await getAISuggestions(sentenceWords.join(' '))) || [];
+        } catch {
+          next = [];
+        }
       }
-      // AI Profile: track that suggestions were shown
-      const shown = local.length > 0 ? local : [];
-      if (shown.length > 0) recordSuggestionsShown(shown.length).catch(() => {});
+      if (cancelled) return;
+      setSuggestions(next.filter(s => typeof s === 'string' && s.length > 0));
+      if (aiEnabled && local.length > 0) recordSuggestionsShown(local.length).catch(() => {});
     })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sentenceWords]);
 
   const addWord = async (word, wasSuggestion = false) => {
-    const next = [...sentenceWords, word];
-    setSentenceWords(next);
+    setSentenceWords(prev => [...prev, word]);
     try {
-      const key = 'userInteractionLog';
-      const existing = await AsyncStorage.getItem(key);
-      let logArray = existing ? JSON.parse(existing) : [];
-      logArray.push({ action: 'addWord', wordAdded: word, sentence: next.join(' '), timestamp: new Date().toISOString() });
-      await AsyncStorage.setItem(key, JSON.stringify(logArray));
       await updateLastActivity();
-      await recordTap(sentenceWords, word);
-      // AI Profile: record word selection for personalized learning
-      await recordWordSelection(word, sentenceWords, wasSuggestion);
+      if (aiEnabled) {
+        await recordTap(sentenceWords, word);
+        // AI Profile: record word selection for personalized learning
+        await recordWordSelection(word, sentenceWords, wasSuggestion);
+      }
     } catch (e) {
-      console.error('Logging or training error:', e);
+      console.warn('Prediction training error:', e.message);
     }
   };
 
@@ -118,7 +131,7 @@ export default function EasySentenceBuilderScreen() {
       voice: settings.speechVoice,
     });
     addSentenceToHistory(text).catch(() => {});
-    if (sentenceWords.length > 0) {
+    if (aiEnabled && sentenceWords.length > 0) {
       recordSentenceSpoken(sentenceWords).catch(() => {});
     }
   };
@@ -145,14 +158,31 @@ export default function EasySentenceBuilderScreen() {
     }
     const rep = categoryImages[item];
     const id = rep?.id ?? rep?._id;
-    const uri = id ? `https://static.arasaac.org/pictograms/${id}/${id}_500.png` : `https://via.placeholder.com/80?text=${item}`;
-    return <TouchableOpacity style={[styles.categoryCard, isSel && [styles.categorySelected, { borderColor: palette.primary }]]} onPress={() => { setWordSearch(''); setSelectedCategory(item); }}><Image source={{ uri }} style={styles.categoryImage}/><Text style={[styles.categoryLabel, { color: palette.text }]}>{item}</Text></TouchableOpacity>;
+    const uri = id ? `https://static.arasaac.org/pictograms/${id}/${id}_500.png` : null;
+    return (
+      <TouchableOpacity
+        style={[styles.categoryCard, isSel && [styles.categorySelected, { borderColor: palette.primary }]]}
+        onPress={() => { setWordSearch(''); setSelectedCategory(item); }}
+        accessibilityRole="button"
+        accessibilityLabel={`${item} category`}
+        accessibilityState={{ selected: isSel }}
+      >
+        {uri ? (
+          <Image source={{ uri }} style={styles.categoryImage} accessibilityElementsHidden />
+        ) : (
+          <View style={[styles.categoryImage, styles.categoryImageFallback, { backgroundColor: palette.chipBg }]}>
+            <Text style={[styles.categoryFallbackText, { color: palette.text }]}>{item[0]}</Text>
+          </View>
+        )}
+        <Text style={[styles.categoryLabel, { color: palette.text }]}>{item}</Text>
+      </TouchableOpacity>
+    );
   };
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: palette.background }]} nestedScrollEnabled>
       <View style={styles.headerRow}><Text style={[styles.heading, { color: palette.text }]}>Build a Sentence</Text><Button title="Clear" onPress={clearSentence} color={palette.danger}/></View>
-      <View style={styles.row}>{sentenceWords.map((w, i) => <View key={i} style={[styles.wordChipContainer, { backgroundColor: palette.chipBg }]}><Text style={[styles.wordChip, { color: palette.text }]}>{w}</Text><TouchableOpacity onPress={() => removeWord(i)} style={[styles.removeChip, { backgroundColor: palette.danger }]}><Text style={{ color: palette.buttonText }}>✕</Text></TouchableOpacity></View>)}</View>
+      <View style={styles.row}>{sentenceWords.map((w, i) => <View key={i} style={[styles.wordChipContainer, { backgroundColor: palette.chipBg }]}><Text style={[styles.wordChip, { color: palette.text }]}>{w}</Text><TouchableOpacity onPress={() => removeWord(i)} style={[styles.removeChip, { backgroundColor: palette.danger }]} accessibilityRole="button" accessibilityLabel={`Remove ${w} from sentence`} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}><Text style={{ color: palette.buttonText }}>✕</Text></TouchableOpacity></View>)}</View>
       <View style={styles.speakButtonInline}><Button title="Speak" onPress={speakSentence} color={palette.primary}/></View>
       <Text style={[styles.label, { color: palette.text }]}>Categories</Text>
       <FlatList data={categories} horizontal keyExtractor={i => i} showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }} contentContainerStyle={{ paddingVertical: 4 }} renderItem={renderCategory} />
@@ -189,6 +219,8 @@ const styles = StyleSheet.create({
   input: { marginVertical: 12, borderWidth: 1, borderRadius: 8, padding: 8 },
   categoryCard: { marginRight: 12, alignItems: 'center' },
   categoryImage: { width: 60, height: 60, borderRadius: 8 },
+  categoryImageFallback: { alignItems: 'center', justifyContent: 'center' },
+  categoryFallbackText: { fontSize: 24, fontWeight: '700' },
   categoryLabel: { marginTop: 4, fontSize: 12, fontWeight: 'bold' },
   categorySelected: { borderWidth: 2, borderRadius: 8 },
   picContainer: { marginRight: 8, alignItems: 'center' },

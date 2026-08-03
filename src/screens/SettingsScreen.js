@@ -20,6 +20,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, brand } from '../theme';
 import { speak, getAvailableVoices } from '../services/speechService';
 import { resetAIProfile, hasLearnedData } from '../services/aiProfileStore';
+import packageJson from '../../package.json';
 
 export default function SettingsScreen() {
   const { settings, loading: settingsLoading, updateSettings } = useSettings();
@@ -28,16 +29,26 @@ export default function SettingsScreen() {
 
   const [voices, setVoices] = useState([]);
   const [loadingVoices, setLoadingVoices] = useState(true);
+  const [learnedData, setLearnedData] = useState(false);
 
   useEffect(() => {
-    getAvailableVoices().then(v => {
-      // Filter to English voices for now; multilingual support in V1
-      const englishVoices = v.filter(voice =>
-        voice.language?.startsWith('en')
-      );
-      setVoices(englishVoices);
-      setLoadingVoices(false);
-    });
+    let cancelled = false;
+    getAvailableVoices()
+      .then(v => {
+        if (cancelled) return;
+        // Filter to English voices for now; multilingual support in V1
+        const englishVoices = v.filter(voice =>
+          voice.language?.startsWith('en')
+        );
+        setVoices(englishVoices);
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoadingVoices(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    setLearnedData(hasLearnedData());
   }, []);
 
   const testSpeech = () => {
@@ -100,7 +111,7 @@ export default function SettingsScreen() {
             accessibilityState={{ selected: settings.gridSize === size }}
           >
             <Text style={{
-              color: settings.gridSize === size ? '#FFF' : palette.text,
+              color: settings.gridSize === size ? palette.buttonText : palette.text,
               fontSize: 18,
               fontWeight: '600',
             }}>
@@ -133,7 +144,7 @@ export default function SettingsScreen() {
               accessibilityState={{ selected: settings.speechRate === rate }}
             >
               <Text style={{
-                color: settings.speechRate === rate ? '#FFF' : palette.text,
+                color: settings.speechRate === rate ? palette.buttonText : palette.text,
                 fontSize: 14,
                 fontWeight: '500',
               }}>
@@ -168,7 +179,7 @@ export default function SettingsScreen() {
               accessibilityState={{ selected: settings.speechPitch === pitch }}
             >
               <Text style={{
-                color: settings.speechPitch === pitch ? '#FFF' : palette.text,
+                color: settings.speechPitch === pitch ? palette.buttonText : palette.text,
                 fontSize: 14,
                 fontWeight: '500',
               }}>
@@ -212,7 +223,7 @@ export default function SettingsScreen() {
         accessibilityRole="button"
         accessibilityLabel="Test speech with current settings"
       >
-        <Text style={styles.testButtonText}>Test Speech</Text>
+        <Text style={[styles.testButtonText, { color: palette.buttonText }]}>Test Speech</Text>
       </TouchableOpacity>
 
       {/* High Contrast Toggle */}
@@ -238,7 +249,7 @@ export default function SettingsScreen() {
         <View style={{ flex: 1 }}>
           <Text style={[styles.label, { color: palette.text, marginTop: 0 }]}>Learn from my usage</Text>
           <Text style={[styles.helperText, { color: palette.textSecondary }]}>
-            Improves suggestions based on your communication patterns. All data stays on-device.
+            Improves suggestions based on your communication patterns. Learned patterns stay on this device.
           </Text>
         </View>
         <Switch
@@ -248,7 +259,21 @@ export default function SettingsScreen() {
         />
       </View>
 
-      {hasLearnedData() && (
+      <View style={styles.switchContainer}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.label, { color: palette.text, marginTop: 0 }]}>Online suggestions</Text>
+          <Text style={[styles.helperText, { color: palette.textSecondary }]}>
+            Sends your current sentence and recent phrases (never your name or email) to our secure server to generate better phrase suggestions. Turn off to keep all communication on-device.
+          </Text>
+        </View>
+        <Switch
+          value={settings.cloudSuggestionsEnabled !== false}
+          onValueChange={(val) => updateSettings({ cloudSuggestionsEnabled: val })}
+          accessibilityLabel="Toggle online AI suggestions"
+        />
+      </View>
+
+      {learnedData && (
         <TouchableOpacity
           style={[styles.testButton, { backgroundColor: palette.danger, marginTop: 8 }]}
           onPress={() => {
@@ -261,9 +286,14 @@ export default function SettingsScreen() {
                   text: 'Reset',
                   style: 'destructive',
                   onPress: () => {
-                    resetAIProfile().then(() => {
-                      Alert.alert('Done', 'AI personalisation data has been reset.');
-                    });
+                    resetAIProfile()
+                      .then(() => {
+                        setLearnedData(false);
+                        Alert.alert('Done', 'AI personalisation data has been reset.');
+                      })
+                      .catch(() => {
+                        Alert.alert('Error', 'Could not reset AI data. Please try again.');
+                      });
                   },
                 },
               ]
@@ -272,7 +302,7 @@ export default function SettingsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Reset AI personalisation data"
         >
-          <Text style={styles.testButtonText}>Reset AI Data</Text>
+          <Text style={[styles.testButtonText, { color: palette.buttonText }]}>Reset AI Data</Text>
         </TouchableOpacity>
       )}
 
@@ -283,7 +313,7 @@ export default function SettingsScreen() {
         accessibilityRole="button"
         accessibilityLabel="Send feedback"
       >
-        <Text style={styles.testButtonText}>Send Feedback</Text>
+        <Text style={[styles.testButtonText, { color: palette.buttonText }]}>Send Feedback</Text>
       </TouchableOpacity>
 
       {/* About & Legal */}
@@ -299,7 +329,7 @@ export default function SettingsScreen() {
         <Text style={[styles.linkText, { color: palette.primary }]}>Privacy Policy</Text>
       </TouchableOpacity>
       <Text style={[styles.versionText, { color: palette.textSecondary }]}>
-        {brand.name} v1.1.0
+        {brand.name} v{packageJson.version}
       </Text>
     </ScrollView>
   );
@@ -394,7 +424,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   testButtonText: {
-    color: '#FFF',
     fontSize: 18,
     fontWeight: '600',
   },

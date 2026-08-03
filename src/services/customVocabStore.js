@@ -37,6 +37,14 @@ let loaded = false;
 
 // ── Load ──
 
+
+// Cloud sync is only for real accounts — anonymous (guest) sessions stay
+// local so guest data is never written under throwaway uids.
+function getSyncUid() {
+  const u = getAuth().currentUser;
+  return u && !u.isAnonymous ? u.uid : null;
+}
+
 export async function loadCustomVocab() {
   if (loaded) return customItems;
 
@@ -78,7 +86,7 @@ async function mergeRemote() {
   //   3. Merge remote items, skipping any in deletedIds
   //   4. Prune tombstones older than 30 days (keeps the set bounded)
   try {
-    const uid = getAuth().currentUser?.uid;
+    const uid = getSyncUid();
     if (!uid) return;
     const db = getDatabase();
     const snap = await fbGet(ref(db, `customVocab/${uid}`));
@@ -218,7 +226,7 @@ export async function getVocabRequests() {
   } catch { /* */ }
 
   try {
-    const uid = getAuth().currentUser?.uid;
+    const uid = getSyncUid();
     if (uid) {
       const db = getDatabase();
       const snap = await fbGet(ref(db, `vocabRequests/${uid}`));
@@ -246,7 +254,7 @@ export async function dismissVocabRequest(term) {
   } catch { /* */ }
 
   try {
-    const uid = getAuth().currentUser?.uid;
+    const uid = getSyncUid();
     if (uid) {
       const db = getDatabase();
       const snap = await fbGet(ref(db, `vocabRequests/${uid}`));
@@ -272,7 +280,7 @@ async function saveLocal() {
 
 function syncToFirebase() {
   try {
-    const uid = getAuth().currentUser?.uid;
+    const uid = getSyncUid();
     if (!uid) return;
     const db = getDatabase();
     fbSet(ref(db, `customVocab/${uid}`), {

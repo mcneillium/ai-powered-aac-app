@@ -17,12 +17,7 @@ import { speak } from '../services/speechService';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
-
-// Cloud Function endpoints
-const FUNCTIONS_BASE = 'https://us-central1-commai-b98fe.cloudfunctions.net';
-const CAPTION_ENDPOINT = `${FUNCTIONS_BASE}/imageCaptionProxy`;
-const IMAGE_AAC_ENDPOINT = `${FUNCTIONS_BASE}/imageToAACPhrases`;
-const OCR_AAC_ENDPOINT = `${FUNCTIONS_BASE}/ocrToAACPhrases`;
+import { callAIBackend, ENDPOINTS } from '../services/aiBackend';
 
 // Timeout wrapper: rejects if promise doesn't resolve in ms
 function withTimeout(promise, ms, label) {
@@ -37,42 +32,14 @@ function withTimeout(promise, ms, label) {
 // Read file as base64 with a timeout. Returns null on failure.
 async function readBase64(uri, timeoutMs = 8000) {
   try {
-    console.log('[Camera] base64 read start');
     const result = await withTimeout(
       FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }),
       timeoutMs,
       'base64 read'
     );
-    console.log('[Camera] base64 read done, length:', result?.length || 0);
     return result;
   } catch (e) {
     console.warn('[Camera] base64 read failed:', e.message);
-    return null;
-  }
-}
-
-// Call a Cloud Function with base64 image. Returns parsed JSON or null.
-async function callCloudFunction(endpoint, body, timeoutMs, label) {
-  try {
-    console.log(`[Camera] ${label} call start`);
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (!response.ok) {
-      console.warn(`[Camera] ${label} HTTP ${response.status}`);
-      return null;
-    }
-    const json = await response.json();
-    console.log(`[Camera] ${label} call done`);
-    return json;
-  } catch (e) {
-    console.warn(`[Camera] ${label} failed:`, e.message);
     return null;
   }
 }
@@ -92,12 +59,16 @@ export default function CombinedImageScreen() {
 
   useEffect(() => {
     (async () => {
-      await requestPerm();
-      const media = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!media.granted) {
-        Alert.alert('Permission needed', 'Need permission to access library');
+      try {
+        await requestPerm();
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+        // Denials are handled at the point of use (openCamera / pickImage)
+        // rather than with an alert on mount.
+      } catch (e) {
+        console.warn('[Camera] permission request failed:', e.message);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const speakPhrase = (text) => {
@@ -109,19 +80,42 @@ export default function CombinedImageScreen() {
   };
 
   const pickImage = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.5 });
-    if (!res.canceled) {
-      handleImage(res.assets[0].uri);
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.5 });
+      if (!res.canceled) {
+        handleImage(res.assets[0].uri);
+      }
+    } catch (e) {
+      console.warn('[Camera] image pick failed:', e.message);
+      Alert.alert('Could not open gallery', 'Please try again.');
     }
   };
 
   const takePicture = async () => {
     if (!cameraRef.current) return;
-    console.log('[Camera] takePicture start');
-    const photo = await cameraRef.current.takePictureAsync({ quality: 0.5 });
-    console.log('[Camera] takePicture done, uri:', photo.uri?.slice(0, 50));
-    setOpenCam(false);
-    handleImage(photo.uri);
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.5 });
+      setOpenCam(false);
+      handleImage(photo.uri);
+    } catch (e) {
+      console.warn('[Camera] takePicture failed:', e.message);
+      setOpenCam(false);
+      Alert.alert('Could not take photo', 'Please try again.');
+    }
+  };
+
+  const openCamera = async () => {
+    // Ask for permission (again) at the point of use; expo returns the
+    // cached result if already decided.
+    const perm = cameraPerm?.granted ? cameraPerm : await requestPerm();
+    if (!perm?.granted) {
+      Alert.alert(
+        'Camera permission needed',
+        'Voice needs camera access to describe things around you. You can allow it in your device settings.'
+      );
+      return;
+    }
+    setOpenCam(true);
   };
 
   const handleImage = async (uri) => {
@@ -159,11 +153,11 @@ export default function CombinedImageScreen() {
     }
 
     // Run caption and AAC phrases in parallel, each with its own timeout
-    const captionPromise = callCloudFunction(
-      CAPTION_ENDPOINT, { image: base64 }, 10000, 'caption'
+    const captionPromise = callAIBackend(
+      ENDPOINTS.caption, { image: base64 }, 10000, 'caption'
     );
-    const phrasesPromise = callCloudFunction(
-      IMAGE_AAC_ENDPOINT, { image: base64 }, 10000, 'image-aac'
+    const phrasesPromise = callAIBackend(
+      ENDPOINTS.imageToAAC, { image: base64 }, 10000, 'image-aac'
     );
 
     const [captionResult, phrasesResult] = await Promise.all([captionPromise, phrasesPromise]);
@@ -207,8 +201,8 @@ export default function CombinedImageScreen() {
       return;
     }
 
-    const result = await callCloudFunction(
-      OCR_AAC_ENDPOINT, { image: base64 }, 10000, 'ocr-aac'
+    const result = await callAIBackend(
+      ENDPOINTS.ocrToAAC, { image: base64 }, 10000, 'ocr-aac'
     );
 
     if (result) {
@@ -281,7 +275,7 @@ export default function CombinedImageScreen() {
 
           {/* Capture buttons */}
           <View style={styles.actionsContainer}>
-            <TouchableOpacity style={styles.actionButton} onPress={() => setOpenCam(true)}
+            <TouchableOpacity style={styles.actionButton} onPress={openCamera}
               accessibilityRole="button" accessibilityLabel="Open camera">
               <MaterialIcons name="photo-camera" size={32} color={palette.primary} />
               <Text style={[styles.actionText, { color: palette.text }]}>Camera</Text>

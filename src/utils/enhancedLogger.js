@@ -1,6 +1,8 @@
 // src/utils/enhancedLogger.js
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAuth } from 'firebase/auth';
+import packageJson from '../../package.json';
 import { ref, push, set, serverTimestamp } from 'firebase/database';
 import { db } from '../../firebaseConfig';
 import NetInfo from '@react-native-community/netinfo';
@@ -72,14 +74,15 @@ async function processLogQueue() {
   if (isProcessingQueue || logQueue.length === 0) return;
   
   isProcessingQueue = true;
-  
+
+  let logsToAdd = [];
   try {
     // Get current logs
     const storedLogsString = await AsyncStorage.getItem('userInteractionLog');
     let storedLogs = storedLogsString ? JSON.parse(storedLogsString) : [];
-    
+
     // Add queued logs
-    const logsToAdd = [...logQueue];
+    logsToAdd = [...logQueue];
     logQueue = []; // Clear the queue
     
     storedLogs = [...storedLogs, ...logsToAdd];
@@ -100,8 +103,8 @@ async function processLogQueue() {
     }
   } catch (error) {
     console.error('Error processing log queue:', error);
-    // Put the logs back in the queue if operation failed
-    logQueue = [...logQueue, ...logQueue];
+    // Put the unwritten logs back at the front of the queue so they retry
+    logQueue = [...logsToAdd, ...logQueue];
   } finally {
     isProcessingQueue = false;
   }
@@ -151,8 +154,9 @@ export async function logEvent(action, metadata = {}, level = 'info') {
     // Add to in-memory queue
     logQueue.push(logEntry);
     
-    // Try to add log immediately to Firebase if online
-    if (isOnline && currentUser) {
+    // Try to add log immediately to Firebase if online.
+    // Anonymous (guest) sessions never sync logs — guest data stays local.
+    if (isOnline && currentUser && !currentUser.isAnonymous) {
       try {
         const logsRef = ref(db, `userLogs/${currentUser.uid}`);
         await push(logsRef, {
@@ -201,21 +205,14 @@ async function getSessionId() {
 }
 
 /**
- * Get basic device info to include with logs
+ * Get basic device info to include with logs.
+ * Intentionally coarse — no device identifiers, only platform + app version.
  */
 async function getDeviceInfo() {
-  try {
-    // This would typically use React Native's Platform and other APIs
-    // to get actual device info, but we'll use a placeholder for now
-    return {
-      platform: 'React Native',
-      appVersion: '1.0.0',
-      // Add more device info as needed
-    };
-  } catch (error) {
-    console.error('Error getting device info:', error);
-    return { platform: 'unknown' };
-  }
+  return {
+    platform: Platform.OS,
+    appVersion: packageJson.version,
+  };
 }
 
 /**
@@ -224,7 +221,7 @@ async function getDeviceInfo() {
 export async function syncLogsToFirebase() {
   try {
     const auth = getAuth();
-    if (!auth.currentUser) {
+    if (!auth.currentUser || auth.currentUser.isAnonymous) {
       console.log('Not logged in, skipping sync');
       return false;
     }

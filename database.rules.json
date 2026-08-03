@@ -72,6 +72,21 @@
         }
       }
     },
+    "feedback": {
+      "$uid": {
+        ".read": false,
+        ".write": "auth != null && auth.uid === $uid",
+        "$entryId": {
+          ".validate": "newData.hasChildren(['feedback', 'timestamp'])",
+          "name": { ".validate": "newData.isString() && newData.val().length <= 100" },
+          "email": { ".validate": "newData.isString() && newData.val().length <= 200" },
+          "role": { ".validate": "newData.isString() && newData.val().length <= 30" },
+          "feedback": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 5000" },
+          "timestamp": { ".validate": "newData.isNumber()" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
     "$other": {
       ".read": false,
       ".write": false

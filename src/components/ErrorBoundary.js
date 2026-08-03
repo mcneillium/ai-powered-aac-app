@@ -8,7 +8,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, resetCount: 0 };
   }
 
   static getDerivedStateFromError(error) {
@@ -20,7 +20,10 @@ export default class ErrorBoundary extends React.Component {
   }
 
   handleReset = () => {
-    this.setState({ hasError: false, error: null });
+    // Bump resetCount so the child subtree remounts with fresh state —
+    // without the key change, a deterministic render error would re-throw
+    // instantly and "Try Again" would appear to do nothing.
+    this.setState(prev => ({ hasError: false, error: null, resetCount: prev.resetCount + 1 }));
   };
 
   render() {
@@ -43,7 +46,7 @@ export default class ErrorBoundary extends React.Component {
       );
     }
 
-    return this.props.children;
+    return <React.Fragment key={this.state.resetCount}>{this.props.children}</React.Fragment>;
   }
 }
 

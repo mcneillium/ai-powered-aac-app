@@ -5,7 +5,7 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList,
-  Dimensions, Image,
+  Dimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,7 +50,13 @@ export default function OnboardingScreen({ onComplete }) {
   const flatListRef = useRef(null);
 
   const completeOnboarding = async () => {
-    await AsyncStorage.setItem('hasLaunched', 'true');
+    try {
+      await AsyncStorage.setItem('hasLaunched', 'true');
+    } catch (e) {
+      // A storage failure must never trap the user in onboarding —
+      // worst case they see it again next launch.
+      console.warn('Failed to persist onboarding flag:', e.message);
+    }
     if (onComplete) onComplete();
   };
 
@@ -110,7 +116,7 @@ export default function OnboardingScreen({ onComplete }) {
             <View
               key={i}
               style={[styles.dot, i === currentIndex && styles.dotActive]}
-              accessibilityLabel={`Page ${i + 1} of ${slides.length}`}
+              importantForAccessibility="no"
             />
           ))}
         </View>

@@ -50,20 +50,26 @@ export default function VocabManagerScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refreshFromFirebase();
-    setVocab([...getCustomVocab()]);
-    setRequests(await getVocabRequests());
-    setRefreshing(false);
+    try {
+      await refreshFromFirebase();
+      setVocab([...getCustomVocab()]);
+      setRequests(await getVocabRequests());
+    } catch (e) {
+      console.warn('Vocab refresh failed:', e.message);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
-  // ── Role gate ──
-  if (!user || role !== 'caregiver') {
+  // ── Role gate ── (anonymous sessions count as signed out)
+  const account = user && !user.isAnonymous ? user : null;
+  if (!account || role !== 'caregiver') {
     return (
       <View style={[styles.container, styles.center, { backgroundColor: palette.background }]}>
         <Ionicons name="lock-closed-outline" size={48} color={palette.textSecondary} />
         <Text style={[styles.gateTitle, { color: palette.text }]}>Caregiver access only</Text>
         <Text style={[styles.gateHint, { color: palette.textSecondary }]}>
-          {!user
+          {!account
             ? 'Sign in with a caregiver account to manage vocabulary.'
             : 'This screen is for caregivers. Your account is registered as a regular user. To change your role, contact support.'}
         </Text>
@@ -278,6 +284,10 @@ export default function VocabManagerScreen() {
                           key={cat.id}
                           style={[styles.catChipSmall, { backgroundColor: editCategory === cat.id ? palette.primary : palette.chipBg }]}
                           onPress={() => setEditCategory(cat.id)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Category ${cat.label}`}
+                          accessibilityState={{ selected: editCategory === cat.id }}
+                          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                         >
                           <Text style={[styles.catChipSmallText, { color: editCategory === cat.id ? palette.buttonText : palette.text }]}>
                             {cat.label}
@@ -373,7 +383,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm, fontSize: 15, marginBottom: spacing.xs,
   },
   editCategories: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: spacing.xs },
-  catChipSmall: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radii.pill },
-  catChipSmallText: { fontSize: 11, fontWeight: '600' },
+  catChipSmall: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: radii.pill },
+  catChipSmallText: { fontSize: 13, fontWeight: '600' },
   editActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
 });

@@ -49,8 +49,11 @@ export default function InsightsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await load();
-    setRefreshing(false);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleSavePhrase = async (phrase) => {

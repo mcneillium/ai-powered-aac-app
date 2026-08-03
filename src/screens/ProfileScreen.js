@@ -7,6 +7,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAuth, signOut, deleteUser } from 'firebase/auth';
 import { getDatabase, ref, remove } from 'firebase/database';
 import { useNavigation } from '@react-navigation/native';
@@ -21,6 +22,9 @@ export default function ProfileScreen() {
   const { user } = useAuth();
   const navigation = useNavigation();
   const palette = getPalette(settings.theme);
+  // Anonymous Firebase sessions exist only so cloud AI calls carry a token —
+  // in the UI they are guests.
+  const account = user && !user.isAnonymous ? user : null;
 
   const handleLogout = async () => {
     try {
@@ -110,7 +114,7 @@ export default function ProfileScreen() {
     );
   }
 
-  const initials = user?.email ? user.email[0].toUpperCase() : '?';
+  const initials = account?.email ? account.email[0].toUpperCase() : '?';
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
@@ -119,10 +123,10 @@ export default function ProfileScreen() {
           <Text style={[styles.avatarText, { color: palette.buttonText }]}>{initials}</Text>
         </View>
         <Text style={[styles.name, { color: palette.text }]}>
-          {user ? 'Welcome!' : 'Guest Mode'}
+          {account ? 'Welcome!' : 'Guest Mode'}
         </Text>
         <Text style={[styles.email, { color: palette.textSecondary }]}>
-          {user?.email || 'Sign in to sync your settings and data'}
+          {account?.email || 'Sign in to sync your settings and data'}
         </Text>
       </View>
 
@@ -159,7 +163,7 @@ export default function ProfileScreen() {
           <Text style={[styles.actionText, { color: palette.buttonText }]}>Vocabulary</Text>
         </TouchableOpacity>
 
-        {user ? (
+        {account ? (
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: palette.danger }]}
             onPress={handleLogout}
@@ -182,7 +186,7 @@ export default function ProfileScreen() {
         )}
       </View>
 
-      {user && (
+      {account && (
         <TouchableOpacity
           style={styles.deleteLink}
           onPress={handleDeleteAccount}
