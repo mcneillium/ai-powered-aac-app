@@ -57,7 +57,7 @@
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid",
         "$logId": {
-          ".validate": "newData.hasChildren(['action', 'timestamp']) && newData.numChildren() <= 15",
+          ".validate": "newData.hasChildren(['action', 'timestamp'])",
           "action": { ".validate": "newData.isString() && newData.val().length <= 200" },
           "timestamp": { ".validate": "newData.isNumber()" },
           "level": { ".validate": "newData.isString() && newData.val().length <= 10" },
@@ -68,7 +68,14 @@
           "syncTimestamp": { ".validate": "true" },
           "serverTimestamp": { ".validate": "true" },
           "count": { ".validate": "newData.isNumber()" },
-          "deviceInfo": { ".validate": "newData.numChildren() <= 5" }
+          "error": { ".validate": "newData.isString() && newData.val().length <= 200" },
+          "deviceInfo": {
+            ".validate": "newData.hasChildren()",
+            "platform": { ".validate": "newData.isString() && newData.val().length <= 32" },
+            "appVersion": { ".validate": "newData.isString() && newData.val().length <= 32" },
+            "$other": { ".validate": false }
+          },
+          "$other": { ".validate": false }
         }
       }
     },
