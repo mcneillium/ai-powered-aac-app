@@ -37,11 +37,21 @@ export default function ProfileScreen() {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account',
-      'This will permanently delete your account and all synced data. Communication data on this device will not be affected.\n\nThis cannot be undone.',
+      // The old copy promised "Communication data on this device will not be
+      // affected" while the handler cleared the AI profile, sentence history,
+      // favourites and custom vocabulary. The user consented to one thing and a
+      // materially different, irreversible thing happened — for an AAC user
+      // that is years of accumulated personalisation, not a cache.
+      'This permanently deletes your account and everything in it, on this device and in the cloud:\n\n' +
+        '• your personal vocabulary and any words you added\n' +
+        '• your saved sentences and favourites\n' +
+        '• what the app has learned about how you communicate\n' +
+        '• your settings, activity history and any feedback you sent\n\n' +
+        'Nothing can be recovered afterwards. If you only want to sign out, use Log Out instead.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete Account',
+          text: 'Delete Everything',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -49,22 +59,48 @@ export default function ProfileScreen() {
               if (!currentUser) return;
               const uid = currentUser.uid;
 
-              // Delete all user data from Firebase
-              try {
-                const db = getDatabase();
-                await Promise.all([
-                  remove(ref(db, `users/${uid}`)),
-                  remove(ref(db, `userSettings/${uid}`)),
-                  remove(ref(db, `userLogs/${uid}`)),
-                  remove(ref(db, `userSync/${uid}`)),
-                  remove(ref(db, `customVocab/${uid}`)),
-                  remove(ref(db, `vocabRequests/${uid}`)),
-                ]);
-              } catch (dbErr) {
-                console.warn('Could not remove some user data:', dbErr);
+              // Delete all user data from Firebase.
+              //
+              // allSettled, not all: one rejected delete used to abandon every
+              // other one. And the outcome is checked, because the previous
+              // version swallowed the failure and carried on to deleteUser —
+              // after which every surviving node is protected by
+              // `auth.uid === $uid` for a uid that can never authenticate
+              // again. Unreachable, undeletable, permanent. That is a UK GDPR
+              // Art. 17 failure with no recovery path, so it must now stop the
+              // deletion rather than complete it dishonestly.
+              const db = getDatabase();
+              const paths = [
+                `users/${uid}`,
+                `userSettings/${uid}`,
+                `userLogs/${uid}`,
+                `userSync/${uid}`,
+                `customVocab/${uid}`,
+                `vocabRequests/${uid}`,
+                // Previously missed. Holds the user's name, email and up to
+                // 5000 characters of free text.
+                `feedback/${uid}`,
+              ];
+              const results = await Promise.allSettled(
+                paths.map((path) => remove(ref(db, path)))
+              );
+              const failedPaths = paths.filter((_, i) => results[i].status === 'rejected');
+
+              if (failedPaths.length > 0) {
+                console.warn('Account deletion aborted; these paths did not delete:', failedPaths);
+                Alert.alert(
+                  'Could not delete everything',
+                  'Some of your data could not be removed, so your account has been left in place — ' +
+                    'deleting the account now would leave that data stranded where nobody can reach it.\n\n' +
+                    'Check your connection and try again. If it keeps failing, contact support.'
+                );
+                return;
               }
 
-              // Clear all user-related local data
+              // Clear all user-related local data.
+              // Tracked, because the success message used to claim everything
+              // was deleted regardless of what actually happened here.
+              let localCleared = false;
               try {
                 await AsyncStorage.multiRemove([
                   '@aac_settings',
@@ -83,13 +119,20 @@ export default function ProfileScreen() {
                   'logLevel',
                   'savedEmotion',
                 ]);
+                localCleared = true;
               } catch (localErr) {
                 console.warn('Could not clear some local data:', localErr);
               }
 
               // Delete auth account
               await deleteUser(currentUser);
-              Alert.alert('Account Deleted', 'Your account and all associated data have been permanently deleted.');
+              Alert.alert(
+                'Account Deleted',
+                localCleared
+                  ? 'Your account and all associated data have been permanently deleted.'
+                  : 'Your account and cloud data have been deleted. Some data stored on this device ' +
+                    'could not be cleared — uninstalling the app will remove it.'
+              );
             } catch (error) {
               if (error.code === 'auth/requires-recent-login') {
                 Alert.alert(
