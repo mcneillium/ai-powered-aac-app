@@ -60,6 +60,23 @@ import {
   advanceScan, selectCurrent, cleanup as cleanupScan,
 } from '../services/switchScanService';
 
+// Reserved vertical space for the prediction strip, in dp.
+//
+// The strip used to be conditionally rendered in normal document flow, so the
+// first word tap pushed every vocabulary button down by roughly 61dp — and the
+// action row wrapping at the same moment added another ~49dp. Total ~110dp
+// against a button pitch of 78dp: the board moved 1.4 rows, landing each button
+// almost exactly where a different button had been. AAC users build muscle
+// memory for button positions, so that is the worst possible displacement.
+//
+// The slot is now always occupied and the grid origin never moves. It costs a
+// little vertical space when there is nothing to suggest. That is the correct
+// trade: a predictable empty strip beats an unpredictable full one.
+//
+// Derived from the chip: paddingVertical 8×2 + 15px word (≈18) + 10px reason
+// (≈12) + marginTop 1 + border 2 = 53, plus 6×2 bar padding = 65.
+const SUGGESTION_BAR_HEIGHT = 66;
+
 export default function AACBoardScreen() {
   const { settings } = useSettings();
   const palette = getPalette(settings.theme);
@@ -91,6 +108,7 @@ export default function AACBoardScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currentPageId, isFocused]
   );
+  const hasSentence = sentenceWords.length > 0;
   const aiEnabled = settings.aiPersonalisationEnabled !== false;
   const cloudEnabled = settings.cloudSuggestionsEnabled !== false;
 
@@ -208,7 +226,20 @@ export default function AACBoardScreen() {
     return focused && focused.type === type && focused.id === id;
   }, [scanActive, scanFocusIndex]);
 
-  const scanRingStyle = { borderColor: '#FF6600', borderWidth: 4 };
+  // Scan focus ring. The old #FF6600 failed WCAG 1.4.11 (3:1) against every
+  // Fitzgerald Key fill it sat on — 2.31:1 on nouns, 2.09:1 on 'important' —
+  // and orange-on-pastel-orange collapses entirely under protanopia and
+  // deuteranopia, which switch users disproportionately have.
+  //
+  // No single hue clears 3:1 against both the pastel vocabulary fills and the
+  // near-black high-contrast button. Black does on every surface a ring can
+  // land on in the light and dark themes (>= 4.56 against every accent,
+  // >= 12.7 against every pastel); white does in high contrast (17.62 against
+  // #1A1A00). So the ring follows the theme.
+  const scanRingStyle = {
+    borderColor: settings.theme === 'highContrast' ? '#FFFFFF' : '#000000',
+    borderWidth: 4,
+  };
 
   // Fetch AI suggestions when sentence changes
   useEffect(() => {
@@ -499,33 +530,33 @@ export default function AACBoardScreen() {
         <View style={styles.sentenceActions}>
           <TouchableOpacity
             onPress={speakSentence}
-            style={[styles.speakBtn, { backgroundColor: palette.primary }, isScanFocused('action', 'speak') && scanRingStyle]}
+            style={[styles.speakBtn, { backgroundColor: palette.primary }, !hasSentence && styles.actionDisabled, isScanFocused('action', 'speak') && scanRingStyle]}
             accessibilityRole="button"
             accessibilityLabel={
               sentenceWords.length > 0
                 ? `Speak sentence: ${sentenceWords.join(' ')}`
                 : 'Speak button. Build a sentence first.'
             }
-            disabled={sentenceWords.length === 0}
+            disabled={!hasSentence}
             accessibilityState={{ selected: isScanFocused('action', 'speak') }}
           >
             <Ionicons name="volume-high" size={24} color={palette.buttonText} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={removeLastWord}
-            style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }, isScanFocused('action', 'backspace') && scanRingStyle]}
+            style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }, !hasSentence && styles.actionDisabled, isScanFocused('action', 'backspace') && scanRingStyle]}
             accessibilityRole="button"
             accessibilityLabel={t('deleteLastWord')}
-            disabled={sentenceWords.length === 0}
+            disabled={!hasSentence}
           >
             <Ionicons name="backspace-outline" size={20} color={palette.buttonText} />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={clearSentence}
-            style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }, isScanFocused('action', 'clear') && scanRingStyle]}
+            style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }, !hasSentence && styles.actionDisabled, isScanFocused('action', 'clear') && scanRingStyle]}
             accessibilityRole="button"
             accessibilityLabel={t('clearSentence')}
-            disabled={sentenceWords.length === 0}
+            disabled={!hasSentence}
           >
             <Ionicons name="trash-outline" size={20} color={palette.buttonText} />
           </TouchableOpacity>
@@ -553,26 +584,36 @@ export default function AACBoardScreen() {
           >
             <Ionicons name="camera-outline" size={18} color={palette.buttonText} />
           </TouchableOpacity>
-          {sentenceWords.length > 0 && (
-            <TouchableOpacity
-              onPress={handleToggleFavourite}
-              style={[styles.sentenceActionBtn, { backgroundColor: isCurrentFavourite ? palette.warning : palette.chipBg }]}
-              accessibilityRole="button"
-              accessibilityLabel={isCurrentFavourite ? t('removeFromFavourites') : t('addToFavourites')}
-            >
-              <Ionicons name={isCurrentFavourite ? 'star' : 'star-outline'} size={16} color={isCurrentFavourite ? palette.buttonText : palette.text} />
-            </TouchableOpacity>
-          )}
-          {sentenceWords.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setDisplayMode('display')}
-              style={[styles.sentenceActionBtn, { backgroundColor: palette.chipBg }]}
-              accessibilityRole="button"
-              accessibilityLabel={t('showOnScreen')}
-            >
-              <Ionicons name="tv-outline" size={16} color={palette.text} />
-            </TouchableOpacity>
-          )}
+          {/* Always rendered, disabled when there is nothing to act on.
+              These two used to appear only once a sentence existed, which
+              widened the action row past the screen on the very first word tap
+              and wrapped it — moving the whole board down by another row. A
+              control that is present-but-disabled costs a little clutter; a
+              control that appears and relayouts the board costs motor planning. */}
+          <TouchableOpacity
+            onPress={handleToggleFavourite}
+            disabled={!hasSentence}
+            style={[
+              styles.sentenceActionBtn,
+              { backgroundColor: isCurrentFavourite ? palette.warning : palette.chipBg },
+              !hasSentence && styles.actionDisabled,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={isCurrentFavourite ? t('removeFromFavourites') : t('addToFavourites')}
+            accessibilityState={{ disabled: !hasSentence }}
+          >
+            <Ionicons name={isCurrentFavourite ? 'star' : 'star-outline'} size={16} color={isCurrentFavourite ? palette.buttonText : palette.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setDisplayMode('display')}
+            disabled={!hasSentence}
+            style={[styles.sentenceActionBtn, { backgroundColor: palette.chipBg }, !hasSentence && styles.actionDisabled]}
+            accessibilityRole="button"
+            accessibilityLabel={t('showOnScreen')}
+            accessibilityState={{ disabled: !hasSentence }}
+          >
+            <Ionicons name="tv-outline" size={16} color={palette.text} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -722,9 +763,16 @@ export default function AACBoardScreen() {
         </View>
       )}
 
-      {/* AI Suggestions strip */}
-      {suggestions.length > 0 && (
-        <View style={[styles.suggestionsBar, { backgroundColor: palette.surface }]}>
+      {/* AI Suggestions strip — always occupies its slot, see
+          SUGGESTION_BAR_HEIGHT. Hidden from screen readers when empty so it is
+          not announced as a meaningless region. */}
+      <View
+        style={[styles.suggestionsBar, { backgroundColor: palette.surface }]}
+        accessibilityElementsHidden={suggestions.length === 0}
+        importantForAccessibility={suggestions.length === 0 ? 'no-hide-descendants' : 'auto'}
+      >
+        {suggestions.length > 0 && (
+          <>
           <Ionicons name="sparkles-outline" size={16} color={palette.textSecondary} style={{ marginRight: 4 }} />
           <FlatList
             data={suggestions}
@@ -751,8 +799,9 @@ export default function AACBoardScreen() {
               );
             }}
           />
-        </View>
-      )}
+          </>
+        )}
+      </View>
 
       {/* Navigation breadcrumb */}
       {currentPageId !== 'home' && (
@@ -852,12 +901,14 @@ const styles = StyleSheet.create({
   historyText: { fontSize: 15, flex: 1 },
   speakCount: { fontSize: 12, fontWeight: '500' },
   emptyText: { fontSize: 14, fontStyle: 'italic', paddingVertical: 4 },
+  // Fixed height, always occupied. See SUGGESTION_BAR_HEIGHT.
   suggestionsBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 6,
+    height: SUGGESTION_BAR_HEIGHT,
   },
+  actionDisabled: { opacity: 0.4 },
   suggestionChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
