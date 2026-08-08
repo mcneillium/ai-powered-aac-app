@@ -21,7 +21,8 @@
         "scripts/**",
         "test/**",
         "*.config.js",
-        "src/__tests__/databaseRules.static.test.js"
+        "src/__tests__/databaseRules.static.test.js",
+        "src/__tests__/sourceHygiene.test.js"
       ],
       "env": {
         "node": true

@@ -58,6 +58,7 @@ import {
   setScanItems, setScanMode, setScanSpeed, getScanState,
   onScanChange, onScanSelect, startScan, stopScan,
   advanceScan, selectCurrent, cleanup as cleanupScan,
+  suggestionScanId,
 } from '../services/switchScanService';
 
 // Reserved vertical space for the prediction strip, in dp.
@@ -144,7 +145,7 @@ export default function AACBoardScreen() {
     // word they could see had the device speak a different one.
     const suggItems = suggestions.map((s) => {
       const word = typeof s === 'string' ? s : s.word;
-      return { type: 'suggestion', id: `sug-${word}`, word, label: word };
+      return { type: 'suggestion', id: suggestionScanId(word), word, label: word };
     });
     const actionItems = [
       { type: 'action', id: 'speak', label: 'Speak' },
@@ -530,7 +531,7 @@ export default function AACBoardScreen() {
         <View style={styles.sentenceActions}>
           <TouchableOpacity
             onPress={speakSentence}
-            style={[styles.speakBtn, { backgroundColor: palette.primary }, !hasSentence && styles.actionDisabled, isScanFocused('action', 'speak') && scanRingStyle]}
+            style={[styles.speakBtn, { backgroundColor: palette.primary }, !hasSentence && !isScanFocused('action', 'speak') && styles.actionDisabled, isScanFocused('action', 'speak') && scanRingStyle]}
             accessibilityRole="button"
             accessibilityLabel={
               sentenceWords.length > 0
@@ -544,7 +545,7 @@ export default function AACBoardScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             onPress={removeLastWord}
-            style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }, !hasSentence && styles.actionDisabled, isScanFocused('action', 'backspace') && scanRingStyle]}
+            style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }, !hasSentence && !isScanFocused('action', 'backspace') && styles.actionDisabled, isScanFocused('action', 'backspace') && scanRingStyle]}
             accessibilityRole="button"
             accessibilityLabel={t('deleteLastWord')}
             disabled={!hasSentence}
@@ -553,7 +554,7 @@ export default function AACBoardScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             onPress={clearSentence}
-            style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }, !hasSentence && styles.actionDisabled, isScanFocused('action', 'clear') && scanRingStyle]}
+            style={[styles.sentenceActionBtn, { backgroundColor: palette.danger }, !hasSentence && !isScanFocused('action', 'clear') && styles.actionDisabled, isScanFocused('action', 'clear') && scanRingStyle]}
             accessibilityRole="button"
             accessibilityLabel={t('clearSentence')}
             disabled={!hasSentence}
@@ -779,10 +780,15 @@ export default function AACBoardScreen() {
             horizontal
             keyExtractor={(item, i) => `${typeof item === 'string' ? item : item.word}-${i}`}
             showsHorizontalScrollIndicator={false}
-            renderItem={({ item, index }) => {
+            renderItem={({ item }) => {
               const word = typeof item === 'string' ? item : item.word;
               const reason = typeof item === 'string' ? null : item.reason;
-              const sugFocused = isScanFocused('suggestion', `sug-${index}`);
+              // Same helper as the scan-item builder above — the convention is
+              // shared structurally, not by memory. Keeping this positional
+              // while the builder moved to content keys made the ring
+              // unmatchable, so a switch user got no visible focus at all
+              // across the whole suggestion block.
+              const sugFocused = isScanFocused('suggestion', suggestionScanId(word));
               return (
                 <TouchableOpacity
                   style={[styles.suggestionChip, { backgroundColor: palette.chipBg, borderColor: palette.border }, sugFocused && scanRingStyle]}
@@ -906,8 +912,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
-    height: SUGGESTION_BAR_HEIGHT,
+    // minHeight, not height: the slot must never collapse (that is the whole
+    // point) but it must be free to grow, because nothing in this app sets
+    // allowFontScaling={false} and at 200% OS text the chip content exceeds 66dp.
+    minHeight: SUGGESTION_BAR_HEIGHT,
   },
+  // Applied only when the control is NOT scan-focused: RN opacity composites
+  // the border too, which would drop the focus ring to 2.05:1 — and these
+  // controls stay reachable by switch even when disabled to touch.
   actionDisabled: { opacity: 0.4 },
   suggestionChip: {
     paddingHorizontal: 14,
