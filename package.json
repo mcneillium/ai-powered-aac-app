@@ -19,7 +19,11 @@
     "eas:submit:android": "npx eas submit --platform android",
     "eas:build:ios": "npx eas build --profile development --platform ios",
     "test": "jest",
-    "test:watch": "jest --watchAll"
+    "test:watch": "jest --watchAll",
+    "gates": "node scripts/gates.mjs",
+    "gates:fast": "node scripts/gates.mjs --fast",
+    "preflight": "node scripts/preflight.mjs",
+    "check:imports": "node scripts/check-import-case.mjs ."
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

@@ -54,3 +54,10 @@ play-service-account.json
 # typescript
 *.tsbuildinfo
 ai-powered-aac-app.zip
+
+# Metro bundle smoke test output (scripts/gates.mjs, scripts/preflight.mjs)
+.metro-smoke/
+
+# Overnight run logs (artefacts are kept, raw logs are not)
+.claude/overnight/*/logs/
+.claude/overnight/logs/
