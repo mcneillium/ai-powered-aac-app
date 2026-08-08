@@ -15,6 +15,17 @@
       "env": {
         "jest": true
       }
+    },
+    {
+      "files": [
+        "scripts/**",
+        "test/**",
+        "*.config.js",
+        "src/__tests__/databaseRules.static.test.js"
+      ],
+      "env": {
+        "node": true
+      }
     }
   ],
   "ignorePatterns": [

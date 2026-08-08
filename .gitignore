@@ -61,3 +61,8 @@ ai-powered-aac-app.zip
 # Overnight run logs (artefacts are kept, raw logs are not)
 .claude/overnight/*/logs/
 .claude/overnight/logs/
+
+# Firebase emulator artifacts
+database-debug.log
+firestore-debug.log
+pubsub-debug.log

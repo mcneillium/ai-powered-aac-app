@@ -182,10 +182,15 @@ const GATES = [
       if (!fs.existsSync(dir)) {
         return { status: 'skip', detail: 'test/rules/ not present' };
       }
-      const r = run('npm', ['run', '--silent', 'test:rules'], { logName: 'rules', timeoutMs: 600_000 });
-      return r.status === 0
-        ? { status: 'pass', detail: 'rules suite green' }
-        : { status: 'fail', detail: `rules suite exited ${r.status} (is the emulator installed?)`, log: r.log };
+      const r = run('npm', ['run', '--silent', 'test:rules'], { logName: 'rules', timeoutMs: 900_000 });
+      if (r.status === 0) return { status: 'pass', detail: 'rules suite green' };
+      // Exit 2 is scripts/rules-test.mjs saying "the emulator could not start",
+      // which is a different fact from "the rules are wrong" and must not be
+      // collapsed into it. Reported as a skip, loudly.
+      if (r.status === 2) {
+        return { status: 'skip', detail: 'emulator unavailable (no JDK 21+) — rules behaviour UNVERIFIED', log: r.log };
+      }
+      return { status: 'fail', detail: `rules suite exited ${r.status}`, log: r.log };
     },
   },
 

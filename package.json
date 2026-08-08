@@ -23,7 +23,8 @@
     "gates": "node scripts/gates.mjs",
     "gates:fast": "node scripts/gates.mjs --fast",
     "preflight": "node scripts/preflight.mjs",
-    "check:imports": "node scripts/check-import-case.mjs ."
+    "check:imports": "node scripts/check-import-case.mjs .",
+    "test:rules": "node scripts/rules-test.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -64,6 +65,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
+    "@firebase/rules-unit-testing": "^4.0.1",
     "@types/react": "~19.1.10",
     "babel-plugin-module-resolver": "^5.0.2",
     "eslint": "^8.57.1",
@@ -79,6 +81,10 @@
     "preset": "jest-expo",
     "transformIgnorePatterns": [
       "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|firebase|@firebase)"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/test/rules/"
     ]
   },
   "overrides": {
