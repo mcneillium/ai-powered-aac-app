@@ -2,7 +2,7 @@
 // Provides Firebase auth state and user role (user/caregiver) to the app.
 // Role is read from Realtime Database at /users/{uid}/role on auth change.
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { getDatabase, ref, get } from 'firebase/database';
 import { auth } from '../../firebaseConfig';
@@ -48,8 +48,12 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
+  // Memoised for the same reason as SettingsContext: an inline literal makes
+  // every useAuth() consumer re-render on any provider render.
+  const value = useMemo(() => ({ user, role, loading, error }), [user, role, loading, error]);
+
   return (
-    <AuthContext.Provider value={{ user, role, loading, error }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

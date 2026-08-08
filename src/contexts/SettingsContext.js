@@ -2,7 +2,7 @@
 // Offline-first settings: AsyncStorage is the primary store.
 // Firebase syncs when available but never blocks the UI.
 
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ref, onValue, set } from 'firebase/database';
 import { db } from '../../firebaseConfig';
@@ -106,8 +106,17 @@ export function SettingsProvider({ children }) {
     }
   }, [settings, user]);
 
+  // Memoised: an inline object literal here is a new identity on every render
+  // of this provider, so every consumer of useSettings() — which is every
+  // screen — re-rendered whenever the Firebase onValue listener fired, even
+  // when the merged settings were byte-identical.
+  const value = useMemo(
+    () => ({ settings, loading, updateSettings }),
+    [settings, loading, updateSettings],
+  );
+
   return (
-    <SettingsContext.Provider value={{ settings, loading, updateSettings }}>
+    <SettingsContext.Provider value={value}>
       {children}
     </SettingsContext.Provider>
   );
