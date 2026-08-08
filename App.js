@@ -45,6 +45,7 @@ import VocabManagerScreen from './src/screens/VocabManagerScreen';
 import { loadImprovedModel } from './src/services/improvedModelLoader';
 import { loadAIProfile, recordSessionStart, flushAIProfile } from './src/services/aiProfileStore';
 import { loadCustomVocab } from './src/services/customVocabStore';
+import { initLogger } from './src/utils/enhancedLogger';
 
 const Tab = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -58,6 +59,13 @@ loadAIProfile()
   .then(() => recordSessionStart())
   .catch(err => console.warn('AI profile load failed (non-blocking):', err));
 loadCustomVocab().catch(err => console.warn('Custom vocab load failed (non-blocking):', err));
+
+// Wire the logger's connectivity listener. Without this call the logger's
+// `isOnline` flag stayed at its hardcoded `true` for the life of the process,
+// so (a) it attempted a network write on every log while genuinely offline and
+// (b) the reconnect-triggered flush of the offline queue never ran at all.
+// `initLogger` was defined and exported but had zero call sites.
+initLogger();
 
 const TAB_ICONS = {
   'AAC Board': 'grid-outline',

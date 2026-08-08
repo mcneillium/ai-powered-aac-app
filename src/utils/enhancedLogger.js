@@ -60,10 +60,62 @@ function isPermissionError(error) {
   return message.toUpperCase().includes('PERMISSION_DENIED');
 }
 
-// In-memory queue for logs waiting to be written to AsyncStorage
+// In-memory queue for logs waiting to be written to AsyncStorage.
+//
+// Bounded. It used to be unbounded, and there were two ways to fill it: a
+// device whose AsyncStorage keeps failing (the catch in processLogQueue puts
+// the batch back), and — until the fix below — every successful online log,
+// because the direct-to-Firebase fast path returned before draining the queue.
+// Same failure class as the poison-pill bug: something that only hurts on a
+// device that has been running for a long time, which is exactly the device an
+// AAC user depends on.
+const MAX_QUEUE_ENTRIES = 500;
 let logQueue = [];
 let isProcessingQueue = false;
 let isOnline = true;
+
+// Retry backoff for Firebase sync. Without this, sync is retried as fast as log
+// volume triggers it: a server having a bad minute gets hammered by every
+// device that is still logging.
+const BACKOFF_BASE_MS = 5_000;
+const BACKOFF_MAX_MS = 5 * 60_000;
+let consecutiveSyncFailures = 0;
+let nextSyncAllowedAt = 0;
+
+function backoffDelay(failures) {
+  const exponential = Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** (failures - 1));
+  // Full jitter. Devices that went offline together come back together; without
+  // jitter they would also retry together.
+  return Math.random() * exponential;
+}
+
+function noteSyncFailure() {
+  consecutiveSyncFailures += 1;
+  nextSyncAllowedAt = Date.now() + backoffDelay(consecutiveSyncFailures);
+}
+
+function noteSyncSuccess() {
+  consecutiveSyncFailures = 0;
+  nextSyncAllowedAt = 0;
+}
+
+/**
+ * Append to the in-memory queue, dropping the oldest entries past the cap.
+ *
+ * Drops are announced with console.warn and deliberately NOT through logEvent:
+ * a logger that reports its own logging failures through itself is a recursion
+ * trap, and the failure mode it produces is worse than the one it reports.
+ */
+function enqueueLog(entry) {
+  logQueue.push(entry);
+  if (logQueue.length > MAX_QUEUE_ENTRIES) {
+    const dropped = logQueue.length - MAX_QUEUE_ENTRIES;
+    logQueue = logQueue.slice(dropped);
+    console.warn(
+      `enhancedLogger: in-memory queue exceeded ${MAX_QUEUE_ENTRIES} entries; dropped ${dropped} oldest.`
+    );
+  }
+}
 
 // Initialize connectivity listener
 export function initLogger() {
@@ -127,10 +179,16 @@ async function processLogQueue() {
     storedLogs = [...storedLogs, ...logsToAdd];
 
     // Cap local log storage at 500 entries to prevent unbounded growth.
-    // Oldest entries are dropped first.
+    // Oldest entries are dropped first, and the drop is announced — a silent
+    // cap is indistinguishable from a working sync, which is precisely the
+    // confusion that made the poison-pill bug hard to see.
     const MAX_LOCAL_LOGS = 500;
     if (storedLogs.length > MAX_LOCAL_LOGS) {
-      storedLogs = storedLogs.slice(storedLogs.length - MAX_LOCAL_LOGS);
+      const dropped = storedLogs.length - MAX_LOCAL_LOGS;
+      storedLogs = storedLogs.slice(dropped);
+      console.warn(
+        `enhancedLogger: local log store exceeded ${MAX_LOCAL_LOGS} entries; dropped ${dropped} oldest unsynced entr${dropped === 1 ? 'y' : 'ies'}.`
+      );
     }
 
     // Store logs back to AsyncStorage
@@ -142,8 +200,9 @@ async function processLogQueue() {
     }
   } catch (error) {
     console.error('Error processing log queue:', error);
-    // Put the unwritten logs back at the front of the queue so they retry
-    logQueue = [...logsToAdd, ...logQueue];
+    // Put the unwritten logs back at the front of the queue so they retry,
+    // keeping the newest if that overflows the cap.
+    logQueue = [...logsToAdd, ...logQueue].slice(-MAX_QUEUE_ENTRIES);
   } finally {
     isProcessingQueue = false;
   }
@@ -192,11 +251,15 @@ export async function logEvent(action, metadata = {}, level = 'info') {
       deviceInfo,
     };
     
-    // Add to in-memory queue
-    logQueue.push(logEntry);
-    
-    // Try to add log immediately to Firebase if online.
+    // Try to write straight to Firebase if online.
     // Anonymous (guest) sessions never sync logs — guest data stays local.
+    //
+    // Note the ordering: the entry is NOT queued before this attempt. It used
+    // to be, and the fast path then returned early without draining the queue,
+    // so every successfully-written entry stayed in memory forever — an
+    // unbounded leak on a long online session, and a duplicate write to
+    // Firebase the moment connectivity dropped and the queue was finally
+    // flushed.
     if (isOnline && currentUser && !currentUser.isAnonymous) {
       try {
         const logsRef = ref(db, `userLogs/${currentUser.uid}`);
@@ -204,15 +267,15 @@ export async function logEvent(action, metadata = {}, level = 'info') {
           ...logEntry,
           serverTimestamp: serverTimestamp()
         });
-        
-        // Successfully logged to Firebase, no need to queue
         return logEntry;
       } catch (firebaseError) {
         console.log('Failed to log directly to Firebase, queueing for later:', firebaseError.message);
-        // Continue to process the queue and store locally
+        // Fall through: queue it and store locally.
       }
     }
-    
+
+    enqueueLog(logEntry);
+
     // Process the queue (store in AsyncStorage)
     processLogQueue().catch(err => 
       console.error('Error in processLogQueue:', err)
@@ -267,6 +330,11 @@ export async function syncLogsToFirebase() {
       return false;
     }
     
+    // Respect the backoff window from previous transient failures.
+    if (Date.now() < nextSyncAllowedAt) {
+      return false;
+    }
+
     // Check network status before attempting sync
     const networkState = await NetInfo.fetch();
     if (!networkState.isConnected || !networkState.isInternetReachable) {
@@ -335,8 +403,12 @@ export async function syncLogsToFirebase() {
     }
     if (retryable.length > 0) {
       console.log(`Synced ${syncedCount} logs; ${retryable.length} kept for retry`);
-    } else if (syncedCount > 0) {
-      console.log('✅ Logs successfully synced to Firebase');
+      noteSyncFailure();
+    } else {
+      noteSyncSuccess();
+      if (syncedCount > 0) {
+        console.log('✅ Logs successfully synced to Firebase');
+      }
     }
 
     // Log the sync itself (directly to Firebase). Only when something actually
@@ -357,10 +429,20 @@ export async function syncLogsToFirebase() {
     return retryable.length === 0;
   } catch (error) {
     console.error('Error syncing logs to Firebase:', error);
-    
+    noteSyncFailure();
     // If there was an error, keep the logs locally
     return false;
   }
+}
+
+/** Exposed for tests and for the debug screen. Not part of the logging API. */
+export function _getSyncBackoffState() {
+  return { consecutiveSyncFailures, nextSyncAllowedAt };
+}
+
+/** Exposed for tests: the in-memory queue depth. */
+export function _getQueueDepth() {
+  return logQueue.length;
 }
 
 /**
