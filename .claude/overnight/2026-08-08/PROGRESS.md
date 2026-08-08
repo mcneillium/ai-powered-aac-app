@@ -115,3 +115,38 @@ Five exported, all in `functions/index.js`: `imageCaptionProxy`,
   `scripts/preflight.mjs`. First full gate run: **7 pass, 0 fail, 1 skip**.
 - `22:55` Wrote the 11-agent fleet into `.claude/agents/` and created the missing
   `commai-aac` skill.
+
+- `23:00` Dispatched the seven-agent audit fleet. Custom `subagent_type` names
+  written this session are not registered until Claude Code restarts (same
+  cause as the hook), so each brief was re-issued inline against the
+  general-purpose agent. Cheap failure, caught immediately.
+- `23:05` `@firebase/rules-unit-testing@5.0.1` installed → tree gate went red
+  (peers on `firebase ^12`). Reverted to 4.0.1 → green. Exactly the §2.C hazard.
+- `23:10` Corrected the expo-doctor baseline from 0 to 1 — the first `CI=1`
+  reading was a cache artefact; the real state is 8 packages behind SDK pins.
+- `23:20` Downloaded a portable Temurin JDK into the scratchpad (no Java on this
+  machine). JDK 17 rejected — firebase-tools requires 21+. JDK 21 works.
+- `23:25` **67 rules tests pass against the emulator.** Confirms by execution
+  what two audits inferred: a linked caregiver is denied everything, and all six
+  unruled dashboard paths fall through to deny-all.
+- `23:30–23:55` Tier A implemented in eleven atomic commits, gates green before
+  each. Test count 130 → 256.
+- `00:05` Phase 8: `scripts/preflight.mjs` green from a clean `npm ci` — install,
+  import sweep, gates, production bundle, and the bundle contains a resolved
+  Firebase config. Dashboard `npm run build` succeeds.
+- `00:10` Full gate suite with the emulator available: **8 pass, 0 fail, 0 skip.**
+- `00:12` Secret scan of the cumulative diff: no credential files added, zero
+  key-shaped strings in added lines.
+- `00:15` Wrote `docs/ARCHITECTURE.md`, `docs/DATA-CONTRACT.md`, and copied the
+  findings into the dashboard repo with a README naming the four things to read.
+
+## FINAL STATE
+
+| | app | dashboard |
+|---|---|---|
+| Baseline | `7415345` | `a7bec76` |
+| Head | see `git log` | `84239ef` |
+| Commits | 13 + handover | 2 |
+| Gates | 8/8 green | build green |
+| Tests | 130 → 256 (+67 rules) | unchanged |
+| Pushed | no | no |

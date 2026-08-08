@@ -89,3 +89,48 @@ event in AsyncStorage → `syncLogsToFirebase` drains the queue to
 `node scripts/gates.mjs` — typecheck, lint (warnings must not increase), jest,
 rules tests, import-case, expo-doctor, production bundle, dependency tree. Never
 commit a red tree; never weaken a test to make it green.
+
+## What the 2026-08-08 audit established (do not re-derive these)
+
+Full detail in `.claude/overnight/2026-08-08/`. The load-bearing facts:
+
+- **The caregiver dashboard does not work, and has not for four months.** Two
+  independent causes, both verified: it reads `userLogs` as a flat map while the
+  app has written `userLogs/{uid}/{pushId}` since 2026-03-29, and no rule in
+  `database.rules.json` grants a caregiver or admin read access to anything.
+  Proven by executing the rules — `npm run test:rules`, 67 cases. **Do not
+  deploy `database.rules.json` before fixing the dashboard**; it will take it
+  from broken-looking to offline.
+- **Tier 1 prediction contributes nothing at runtime.** The model never loads
+  (`json` is in `assetExts`, so `require('model.json')` returns an asset id),
+  and if it did it would decode through the wrong index space and its weights
+  are near-uniform anyway. Every failure is silent, masked by the bigram
+  fallback. Do not "fix the loading bug" in isolation — that ships a 100–400ms
+  JS-thread stall on every fourth tap.
+- **Two Admin SDK service-account keys are in the dashboard's git history**, and
+  `setUserPassword` there is a public unauthenticated account-takeover endpoint.
+  Both are live. Nothing else about security matters until the keys are revoked
+  in GCP IAM.
+- The palette is now **solved numerically** and pinned by
+  `src/__tests__/themeContrast.test.js`. Do not hand-pick a colour; run the
+  test.
+- The board's prediction strip holds a **fixed 66dp slot** on purpose. It looks
+  like wasted space; it is motor-plan stability. Do not "optimise" it away.
+- Feature flags live in `src/config/featureFlags.js`, all default OFF, no
+  persistence, no remote config — deliberate: a flag that changes underneath the
+  user is a liability on a device they speak with.
+
+## For a future unattended run
+
+- Hooks in `.claude/settings.json` and agents in `.claude/agents/` are captured
+  at session **start**. Anything written mid-session is inert until restart —
+  budget for that rather than discovering it, and re-issue agent briefs inline
+  against `general-purpose` if the custom types do not resolve.
+- The Firebase emulator needs **JDK 21+** (17 is rejected by firebase-tools).
+  There is no Java on Paul's machine; a portable Temurin zip into the scratchpad
+  works and leaves nothing behind.
+- A root `npm install` moves the resolved tree underneath you. Re-run the gates
+  immediately after one, every time. `@firebase/rules-unit-testing` must stay on
+  4.x while the app is on `firebase ^11`.
+- `expo-doctor` answers differently with and without `CI=1`, and caches. Take a
+  baseline twice before trusting it.

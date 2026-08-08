@@ -9,6 +9,31 @@ The AI-Powered Augmentative and Alternative Communication (AAC) application is a
 
 This documentation provides detailed information about the system architecture, features, implementation details, and usage guidelines.
 
+## Quick reference — quality gates
+
+Run before every commit. Cross-platform Node, no shell differences.
+
+```bash
+npm run gates          # typecheck, lint, tests, rules, import-case, expo-doctor, bundle, dep tree
+npm run gates:fast     # same, minus the bundle and expo-doctor (~15s)
+npm run check:imports  # resolves every relative import the way Metro does (<1s)
+npm run test:rules     # 67 security-rules cases against the Firebase emulator
+npm run preflight      # npm ci + sweep + gates + production bundle. Run before spending EAS minutes.
+```
+
+Pre-existing failures are gated on **not getting worse** against
+`scripts/gates.baseline.json`; the bundle and import-case gates are absolute.
+Never regenerate the baseline to silence a regression — only after genuinely
+fixing something.
+
+`npm run test:rules` needs a JDK 21+ for the Firebase emulator
+(`winget install --id EclipseAdoptium.Temurin.21.JDK`). Without one it reports a
+**skip**, not a pass — rules behaviour is then unverified.
+
+Architecture: `docs/ARCHITECTURE.md`. The shared Firebase schema and its known
+breaks: `docs/DATA-CONTRACT.md`. Why the versionCode 19 build failed and what
+now prevents it: `docs/release/metro-bundling-postmortem.md`.
+
 ## Table of Contents
 
 1. [System Architecture](#system-architecture)

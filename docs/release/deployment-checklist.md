@@ -404,3 +404,36 @@ Run the two batches below **separately**, so any regression is attributable.
       `vertex.project_id`) left over from the abandoned Quick Page work.
       Clearing them (see §0) removes the warning and the stale secret at once;
       no code migration is needed.
+
+---
+
+## 4b. Superseded — see the 2026-08-08 postmortem
+
+§4a above ("did not reproduce") is superseded. The versionCode 19 failure was
+root-caused and reproduced on 2026-08-08: an import of a module that does not
+exist (`../utils/logger` from `src/screens/LoginScreen.js`), fixed in `194a416`.
+The `node_modules`-drift hypothesis recorded in §4a is **disproven** — the April
+tree still fails when given a healthy dependency tree.
+
+Full write-up: `docs/release/metro-bundling-postmortem.md`.
+Prevention: `node scripts/check-import-case.mjs .` — gate #5, and a separate
+early step in CI.
+
+## 4c. STOP — read before deploying database rules
+
+The database-rules deploy in §1 will take the caregiver dashboard **offline**.
+
+This is not a prediction. `npm run test:rules` executes `database.rules.json`
+against the Firebase emulator, and 67 cases confirm that no rule grants a
+caregiver or admin read access to anything, and that six of the paths the
+dashboard uses (`alerts`, `favorites`, `customBoards`, `systemConfig`,
+`fineTuneMetrics`, `sessions`) have no rule at all and fall through to the
+deny-all catch-all. Because every dashboard call site swallows the failure into
+an empty state, it will look like a data problem rather than a rules problem.
+
+Do §1 only after the dashboard work in
+`.claude/overnight/2026-08-08/BACKLOG.md` items B-1 to B-3, in that order — the
+`.indexOn` step must land before the read tier is opened, or a permission error
+becomes a multi-gigabyte transfer per page load.
+
+Storage rules (§2) are unaffected and safe.

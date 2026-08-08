@@ -5,9 +5,26 @@ what it would take to close.
 
 ---
 
-## R-001 — The safety hook is written and inert until Claude Code restarts
+## R-001 — The safety hook armed mid-run, after appearing inert
 
-**Severity:** medium (process risk, not product risk)
+**Severity:** low (resolved — but the sequence is worth knowing)
+
+**UPDATE, end of run:** the hook **did** arm, later in the session, without a
+restart. It blocked one of my own commands — a heredoc writing documentation
+that happened to contain the words `firebase deploy`. So the guard works, it
+enforces conservatively on text as well as intent, and it is live in this repo
+now. The original note below stands as a record of what was true for the first
+few hours; the practical consequence for Paul is the paragraph after it.
+
+**Practical consequence:** when you run the morning deploys, this hook will
+block `firebase deploy` if you run it from inside Claude Code. Run those from a
+plain terminal. It also blocks `eas build` and `eas submit` for the same reason.
+If you would rather not have it, delete `.claude/settings.json`; the rules are
+listed in `.claude/hooks/guard.mjs` and each one is commented with why.
+
+---
+
+### Original note (accurate for the first part of the run)
 
 `.claude/hooks/guard.mjs` is registered as a `PreToolUse` hook for `Bash` in
 `.claude/settings.json`. All ten rules were unit-tested against fifteen commands
