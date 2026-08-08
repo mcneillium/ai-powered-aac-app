@@ -1,53 +1,92 @@
 name: CI
 
+# Runs the same gate suite Paul runs locally: node scripts/gates.mjs.
+#
+# No secrets, no deployment steps, and deliberately no EAS build — those are
+# supervised actions. This workflow only answers "would this have bundled?",
+# which is the question versionCode 19 could not answer until it was already on
+# EAS twenty minutes in.
+
 on:
-  push:
-    branches: [main, master]
   pull_request:
-    branches: [main, master]
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  lint-test-build:
-    name: Lint, Test & Build
+  gates:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Matches eas.json build.production.node so the container that runs
+          # the gates is the container that runs the release bundle.
+          node-version: '22.12.0'
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+      - name: Install from the lockfile
+        # ci, not install: this is what the EAS container does, and the
+        # distinction is the whole point of running this on Linux at all.
+        run: npm ci
 
-      - name: Lint
-        run: npm run lint
+      - name: Import resolution and case sweep
+        # Cheapest gate and the one that would have caught the release blocker.
+        # Ubuntu's filesystem is case-sensitive, so a mismatch that is invisible
+        # on Windows fails here — which is exactly what we want.
+        run: node scripts/check-import-case.mjs .
 
-      - name: Run tests
-        run: npx jest --no-coverage --forceExit
-
-      - name: Check Expo config
-        run: npx expo config --type public
+      - name: Gates
         env:
-          EXPO_PUBLIC_FIREBASE_API_KEY: test
-          EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: test.firebaseapp.com
-          EXPO_PUBLIC_FIREBASE_DATABASE_URL: https://test.firebasedatabase.app
-          EXPO_PUBLIC_FIREBASE_PROJECT_ID: test
-          EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: test.appspot.com
-          EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: test
-          EXPO_PUBLIC_FIREBASE_APP_ID: test
-          EXPO_PUBLIC_GOOGLE_CLOUD_VISION_API_KEY: test
+          # Placeholders. EXPO_PUBLIC_* are inlined at bundle time, so Metro
+          # needs *something* present; these are deliberately not real values
+          # and no secret is configured for this workflow.
+          EXPO_PUBLIC_FIREBASE_API_KEY: ci-placeholder
+          EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: ci.example.invalid
+          EXPO_PUBLIC_FIREBASE_DATABASE_URL: https://ci.example.invalid
+          EXPO_PUBLIC_FIREBASE_PROJECT_ID: ci-placeholder
+          EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: ci.example.invalid
+          EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '000000000000'
+          EXPO_PUBLIC_FIREBASE_APP_ID: '1:000000000000:android:0000000000000000000000'
+        run: node scripts/gates.mjs --label=ci
 
-      - name: Export web bundle (build check)
-        run: npx expo export --platform web
-        env:
-          EXPO_PUBLIC_FIREBASE_API_KEY: test
-          EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: test.firebaseapp.com
-          EXPO_PUBLIC_FIREBASE_DATABASE_URL: https://test.firebasedatabase.app
-          EXPO_PUBLIC_FIREBASE_PROJECT_ID: test
-          EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: test.appspot.com
-          EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: test
-          EXPO_PUBLIC_FIREBASE_APP_ID: test
-          EXPO_PUBLIC_GOOGLE_CLOUD_VISION_API_KEY: test
+      - name: Upload gate logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-logs
+          path: .claude/overnight/logs/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  rules:
+    # Separate job: the rules suite needs a JDK for the Firebase emulator, and
+    # keeping it apart means a missing JDK cannot be mistaken for a rules
+    # failure.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - run: npm ci
+
+      - name: Security rules against the emulator
+        run: npm run test:rules
