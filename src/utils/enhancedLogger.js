@@ -251,6 +251,18 @@ export async function logEvent(action, metadata = {}, level = 'info') {
       deviceInfo,
     };
     
+    // Queued first, then removed on a confirmed write.
+    //
+    // The naive orderings both lose data. Queue-after-await drops the entry if
+    // the process dies while `push()` is pending — and `push()` can stay
+    // pending indefinitely when NetInfo's reachability heuristic still says
+    // online but the link is already gone, which is a routine few-second window
+    // on a mobile device. Queue-before-and-return (the original) never drained
+    // on the success path, so every online log was written twice and the queue
+    // grew without bound. Queue, write, then splice is the only ordering where
+    // an entry is either in the queue or confirmed in Firebase at every instant.
+    enqueueLog(logEntry);
+
     // Try to write straight to Firebase if online.
     // Anonymous (guest) sessions never sync logs — guest data stays local.
     //
@@ -267,14 +279,16 @@ export async function logEvent(action, metadata = {}, level = 'info') {
           ...logEntry,
           serverTimestamp: serverTimestamp()
         });
+        // Confirmed written. Drop it from the queue by identity, not by index —
+        // other entries may have been added or evicted while this await ran.
+        const at = logQueue.indexOf(logEntry);
+        if (at !== -1) logQueue.splice(at, 1);
         return logEntry;
       } catch (firebaseError) {
         console.log('Failed to log directly to Firebase, queueing for later:', firebaseError.message);
-        // Fall through: queue it and store locally.
+        // Fall through: it is already queued.
       }
     }
-
-    enqueueLog(logEntry);
 
     // Process the queue (store in AsyncStorage)
     processLogQueue().catch(err => 
@@ -429,7 +443,11 @@ export async function syncLogsToFirebase() {
     return retryable.length === 0;
   } catch (error) {
     console.error('Error syncing logs to Firebase:', error);
-    noteSyncFailure();
+    // Only network-shaped faults extend the backoff. A corrupt
+    // `userInteractionLog` makes JSON.parse throw on every attempt, and
+    // escalating to the five-minute ceiling for that would mean log sync never
+    // self-heals — a permanent failure dressed up as a transient one.
+    if (!(error instanceof SyntaxError)) noteSyncFailure();
     // If there was an error, keep the logs locally
     return false;
   }

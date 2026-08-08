@@ -69,6 +69,21 @@ describe('contrast: body text on surfaces meets WCAG 2.2 AA (4.5:1)', () => {
   }
 });
 
+describe('contrast: tab bar labels meet WCAG 2.2 AA (4.5:1)', () => {
+  // React Navigation tints the label, not only the icon, so these are text
+  // pairings. They were missed by the first pass: everything else was darkened
+  // and the tab bar was left alone, which is exactly the kind of gap a
+  // presence-only theme test cannot see.
+  for (const themeName of ['light', 'dark', 'highContrast']) {
+    for (const token of ['tabBarActive', 'tabBarInactive']) {
+      test(`${themeName}: ${token} on tabBarBg`, () => {
+        const palette = palettes[themeName];
+        expect(round(contrast(palette[token], palette.tabBarBg))).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  }
+});
+
 describe('contrast: UI component boundaries meet WCAG 2.2 AA (3:1)', () => {
   const PAIRS = [
     ['border', 'background'],

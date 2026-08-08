@@ -9,6 +9,11 @@ let isSpeaking = false;
 // Set synchronously by speak(); isSpeaking is only set by the async onStart
 // callback and so cannot be trusted to decide whether a stop is needed.
 let speakRequested = false;
+// Monotonic id per requested utterance. Stopping utterance A fires A's
+// onStopped *after* speak(B) has already set speakRequested for B, so without
+// this A's callback would clear B's flag and reopen the very window the flag
+// exists to close. Only the current utterance's callbacks are allowed to act.
+let utteranceSeq = 0;
 
 // ── Expressive Voice Presets ──
 // These adjust rate and pitch to convey different moods/intentions.
@@ -80,18 +85,22 @@ export async function speak(text, options = {}) {
   // synchronously below, which closes that window.
   await stop({ force: speakRequested });
   speakRequested = true;
+  utteranceSeq += 1;
+  const mySeq = utteranceSeq;
+  const isCurrent = () => mySeq === utteranceSeq;
 
   const speechOptions = {
     rate: options.rate ?? 1.0,
     pitch: options.pitch ?? 1.0,
-    onStart: () => { isSpeaking = true; },
+    onStart: () => { if (isCurrent()) isSpeaking = true; },
     onDone: () => {
+      if (!isCurrent()) return;
       isSpeaking = false;
       speakRequested = false;
       if (options.onDone) options.onDone();
     },
-    onError: () => { isSpeaking = false; speakRequested = false; },
-    onStopped: () => { isSpeaking = false; speakRequested = false; },
+    onError: () => { if (isCurrent()) { isSpeaking = false; speakRequested = false; } },
+    onStopped: () => { if (isCurrent()) { isSpeaking = false; speakRequested = false; } },
   };
 
   if (options.voice) {
@@ -115,6 +124,9 @@ export async function speak(text, options = {}) {
  */
 export async function stop({ force = true } = {}) {
   if (isSpeaking || force) {
+    // Invalidate the in-flight utterance so its late callbacks cannot clear
+    // flags belonging to whatever replaces it.
+    utteranceSeq += 1;
     Speech.stop();
     isSpeaking = false;
     speakRequested = false;

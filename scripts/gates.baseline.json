@@ -2,12 +2,31 @@
   "_comment": "Phase 0 baseline for the 2026-08-08 overnight run. Gates that were already failing when the run started are gated on NOT GETTING WORSE, not on being green. Regenerate deliberately with `node scripts/gates.mjs --write-baseline` after you have genuinely fixed something, never to silence a regression.",
   "capturedAt": "2026-08-08",
   "capturedAtSha": "7079c09c3dbf75a6aac0391df9f3318985562698",
-  "lint": { "errors": 0, "warnings": 14 },
-  "test": { "suites": 19, "tests": 130, "failed": 0 },
+  "lint": {
+    "errors": 0,
+    "warnings": 14
+  },
+  "test": {
+    "suites": 19,
+    "tests": 130,
+    "failed": 0
+  },
   "_expoDoctorNote": "1, not 0. The first CI=1 run of the night reported 18/18 and that reading was a cache artefact: expo-doctor's dependency-version check is served from a cache that a subsequent npm install invalidates. The real, pre-existing state is 8 packages drifted from the SDK 54 pins (eslint-config-expo, @react-native-community/netinfo, @react-native-picker/picker, expo, expo-asset, expo-dev-client, expo-file-system, expo-image-picker). That drift is a backlog item, not a gate failure — see BACKLOG.md.",
-  "expoDoctor": { "failedChecks": 1 },
-  "npmLs": { "invalidCount": 4 },
-  "bundle": { "androidBytes": 7147473 },
-  "importCase": { "violations": 0 },
-  "rulesTests": { "present": false }
+  "expoDoctor": {
+    "failedChecks": 1
+  },
+  "npmLs": {
+    "invalidCount": 4
+  },
+  "bundle": {
+    "androidBytes": 7147473
+  },
+  "importCase": {
+    "violations": 0
+  },
+  "rulesTests": {
+    "present": true,
+    "cases": 67,
+    "note": "Needs a JDK 21+ for the Firebase emulator. Without one the gate reports SKIP, not PASS."
+  }
 }
