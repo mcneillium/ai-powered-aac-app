@@ -115,7 +115,11 @@ export default function QuickRepairOverlay() {
   const screenWidth = Dimensions.get('window').width;
   const numCols = screenWidth > 500 ? 4 : 3;
 
-  const scanRing = { borderColor: '#FF6600', borderWidth: 4 };
+  // See AACBoardScreen: #FF6600 failed 3:1 against every fill it sat on.
+  const scanRing = {
+    borderColor: settings.theme === 'highContrast' ? '#FFFFFF' : '#000000',
+    borderWidth: 4,
+  };
 
   return (
     <>
