@@ -48,7 +48,13 @@ export default function QuickRepairOverlay() {
   const insets = useSafeAreaInsets();
   // Tab bar height = 60 + insets.bottom. FAB sits 20px above that.
   const fabBottom = 60 + insets.bottom + 20;
-  const wasScanningBefore = useRef(false);
+  // State, not a ref: this gates whether the Next/Select controls render. As a
+  // ref it was assigned in the effect *after* the first render and never caused
+  // a re-render, so on first open a step-scan user saw no scan controls at all
+  // — and with no external switch input there was no way to reach Close either.
+  // This is the urgent-repair surface; being trapped here is the least
+  // acceptable place in the app for it.
+  const [wasScanningBefore, setWasScanningBefore] = useState(false);
 
   const handlePhrase = useCallback((phrase) => {
     speak(phrase.label, {
@@ -68,8 +74,9 @@ export default function QuickRepairOverlay() {
     if (!visible) return undefined;
 
     savedScanContext.current = saveScanContext();
-    wasScanningBefore.current = getScanState().isRunning;
-    if (wasScanningBefore.current) {
+    const wasScanning = getScanState().isRunning;
+    setWasScanningBefore(wasScanning);
+    if (wasScanning) {
       stopScan();
     }
 
@@ -94,7 +101,7 @@ export default function QuickRepairOverlay() {
       }
     });
 
-    if (wasScanningBefore.current) {
+    if (wasScanning) {
       startScan();
     }
 
@@ -147,7 +154,7 @@ export default function QuickRepairOverlay() {
             </View>
 
             {/* Scan controls when scanning is active inside the modal */}
-            {visible && wasScanningBefore.current && (
+            {visible && wasScanningBefore && (
               <View style={styles.scanControls}>
                 {getScanState().scanMode === 'step' ? (
                   <>
