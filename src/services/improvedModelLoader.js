@@ -1,6 +1,7 @@
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-react-native';
 import { bundleResourceIO } from '@tensorflow/tfjs-react-native';
+import { isSpeakableSuggestion } from '../utils/suggestionFilter';
 
 // Load model.json and weights from your assets folder
 const modelJson = require('../../assets/tf_model/word_prediction_tfjs/model.json');
@@ -93,7 +94,7 @@ export async function predictTopKWordsWithImprovedModel(
   const idxToWord = getIndexToWord();
   return topKIndices
     .map(idx => idxToWord[idx])
-    .filter(word => word && word !== '[UNKNOWN]');
+    .filter(isSpeakableSuggestion);
 }
 
 /**
