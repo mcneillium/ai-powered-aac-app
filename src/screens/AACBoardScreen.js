@@ -119,9 +119,15 @@ export default function AACBoardScreen() {
     const vocabItems = currentPage.buttons.map(b => ({
       type: 'vocab', id: b.id, button: b, label: b.label,
     }));
-    const suggItems = suggestions.map((s, i) => ({
-      type: 'suggestion', id: `sug-${i}`, word: typeof s === 'string' ? s : s.word, label: typeof s === 'string' ? s : s.word,
-    }));
+    // Keyed by the word itself, not by array position. With positional ids
+    // (`sug-0`, `sug-1`, …) a fresh batch of predictions with the same *count*
+    // compared equal to the previous one, so the scan highlight stayed put
+    // while the word underneath it changed — and a switch user pressing on the
+    // word they could see had the device speak a different one.
+    const suggItems = suggestions.map((s) => {
+      const word = typeof s === 'string' ? s : s.word;
+      return { type: 'suggestion', id: `sug-${word}`, word, label: word };
+    });
     const actionItems = [
       { type: 'action', id: 'speak', label: 'Speak' },
       { type: 'action', id: 'backspace', label: 'Delete' },
