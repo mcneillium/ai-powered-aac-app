@@ -59,6 +59,31 @@ export default function ProfileScreen() {
               if (!currentUser) return;
               const uid = currentUser.uid;
 
+              // Check the credential is fresh enough BEFORE destroying anything.
+              //
+              // Firebase requires a recent sign-in for deleteUser and throws
+              // auth/requires-recent-login otherwise. For a real user that is
+              // the normal case, not an edge case — an AAC device stays signed
+              // in for weeks. Previously the data was deleted first and the
+              // throw landed last, so the most likely outcome of tapping delete
+              // was: every node gone, all local vocabulary and favourites
+              // cleared, the account still there, and a message inviting a
+              // retry. The user would sign back in to an empty app having never
+              // actually deleted anything.
+              //
+              // Nothing irreversible runs until deleteUser is known to be able
+              // to succeed.
+              const lastSignIn = Date.parse(currentUser.metadata?.lastSignInTime ?? '');
+              const RECENT_LOGIN_WINDOW_MS = 4 * 60_000; // Firebase allows ~5; leave headroom.
+              if (!Number.isFinite(lastSignIn) || Date.now() - lastSignIn > RECENT_LOGIN_WINDOW_MS) {
+                Alert.alert(
+                  'Please sign in again first',
+                  'For your security, deleting an account needs a recent sign-in.\n\n' +
+                    'Log out, log back in, and then delete. Nothing has been changed.'
+                );
+                return;
+              }
+
               // Delete all user data from Firebase.
               //
               // allSettled, not all: one rejected delete used to abandon every
@@ -89,10 +114,12 @@ export default function ProfileScreen() {
               if (failedPaths.length > 0) {
                 console.warn('Account deletion aborted; these paths did not delete:', failedPaths);
                 Alert.alert(
-                  'Could not delete everything',
-                  'Some of your data could not be removed, so your account has been left in place — ' +
-                    'deleting the account now would leave that data stranded where nobody can reach it.\n\n' +
-                    'Check your connection and try again. If it keeps failing, contact support.'
+                  'Deletion incomplete',
+                  `${paths.length - failedPaths.length} of ${paths.length} parts of your data were ` +
+                    'removed, but the rest could not be, so your account itself has been left in ' +
+                    'place — deleting it now would strand that data where nobody can reach it.\n\n' +
+                    'What was already removed is gone and cannot be restored. Check your connection ' +
+                    'and try again to finish, or contact support.'
                 );
                 return;
               }
