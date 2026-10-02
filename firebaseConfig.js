@@ -38,11 +38,13 @@ const app = !getApps().length
 export const db = getDatabase(app);
 
 // 3) Initialize Auth exactly once, with AsyncStorage persistence
+// (getReactNativePersistence only exists in Firebase's React Native build;
+// on web, getAuth's default browser persistence is used instead.)
 let auth;
 try {
-  auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage)
-  });
+  auth = typeof getReactNativePersistence === 'function'
+    ? initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) })
+    : getAuth(app);
 } catch (e) {
   if (e.code === 'auth/already-initialized') {
     auth = getAuth(app);

@@ -22,7 +22,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette } from '../theme';
 import { speak, stop, buildSpeechOptions } from '../services/speechService';
@@ -57,6 +57,7 @@ import { getAACPhraseSuggestions } from '../services/vertexAISuggestions';
 import DisplayMode from '../components/DisplayMode';
 import VoicePresetPicker from '../components/VoicePresetPicker';
 import WordFinder from '../components/WordFinder';
+import { openQuickPhrases, setQuickPhrasesButtonHidden } from '../components/QuickRepairOverlay';
 import {
   setScanItems, setScanMode, setScanSpeed, getScanState,
   onScanChange, onScanSelect, startScan, stopScan,
@@ -87,6 +88,14 @@ export default function AACBoardScreen() {
   const [undoWords, setUndoWords] = useState(null);
   const [showFinder, setShowFinder] = useState(false);
   const sentenceBarRef = useRef(null);
+  const sentenceScrollRef = useRef(null);
+
+  // The board has its own Quick Phrases button in the action row; hide the
+  // floating one here so it never sits on top of a vocabulary button.
+  useFocusEffect(useCallback(() => {
+    setQuickPhrasesButtonHidden(true);
+    return () => setQuickPhrasesButtonHidden(false);
+  }, []));
 
   // Memoized: getPage builds a fresh object per call, and a new identity on
   // every render would reset the switch-scanning item list (and scan position).
@@ -571,8 +580,11 @@ export default function AACBoardScreen() {
       >
         {/* Only the words are grouped as one accessible element. Grouping the
             whole bar hid the action buttons from VoiceOver / Switch Control. */}
-        <View
-          style={styles.sentenceWords}
+        <ScrollView
+          ref={sentenceScrollRef}
+          style={{ height: Math.round(64 * textScale) }}
+          contentContainerStyle={styles.sentenceWords}
+          onContentSizeChange={() => sentenceScrollRef.current?.scrollToEnd({ animated: false })}
           accessible
           accessibilityRole="text"
           accessibilityLabel={
@@ -596,7 +608,7 @@ export default function AACBoardScreen() {
               </Text>
             ))
           )}
-        </View>
+        </ScrollView>
 
         {/* Action buttons — fixed order so their positions never move */}
         <View style={styles.sentenceActions}>
@@ -637,18 +649,25 @@ export default function AACBoardScreen() {
             onPress: undo, icon: 'arrow-undo-outline', iconSize: 18, bg: palette.chipBg, fg: palette.text,
             label: undoWords ? t('undoLabel') : t('nothingToUndo'), disabled: !undoWords, scanId: 'undo',
           })}
-          {hasWords && actionButton({
+          {actionButton({
             onPress: handleToggleFavourite,
             icon: isCurrentFavourite ? 'star' : 'star-outline',
             iconSize: 18,
             bg: isCurrentFavourite ? palette.warning : palette.chipBg,
             fg: isCurrentFavourite ? palette.buttonText : palette.text,
             label: isCurrentFavourite ? t('removeFromFavourites') : t('addToFavourites'),
+            disabled: !hasWords,
           })}
-          {hasWords && actionButton({
+          {actionButton({
             onPress: () => setDisplayMode('display'),
             icon: 'tv-outline', iconSize: 18, bg: palette.chipBg, fg: palette.text,
             label: t('showOnScreen'),
+            disabled: !hasWords,
+          })}
+          {actionButton({
+            onPress: openQuickPhrases,
+            icon: 'flash', iconSize: 18, bg: palette.primary,
+            label: t('quickPhrasesLabel'),
           })}
         </View>
       </View>
@@ -933,7 +952,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     minHeight: 32,
-    marginBottom: 4,
+    paddingBottom: 4,
   },
   sentenceWord: { fontSize: 20, fontWeight: '500', marginRight: 6, paddingVertical: 2 },
   placeholder: { fontSize: 16, fontStyle: 'italic' },

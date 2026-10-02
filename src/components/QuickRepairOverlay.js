@@ -25,23 +25,59 @@ import {
   saveScanContext, restoreScanContext,
 } from '../services/switchScanService';
 
+// Tile colours keep white text at WCAG AA (4.5:1) or better.
 const REPAIR_PHRASES = [
-  { id: 'wait',       label: 'Wait',           icon: 'hand-left-outline',   color: '#FF9800', priority: 'high' },
-  { id: 'yes',        label: 'Yes',            icon: 'checkmark-circle',    color: '#4CAF50', priority: 'high' },
-  { id: 'no',         label: 'No',             icon: 'close-circle',        color: '#F44336', priority: 'high' },
-  { id: 'help',       label: 'I need help',    icon: 'alert-circle',        color: '#F44336', priority: 'high' },
-  { id: 'not_that',   label: 'Not that',       icon: 'arrow-undo',          color: '#FF5722', priority: 'high' },
-  { id: 'again',      label: 'Say that again', icon: 'refresh',             color: '#2979FF', priority: 'mid' },
-  { id: 'thinking',   label: "I'm thinking",   icon: 'ellipsis-horizontal', color: '#9C27B0', priority: 'mid' },
-  { id: 'finish',     label: 'Let me finish',  icon: 'timer-outline',       color: '#FF9800', priority: 'mid' },
-  { id: 'slower',     label: 'Slower please',  icon: 'speedometer-outline', color: '#2979FF', priority: 'mid' },
-  { id: 'maybe',      label: 'Maybe',          icon: 'help-circle-outline', color: '#607D8B', priority: 'mid' },
+  { id: 'wait',       label: 'Wait',           icon: 'hand-left-outline',   color: '#A85200', priority: 'high' },
+  { id: 'yes',        label: 'Yes',            icon: 'checkmark-circle',    color: '#2E7D32', priority: 'high' },
+  { id: 'no',         label: 'No',             icon: 'close-circle',        color: '#C62828', priority: 'high' },
+  { id: 'help',       label: 'I need help',    icon: 'alert-circle',        color: '#C62828', priority: 'high' },
+  { id: 'not_that',   label: 'Not that',       icon: 'arrow-undo',          color: '#BF360C', priority: 'high' },
+  { id: 'again',      label: 'Say that again', icon: 'refresh',             color: '#1A66E0', priority: 'mid' },
+  { id: 'thinking',   label: "I'm thinking",   icon: 'ellipsis-horizontal', color: '#7B1FA2', priority: 'mid' },
+  { id: 'finish',     label: 'Let me finish',  icon: 'timer-outline',       color: '#A85200', priority: 'mid' },
+  { id: 'slower',     label: 'Slower please',  icon: 'speedometer-outline', color: '#1A66E0', priority: 'mid' },
+  { id: 'maybe',      label: 'Maybe',          icon: 'help-circle-outline', color: '#455A64', priority: 'mid' },
   { id: 'private',    label: "That's private", icon: 'lock-closed',         color: '#795548', priority: 'low' },
-  { id: 'i_mean',     label: 'I mean...',      icon: 'swap-horizontal',     color: '#009688', priority: 'low' },
+  { id: 'i_mean',     label: 'I mean...',      icon: 'swap-horizontal',     color: '#00695C', priority: 'low' },
 ];
+
+// Screens can open the panel from their own button and hide the floating
+// trigger while focused (the AAC Board does, so the button never covers a
+// vocabulary button).
+const listeners = new Set();
+let fabHidden = false;
+let openRequested = false;
+
+function notify() {
+  listeners.forEach(fn => fn());
+}
+
+export function openQuickPhrases() {
+  openRequested = true;
+  notify();
+}
+
+export function setQuickPhrasesButtonHidden(hidden) {
+  fabHidden = !!hidden;
+  notify();
+}
 
 export default function QuickRepairOverlay() {
   const [visible, setVisible] = useState(false);
+  const [hideFab, setHideFab] = useState(fabHidden);
+
+  useEffect(() => {
+    const sync = () => {
+      setHideFab(fabHidden);
+      if (openRequested) {
+        openRequested = false;
+        setVisible(true);
+      }
+    };
+    listeners.add(sync);
+    sync();
+    return () => { listeners.delete(sync); };
+  }, []);
   const [scanFocusId, setScanFocusId] = useState(null);
   const { settings } = useSettings();
   const palette = getPalette(settings.theme);
@@ -108,7 +144,8 @@ export default function QuickRepairOverlay() {
 
   return (
     <>
-      {/* Floating trigger button — always visible */}
+      {/* Floating trigger button — hidden on screens that provide their own */}
+      {!hideFab && (
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: palette.primary, bottom: fabBottom }]}
         onPress={() => setVisible(true)}
@@ -119,6 +156,7 @@ export default function QuickRepairOverlay() {
       >
         <Ionicons name="flash" size={24} color={palette.buttonText} />
       </TouchableOpacity>
+      )}
 
       {/* Full-screen overlay with repair phrases */}
       <Modal
