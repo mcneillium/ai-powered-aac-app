@@ -547,6 +547,14 @@ export default function SettingsScreen() {
       <Text style={[styles.helperText, { color: palette.textSecondary, marginTop: 8 }]}>
         Pictograms' author: Sergio Palao. Origin: ARASAAC (https://arasaac.org). License: CC (BY-NC-SA). Owner: Government of Aragón (Spain).
       </Text>
+      <TouchableOpacity
+        onPress={() => navigation.navigate('Licenses')}
+        accessibilityRole="link"
+        accessibilityLabel="Credits and open-source licences"
+        style={styles.linkRow}
+      >
+        <Text style={[styles.linkText, { color: palette.primary }]}>Credits & open-source licences</Text>
+      </TouchableOpacity>
       <Text style={[styles.versionText, { color: palette.textSecondary }]}>
         {brand.name} v{packageJson.version}
       </Text>

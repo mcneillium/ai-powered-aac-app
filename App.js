@@ -40,6 +40,7 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import CameraScreen from './src/screens/CameraScreen';
 import InsightsScreen from './src/screens/InsightsScreen';
 import VocabManagerScreen from './src/screens/VocabManagerScreen';
+import LicensesScreen from './src/screens/LicensesScreen';
 
 // Non-blocking model load
 import { loadImprovedModel } from './src/services/improvedModelLoader';
@@ -227,6 +228,11 @@ function RootNavigator() {
         name="VocabManager"
         component={VocabManagerScreen}
         options={{ title: 'Manage Vocabulary' }}
+      />
+      <RootStack.Screen
+        name="Licenses"
+        component={LicensesScreen}
+        options={{ title: 'Credits & Licences' }}
       />
       <RootStack.Screen
         name="Login"

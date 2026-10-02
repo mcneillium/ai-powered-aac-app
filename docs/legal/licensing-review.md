@@ -177,3 +177,33 @@ The `@license` headers in the dist files (for example `@tensorflow/tfjs-core/dis
 - Licences of React Native's native third-party libraries (Folly, boost, glog, fmt, double-conversion, fast_float).
 - Whether `@license` comments survive into the Hermes production bundle.
 - `talkbank.org/share/rules.html` (the URL given in the task) returns 404. The rules were read at `talkbank.org/0share/rules.html`.
+
+## Independent spot-checks and actions taken (2026-10-02)
+
+The draft above was compiled by a research agent. These load-bearing claims were then re-checked directly against the primary sources:
+
+| Claim | Check | Result |
+|---|---|---|
+| ARASAAC: BY-NC-SA, non-profit only, commercial products excluded | Fetched the arasaac.org site bundle (`main.eb2f1395722f4150e4cd.js`) and grepped the terms strings | Confirmed, word for word |
+| TalkBank/CHILDES: CC BY-NC-SA 3.0, "precludes the incorporation of the data in commercial products" | Fetched https://talkbank.org/0share/rules.html | Confirmed |
+| `tokenizer.json` is CHILDES-derived | Parsed the file: it has 5,000 entries, with CHAT codes `xxx` at #10 and `yyy` at #614 | The CHAT codes are present. CHILDES origin is still an inference |
+| Attribution links | `arasaac.org/terms-of-use`, `talkbank.org/0share/rules.html` and `creativecommons.org/licenses/by-nc-sa/3.0/` | All return HTTP 200 |
+
+**Actions taken in this pass** (no symbol set was replaced):
+- **Licences screen.** Added Settings › About › *Credits & open-source licences* (`src/screens/LicensesScreen.js`). It shows:
+  - the ARASAAC credit, with a link to ARASAAC's terms;
+  - a CHILDES/TalkBank credit with the MacWhinney (2000) citation. This conservatively assumes the CHILDES origin, which still needs confirming;
+  - the icon-font credits;
+  - full licence texts for the 96 packages in the shipped JS bundle.
+- **Notices generator.** `scripts/generate-third-party-notices.js` builds the list from the Metro bundle source map plus the direct runtime dependencies. Packages that ship no LICENSE file use the standard MIT or Apache-2.0 text (`scripts/licenses/`). Re-run it when dependencies change.
+- **Regression test.** `src/__tests__/thirdPartyNotices.test.js` fails if any of these happen:
+  - a direct dependency is missing from the notices;
+  - a package has no displayable licence text;
+  - a copyleft, non-commercial or unknown licence enters the bundle.
+
+**Still open (owner decisions):**
+- Confirm the source of `tokenizer.json`, and which CHILDES corpora it used, so that corpus-specific citations can be added.
+- Confirm the rights to the "VOICE" icon artwork.
+- Add the ARASAAC credit to the store listing if screenshots show pictograms.
+- Native-only third-party code (Android and iOS libraries pulled in by React Native and Expo modules through Gradle/CocoaPods, for example OkHttp, Fresco, SoLoader, Folly) is not in the generated list. Google Play's OSS-licences tooling, or an equivalent, should cover it before release.
+- `.github/workflows/train-model.yml` calls a deleted script (`train_aac_model.py`). This is unrelated to the shipped app, but the workflow will fail if triggered.
