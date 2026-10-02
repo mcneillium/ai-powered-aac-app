@@ -189,4 +189,7 @@ An independent review of this phase found five issues, all fixed with regression
 - **Release-readiness finding.** The merged release manifest requests `SYSTEM_ALERT_WINDOW`, `READ_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE`, none of which `app.json` declares; they come from dependencies. `RECORD_AUDIO` is declared but unused.
   - Consider blocking them with `android.blockedPermissions` in `app.json`, after confirming nothing needs them.
   - Left unchanged here because it can affect development builds.
+- **Emulator [emulator]: not achieved.** The container has no `/dev/kvm` and no `vmx`/`svm` CPU flags; `emulator -accel-check` reports "KVM requires a CPU that supports vmx or svm".
+  - An Android 34 x86_64 image started with `-accel off`, but after about 40 minutes adb still reported the device `offline` and boot never completed.
+  - So no on-emulator run or speech check was possible. All runtime behaviour on Android is still unverified natively and is a device task.
 - **iOS.** It cannot be built or simulated here: this environment is Linux, with no Xcode or macOS. Every iOS item is a device/simulator task in the checklist.
