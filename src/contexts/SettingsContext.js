@@ -35,6 +35,19 @@ const defaultSettings = {
 
 export { defaultSettings };
 
+// Settings that belong to this device only and are never synced: voice ids
+// differ between devices and platforms, and the compact layout depends on
+// this device's screen. (Keeping them local also means a reset to "default"
+// (null), which the Realtime Database stores as a missing key, is not lost.)
+export const LOCAL_ONLY_KEYS = ['speechVoice', 'compactLayout'];
+
+/** The settings object as written to the cloud. Exported for tests. */
+export function toCloudSettings(settings) {
+  const out = { ...settings };
+  LOCAL_ONLY_KEYS.forEach(k => { delete out[k]; });
+  return out;
+}
+
 /**
  * Merge cloud settings into local ones. Cloud values only win when they are
  * real values: a missing, null or non-object snapshot never wipes local
@@ -44,6 +57,7 @@ export function mergeRemoteSettings(local, remote) {
   if (!remote || typeof remote !== 'object' || Array.isArray(remote)) return local;
   const merged = { ...local };
   for (const [key, value] of Object.entries(remote)) {
+    if (LOCAL_ONLY_KEYS.includes(key)) continue;
     if (value !== null && value !== undefined) merged[key] = value;
   }
   return merged;
@@ -142,7 +156,7 @@ export function SettingsProvider({ children }) {
     try {
       const uid = user && !user.isAnonymous ? user.uid : null;
       if (uid && db) {
-        await set(ref(db, dbPath(DB_PATHS.USER_SETTINGS, uid)), newSettings);
+        await set(ref(db, dbPath(DB_PATHS.USER_SETTINGS, uid)), toCloudSettings(newSettings));
       }
     } catch (e) {
       // Firebase sync failure is acceptable — local is source of truth

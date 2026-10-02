@@ -209,3 +209,44 @@ describe('missing engine / no voice data', () => {
     expect(getIsSpeaking()).toBe(false);
   });
 });
+
+describe('review fixes', () => {
+  test('a final error mid-queue cancels the remaining chunks', async () => {
+    const long = Array.from({ length: 900 }, (_, i) => `word${i}`).join(' ');
+    await speak(long);
+    const calls = mockSpeech.speak.mock.calls;
+    expect(calls.length).toBeGreaterThan(1);
+    calls[0][1].onStart();
+    const stopsBefore = mockSpeech.stop.mock.calls.length;
+    calls[1][1].onError();
+    expect(mockSpeech.stop.mock.calls.length).toBe(stopsBefore + 1);
+    // A later chunk finishing must not be treated as current
+    const doneSpy = jest.fn();
+    calls[calls.length - 1][1].onDone(doneSpy);
+    expect(getIsSpeaking()).toBe(false);
+  });
+
+  test('a saved voice that never starts (iOS silent rejection) retries with the default voice', async () => {
+    jest.useFakeTimers();
+    mockSpeech.getAvailableVoicesAsync.mockImplementationOnce(() => Promise.resolve([])); // list unknown → voice kept
+    await speak('hello', { voice: 'ios-voice' });
+    expect(mockSpeech.speak.mock.calls[0][1].voice).toBe('ios-voice');
+    jest.advanceTimersByTime(5100);
+    await Promise.resolve(); await Promise.resolve();
+    expect(mockSpeech.speak).toHaveBeenCalledTimes(2);
+    expect(mockSpeech.speak.mock.calls[1][1].voice).toBeUndefined();
+  });
+
+  test('a late start after the timeout restores the speaking state', async () => {
+    jest.useFakeTimers();
+    const statuses = [];
+    subscribeSpeechStatus(s => statuses.push(s));
+    await speak('hello');
+    jest.advanceTimersByTime(5100);
+    expect(statuses[statuses.length - 1].error).toBe('unavailable');
+    lastCall()[1].onStart();
+    expect(getIsSpeaking()).toBe(true);
+    expect(statuses[statuses.length - 1]).toEqual({ speaking: true, error: null });
+  });
+});
+

@@ -186,9 +186,27 @@ export async function speak(text, options = {}) {
 function startChunks(gen, chunks, from, options, voice, allowRetry) {
   let started = false;
 
-  // No onStart within the timeout → the engine is missing or has no voice data.
+  // Replace this attempt with the remaining text in the default voice, once.
+  const retryWithDefaultVoice = (index) => {
+    const retryGen = ++generation;
+    clearTimers();
+    nativeStop().then(() => {
+      if (retryGen !== generation) return;
+      startChunks(retryGen, chunks, index, options, null, false);
+    });
+  };
+
+  // No onStart within the timeout. With a chosen voice this is most likely the
+  // voice failing silently (iOS rejects unknown voices without an error
+  // event), so retry with the default voice first. Otherwise the engine is
+  // missing or has no voice data. Speech is not cancelled here: a slow engine
+  // that starts late recovers the speaking state in onStart.
   startTimer = setTimeout(() => {
     if (gen !== generation || started) return;
+    if (allowRetry && voice) {
+      retryWithDefaultVoice(from);
+      return;
+    }
     setIdle();
     emitStatus({ error: 'unavailable' });
   }, START_TIMEOUT_MS);
@@ -206,6 +224,12 @@ function startChunks(gen, chunks, from, options, voice, allowRetry) {
           clearTimeout(startTimer);
           armWatchdog(gen, chunks.slice(i).join(' '), options.rate ?? 1.0);
         }
+        // Started after the start timeout already reported a problem: speech
+        // is audible, so reflect that rather than showing "unavailable".
+        if (!isSpeaking || lastStatus.error) {
+          isSpeaking = true;
+          emitStatus({ speaking: true, error: null });
+        }
       },
       onDone: () => {
         if (gen !== generation || !isLast) return;
@@ -219,17 +243,15 @@ function startChunks(gen, chunks, from, options, voice, allowRetry) {
       onError: () => {
         if (gen !== generation) return; // stale: e.g. web fires onerror on cancel()
         if (!started && allowRetry && voice) {
-          // The chosen voice failed before anything was heard: replace this
-          // attempt with the remaining text in the default voice, once.
-          const retryGen = ++generation;
-          clearTimers();
-          nativeStop().then(() => {
-            if (retryGen !== generation) return;
-            startChunks(retryGen, chunks, i, options, null, false);
-          });
+          // The chosen voice failed before anything was heard.
+          retryWithDefaultVoice(i);
           return;
         }
+        // Final failure: cancel the rest of the queue too, so no later chunk
+        // plays while the UI reports the failure.
+        generation++;
         setIdle();
+        nativeStop();
         emitStatus({ error: 'failed' });
       },
     };

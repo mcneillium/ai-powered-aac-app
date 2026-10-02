@@ -4,8 +4,8 @@
 // single fixed row of core actions above the word grid.
 // Items keep a fixed order; unavailable items are shown disabled, not hidden.
 
-import React from 'react';
-import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView } from 'react-native';
+import React, { useRef } from 'react';
+import { View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getPalette, radii, spacing } from '../theme';
 import { useSettings } from '../contexts/SettingsContext';
@@ -15,9 +15,26 @@ import VoicePresetPicker from './VoicePresetPicker';
 export default function MoreActionsMenu({ visible, onClose, items, voicePreset, onSelectVoicePreset }) {
   const { settings } = useSettings();
   const palette = getPalette(settings.theme);
+  // iOS cannot present another modal (e.g. Show on screen) while this one is
+  // still dismissing, so run the chosen action once dismissal has finished.
+  const pending = useRef(null);
+  const choose = (item) => {
+    if (Platform.OS === 'ios') {
+      pending.current = item.onPress;
+      onClose();
+    } else {
+      onClose();
+      setTimeout(item.onPress, 0);
+    }
+  };
+  const handleDismiss = () => {
+    const action = pending.current;
+    pending.current = null;
+    if (action) action();
+  };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} accessibilityViewIsModal>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} onDismiss={handleDismiss} accessibilityViewIsModal>
       <View style={[styles.overlay, { backgroundColor: palette.overlay }]}>
         <View style={[styles.panel, { backgroundColor: palette.cardBg }]}>
           <View style={styles.header}>
@@ -37,7 +54,7 @@ export default function MoreActionsMenu({ visible, onClose, items, voicePreset, 
             {items.map(item => (
               <TouchableOpacity
                 key={item.key}
-                onPress={() => { onClose(); item.onPress(); }}
+                onPress={() => choose(item)}
                 disabled={item.disabled}
                 style={[styles.item, { borderBottomColor: palette.border }, item.disabled && styles.disabled]}
                 accessibilityRole="button"
