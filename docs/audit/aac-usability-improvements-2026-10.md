@@ -62,7 +62,7 @@ AI suggestions are still only added when the user taps one. Nothing is spoken, s
 
 - **Not tested on physical Android or iOS devices.** That covers TalkBack, VoiceOver, Android Switch Access, real TTS engines and the voice-fallback path on a device.
 - **Hardware switch and keyboard keys are not bound globally.** The recommended library is `expo-key-event` (MIT, Expo SDK 52+, needs a dev build), wired to `handleScanKeyEvent`. It was not added because it can't be tested here. On-screen scan controls work, and OS Switch Access / Switch Control work with the labelled controls.
-- **The app crashes at startup if the `EXPO_PUBLIC_FIREBASE_*` variables are missing from a build,** and that includes the offline board. EAS builds must always set them. Making Firebase fully optional would touch about 14 modules.
+- ~~The app crashes at startup if the `EXPO_PUBLIC_FIREBASE_*` variables are missing from a build.~~ **Resolved in phase 2:** Firebase is now optional and missing or invalid configuration no longer crashes the app (see Phase 2 §1).
 - **On small phones (320×640) the default board chrome leaves about 1.5 rows of grid visible.** The voice-style and scanning bars can be hidden in Settings → Board & Communication. The defaults were not changed, so existing users' button positions stay where they are.
 - **The page bar now also shows on Home.** This moves the Home grid down once, by about 50px, so that it starts at the same place as every other page.
 - **The bundled prediction model fails to load on web.** It was already non-blocking, and the board keeps working without it.

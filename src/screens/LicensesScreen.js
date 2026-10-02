@@ -19,31 +19,39 @@ const CREDITS = [
   {
     id: 'childes',
     title: 'Word prediction vocabulary',
-    body: 'The on-device word prediction vocabulary is derived from child-language transcripts in the CHILDES database (TalkBank), used under the Creative Commons BY-NC-SA 3.0 licence. MacWhinney, B. (2000). The CHILDES Project: Tools for analyzing talk. 3rd Edition. Mahwah, NJ: Lawrence Erlbaum Associates.',
+    // Provenance is inferred (CHILDES transcription codes in the vocabulary
+    // file), not yet confirmed — see docs/legal/licensing-review.md.
+    body: 'The on-device word prediction vocabulary appears to be derived from child-language transcripts in the CHILDES database (TalkBank); its exact source is being confirmed. CHILDES data is shared under the Creative Commons BY-NC-SA 3.0 licence. MacWhinney, B. (2000). The CHILDES Project: Tools for analyzing talk. 3rd Edition. Mahwah, NJ: Lawrence Erlbaum Associates.',
     link: { label: 'TalkBank data rules', url: 'https://talkbank.org/0share/rules.html' },
   },
   {
     id: 'icons',
     title: 'Icons',
-    body: 'Ionicons (MIT License, © Ionic) and Material Icons (Apache License 2.0, © Google), via @expo/vector-icons. Licence texts are listed below.',
+    body: 'Ionicons (MIT License) and Material Icons (Apache License 2.0), bundled by @expo/vector-icons. Their notices and licence texts are listed below.',
   },
 ];
 
 function licenceTextsFor(pkg) {
   if (pkg.textId && notices.texts[pkg.textId]) return [notices.texts[pkg.textId]];
-  // Packages published without a LICENSE file: show the standard text for
-  // each licence named in their SPDX expression.
-  return pkg.license
+  // Packages published without a LICENSE file (and the icon fonts): show the
+  // copyright notice followed by the standard text for each licence named
+  // in their SPDX expression.
+  const standard = pkg.license
     .split(/\s+(?:AND|OR)\s+/)
     .map(id => notices.standardTexts[id.replace(/[()]/g, '')])
     .filter(Boolean);
+  return pkg.copyright ? [pkg.copyright, ...standard] : standard;
 }
 
 export default function LicensesScreen() {
   const { settings } = useSettings();
   const palette = getPalette(settings.theme);
   const [open, setOpen] = useState(null);
-  const data = useMemo(() => notices.packages, []);
+  // Icon fonts first (separate works with their own notices), then packages.
+  const data = useMemo(
+    () => [...(notices.fonts || []).map(f => ({ ...f, version: '' })), ...notices.packages],
+    []
+  );
 
   const header = (
     <View>
@@ -64,7 +72,7 @@ export default function LicensesScreen() {
         </View>
       ))}
       <Text style={[styles.section, { color: palette.text }]} accessibilityRole="header">
-        Open-source software ({data.length} packages)
+        Open-source software ({notices.packages.length} packages, {(notices.fonts || []).length} fonts)
       </Text>
       <Text style={[styles.body, { color: palette.textSecondary, marginBottom: spacing.sm }]}>
         Tap a package to read its licence.
@@ -77,22 +85,25 @@ export default function LicensesScreen() {
       style={{ backgroundColor: palette.background }}
       contentContainerStyle={styles.content}
       data={data}
-      keyExtractor={p => p.name}
+      keyExtractor={p => `${p.name}@${p.version}`}
       ListHeaderComponent={header}
       initialNumToRender={20}
       renderItem={({ item }) => {
-        const expanded = open === item.name;
+        const id = `${item.name}@${item.version}`;
+        const expanded = open === id;
         return (
           <View style={[styles.row, { borderBottomColor: palette.border }]}>
             <TouchableOpacity
-              onPress={() => setOpen(expanded ? null : item.name)}
+              onPress={() => setOpen(expanded ? null : id)}
               style={styles.rowMain}
               accessibilityRole="button"
-              accessibilityLabel={`${item.name} ${item.version}, ${item.license} licence`}
+              accessibilityLabel={`${item.name}${item.version ? ` ${item.version}` : ''}, ${item.license} licence`}
               accessibilityState={{ expanded }}
             >
               <Text style={[styles.pkg, { color: palette.text }]}>{item.name}</Text>
-              <Text style={[styles.meta, { color: palette.textSecondary }]}>{item.version} · {item.license}</Text>
+              <Text style={[styles.meta, { color: palette.textSecondary }]}>
+                {item.version ? `${item.version} · ` : ''}{item.license}
+              </Text>
             </TouchableOpacity>
             {expanded && licenceTextsFor(item).map((text, i) => (
               <Text key={i} style={[styles.licence, { color: palette.text, backgroundColor: palette.surface }]} selectable>

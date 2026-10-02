@@ -135,7 +135,12 @@ export default function AACBoardScreen() {
   useEffect(() => {
     let timer = null;
     const unsubscribe = subscribeSpeechStatus(({ error }) => {
-      if (!error) return;
+      if (!error) {
+        // Speech started (or a late start recovered): drop any old notice.
+        clearTimeout(timer);
+        setSpeechProblem(null);
+        return;
+      }
       setSpeechProblem(error);
       clearTimeout(timer);
       timer = setTimeout(() => setSpeechProblem(null), 8000);

@@ -4,7 +4,7 @@
 
 import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ref, onValue, set } from 'firebase/database';
+import { ref, onValue, update } from 'firebase/database';
 import { db } from '../../firebaseConfig';
 import { useAuth } from './AuthContext';
 import { DB_PATHS, dbPath } from '../shared/schema';
@@ -46,6 +46,19 @@ export function toCloudSettings(settings) {
   const out = { ...settings };
   LOCAL_ONLY_KEYS.forEach(k => { delete out[k]; });
   return out;
+}
+
+/**
+ * The cloud patch for one settings change: only the keys that changed,
+ * minus device-only keys and undefined values. Writing a partial patch
+ * (Realtime Database update()) means a change made on a fresh device before
+ * the first cloud snapshot arrives cannot replace the account's synced
+ * settings with this device's defaults. Exported for tests.
+ */
+export function cloudPatchFor(updates) {
+  const patch = toCloudSettings(updates || {});
+  Object.keys(patch).forEach(k => { if (patch[k] === undefined) delete patch[k]; });
+  return patch;
 }
 
 /**
@@ -156,7 +169,10 @@ export function SettingsProvider({ children }) {
     try {
       const uid = user && !user.isAnonymous ? user.uid : null;
       if (uid && db) {
-        await set(ref(db, dbPath(DB_PATHS.USER_SETTINGS, uid)), toCloudSettings(newSettings));
+        const patch = cloudPatchFor(updates);
+        if (Object.keys(patch).length > 0) {
+          await update(ref(db, dbPath(DB_PATHS.USER_SETTINGS, uid)), patch);
+        }
       }
     } catch (e) {
       // Firebase sync failure is acceptable — local is source of truth

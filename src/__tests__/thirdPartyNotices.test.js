@@ -27,3 +27,27 @@ describe('third-party notices', () => {
     expect(notices.standardTexts['Apache-2.0']).toMatch(/Apache License\s+Version 2\.0/);
   });
 });
+
+describe('notice completeness', () => {
+  test('packages without their own LICENSE file carry a copyright line', () => {
+    notices.packages.filter(p => !p.textId).forEach(p => {
+      expect({ name: p.name, copyright: /^Copyright/.test(p.copyright || '') }).toEqual({ name: p.name, copyright: true });
+    });
+  });
+
+  test('bundled icon fonts are listed with notice and licence text', () => {
+    const names = notices.fonts.map(f => f.name).join(' ');
+    expect(names).toMatch(/Ionicons/);
+    expect(names).toMatch(/Material Icons/);
+    notices.fonts.forEach(f => {
+      expect(f.copyright).toMatch(/^Copyright/);
+      expect(notices.standardTexts[f.license]).toBeTruthy();
+    });
+  });
+
+  test('nested package copies are listed at the version actually bundled', () => {
+    const webidl = notices.packages.filter(p => p.name === 'webidl-conversions');
+    expect(webidl.map(p => p.version)).toEqual(['5.0.0']);
+  });
+});
+

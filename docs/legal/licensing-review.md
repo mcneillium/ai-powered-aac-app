@@ -145,12 +145,12 @@ The `@license` headers in the dist files (for example `@tensorflow/tfjs-core/dis
 
 ## Conditions for the intended distribution model (free Play/App Store app)
 
-1. **ARASAAC.** Use is within the terms if the app stays free with no ads, IAP or subscriptions, and attribution stays visible. The current Settings > About text meets the wording requirement. Recommended additions:
+1. **ARASAAC (provisional).** Being free, with no ads, IAP or subscriptions, is necessary but not by itself sufficient. NonCommercial is judged by the purpose of the use (CC BY-NC-SA 4.0 §1(k)), and whether the publisher's purpose qualifies is still unverified (see Unverified items). Treat this as a provisional assessment until the publisher's purpose is confirmed or ARASAAC confirms the use. Attribution must stay visible; the current Settings > About text and the Credits screen meet the wording requirement. Recommended additions:
    - a link to the CC BY-NC-SA licence deed;
    - the same credit in the store description, if screenshots show pictograms;
    - not using the ARASAAC logo or name as branding (it is a registered trademark).
-2. **CHILDES-derived `tokenizer.json`** (if confirmed). Non-commercial use is fine. Attribution to CHILDES/TalkBank (MacWhinney 2000) and a licence statement are needed. The app has neither.
-3. **Open-source notices.** MIT, BSD and ISC require the copyright and permission notice to be included with copies, and Apache-2.0 requires the licence text. The app has no licence or notices screen and no bundled notices file. This is not met.
+2. **CHILDES-derived `tokenizer.json`** (if confirmed). Non-commercial use is fine, subject to the same purpose question as ARASAAC. Attribution to CHILDES/TalkBank (MacWhinney 2000) and a licence statement are needed. The Credits screen now carries a provisional credit, worded as unconfirmed; corpus-specific citations wait on confirming the source.
+3. **Open-source notices.** MIT, BSD and ISC require the copyright and permission notice to be included with copies, and Apache-2.0 requires the licence text. **Now met for the JS bundle:** Settings › About › *Credits & open-source licences* lists the 96 shipped packages and the two icon fonts. Packages without their own LICENSE file show a copyright line from their package metadata plus the standard text. **Remaining gap:** native-only Android/iOS libraries pulled in through Gradle/CocoaPods (see "Still open" below).
 4. **App store terms.** Google Play and Apple accept CC BY-NC-SA content in free apps as long as the licensor's terms are followed. Neither store imposes a licence screen, but the licences above do.
 5. **Developer-owned assets.** Confirm rights to the "VOICE" icon artwork (**UNVERIFIED**).
 

@@ -188,7 +188,7 @@ export default function VocabManagerScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Approve "${term}"`}
                 >
-                  <Ionicons name="checkmark" size={16} color="#FFF" />
+                  <Ionicons name="checkmark" size={16} color={palette.buttonText} />
                   <Text style={[styles.actionChipText, { color: palette.buttonText }]}>Add</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -298,7 +298,7 @@ export default function VocabManagerScreen() {
                     <View style={styles.editActions}>
                       <TouchableOpacity onPress={saveEdit} style={[styles.actionChip, { backgroundColor: palette.success }]}
                         accessibilityRole="button" accessibilityLabel="Save changes">
-                        <Ionicons name="checkmark" size={16} color="#FFF" />
+                        <Ionicons name="checkmark" size={16} color={palette.buttonText} />
                         <Text style={[styles.actionChipText, { color: palette.buttonText }]}>Save</Text>
                       </TouchableOpacity>
                       <TouchableOpacity onPress={cancelEdit} style={[styles.actionChip, { backgroundColor: palette.chipBg }]}

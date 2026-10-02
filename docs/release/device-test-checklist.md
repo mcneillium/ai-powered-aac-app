@@ -19,7 +19,7 @@ for section A; note the installed TTS engine (Android: Settings › Accessibilit
 | A2 | Tap *I want* › *more* › Speak | Words appear; speech plays |
 | A3 | Open Profile, Login, Settings › AI section | A "cloud unavailable" notice appears only on these; board shows no cloud notice |
 | A4 | Add a favourite, kill the app, relaunch | Favourite and history are still there |
-| A5 | Build WITH Firebase, sign in on device 1, change speech speed; sign in on device 2 that has different local settings | Device 2 keeps local-only settings (e.g. text size) that were never synced; no setting resets to default |
+| A5 | Turn Wi-Fi or mobile data back on first. Build WITH Firebase, sign in on device 1, change speech speed; sign in on device 2 that has different local settings | Device 2 keeps local-only settings (e.g. text size) that were never synced; no setting resets to default |
 
 ## B. Speech
 | # | Steps | Expected |
@@ -70,5 +70,6 @@ for section A; note the installed TTS engine (Android: Settings › Accessibilit
 ## F. Data preservation
 | # | Steps | Expected |
 |---|---|---|
-| F1 | Install previous release, add favourites/history/custom words/pronunciations/settings; upgrade to this build | All data intact; compact layout off |
+| F1 | Install previous release, add favourites/history/custom words/settings; upgrade to this build | All data intact; compact layout off |
+| F1b | After upgrading, add a pronunciation (new in this build), close and reopen the app | Pronunciation still there and still applied |
 | F2 | Upgrade with Firebase unreachable | Same as F1 |

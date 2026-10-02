@@ -26,15 +26,21 @@ if (!mapPath) {
 }
 
 const sourceMap = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
-const names = new Set();
+
+// Resolve each bundled source to the package directory it actually came
+// from, including nested node_modules copies (which can be other versions
+// with other notices than the root copy).
+const packageDirs = new Set();
 for (const src of sourceMap.sources || []) {
   const i = src.lastIndexOf('node_modules/');
   if (i < 0) continue;
   const parts = src.slice(i + 'node_modules/'.length).split('/');
-  names.add(parts[0].startsWith('@') ? `${parts[0]}/${parts[1]}` : parts[0]);
+  const name = parts[0].startsWith('@') ? `${parts[0]}/${parts[1]}` : parts[0];
+  const rel = `${src.slice(0, i)}node_modules/${name}`.replace(/^\/+/, '');
+  packageDirs.add(path.join(ROOT, rel));
 }
 const rootPkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-Object.keys(rootPkg.dependencies || {}).forEach(n => names.add(n));
+Object.keys(rootPkg.dependencies || {}).forEach(n => packageDirs.add(path.join(ROOT, 'node_modules', n)));
 
 const LICENSE_FILES = /^(licen[cs]e|copying)(\.(md|txt|markdown))?$/i;
 const texts = {}; // hash -> text (identical licence texts stored once)
@@ -44,26 +50,48 @@ const hash = (s) => {
   return `t${(h >>> 0).toString(36)}`;
 };
 
-const packages = [];
+// For packages published without a LICENSE file, the copyright holder comes
+// from package.json so the standard text is never shown without it.
+function copyrightFrom(pj) {
+  const person = (a) => (typeof a === 'string' ? a.replace(/\s*[<(].*$/, '') : a && a.name);
+  const holder = person(pj.author)
+    || (Array.isArray(pj.contributors) && pj.contributors.map(person).filter(Boolean).join(', '))
+    || (Array.isArray(pj.maintainers) && pj.maintainers.map(person).filter(Boolean).join(', '));
+  return holder ? `Copyright (c) ${holder}` : `Copyright (c) the ${pj.name} authors`;
+}
+
+const byKey = new Map(); // name@version -> entry (distinct copies kept)
 const missing = [];
-for (const name of [...names].sort()) {
-  const dir = path.join(ROOT, 'node_modules', name);
+for (const dir of [...packageDirs].sort()) {
   const pjPath = path.join(dir, 'package.json');
   if (!fs.existsSync(pjPath)) continue; // e.g. virtual modules
   const pj = JSON.parse(fs.readFileSync(pjPath, 'utf8'));
+  const key = `${pj.name}@${pj.version}`;
+  if (byKey.has(key)) continue;
   const license = typeof pj.license === 'string' ? pj.license
     : (pj.license && pj.license.type) || (Array.isArray(pj.licenses) ? pj.licenses.map(l => l.type).join(' OR ') : 'UNKNOWN');
   const file = fs.readdirSync(dir).find(f => LICENSE_FILES.test(f));
   let textId = null;
+  let copyright = null;
   if (file) {
     const text = fs.readFileSync(path.join(dir, file), 'utf8').trim();
     textId = hash(text);
     texts[textId] = text;
   } else {
-    missing.push(name);
+    copyright = copyrightFrom(pj);
+    missing.push(pj.name);
   }
-  packages.push({ name, version: pj.version, license, textId });
+  byKey.set(key, { name: pj.name, version: pj.version, license, textId, copyright });
 }
+const packages = [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version));
+
+// Fonts bundled by @expo/vector-icons are separate works with their own
+// notices (sources: github.com/ionic-team/ionicons and
+// github.com/google/material-design-icons LICENSE files).
+const fonts = [
+  { name: 'Ionicons (icon font)', license: 'MIT', copyright: 'Copyright (c) 2015-present Ionic (http://ionic.io/)' },
+  { name: 'Material Icons (icon font)', license: 'Apache-2.0', copyright: 'Copyright Google LLC' },
+];
 
 // Licence texts for packages that ship no LICENSE file in node_modules, keyed
 // by SPDX id. The Apache-2.0 text is required by its section 4(a).
@@ -81,6 +109,7 @@ fs.writeFileSync(OUT, JSON.stringify({
   generated: new Date().toISOString().slice(0, 10),
   note: 'Packages shipped in the app bundle. Packages without a LICENSE file in their published package use the standard text for their SPDX licence.',
   packages,
+  fonts,
   texts,
   standardTexts,
 }));
