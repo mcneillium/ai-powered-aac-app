@@ -8,8 +8,14 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "plugins": [
-      "expo-camera",
-      "expo-asset"
+      [
+        "expo-camera",
+        {
+          "recordAudioAndroid": false
+        }
+      ],
+      "expo-asset",
+      "./plugins/withFontScaleConfigChange"
     ],
     "assetBundlePatterns": [
       "assets/**/*"
@@ -35,8 +41,13 @@
         "backgroundColor": "#2979FF"
       },
       "permissions": [
-        "CAMERA",
-        "RECORD_AUDIO"
+        "CAMERA"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
       ],
       "package": "com.elpabloawakens.aipoweredaacapp",
       "versionCode": 2
