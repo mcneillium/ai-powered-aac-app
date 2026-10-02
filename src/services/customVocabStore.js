@@ -16,6 +16,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAuth } from 'firebase/auth';
 import { getDatabase, ref, set as fbSet, get as fbGet } from 'firebase/database';
+import { safeParse } from '../utils/safeStorage';
 
 const CUSTOM_VOCAB_KEY = '@aac_custom_vocab';
 const DELETED_IDS_KEY = '@aac_custom_vocab_deleted';
@@ -51,13 +52,14 @@ export async function loadCustomVocab() {
   // 1. Local first
   try {
     const raw = await AsyncStorage.getItem(CUSTOM_VOCAB_KEY);
-    customItems = raw ? JSON.parse(raw) : [];
+    customItems = await safeParse(CUSTOM_VOCAB_KEY, raw, []);
+    if (!Array.isArray(customItems)) customItems = [];
   } catch {
     customItems = [];
   }
   try {
     const raw = await AsyncStorage.getItem(DELETED_IDS_KEY);
-    deletedIds = raw ? JSON.parse(raw) : {};
+    deletedIds = (await safeParse(DELETED_IDS_KEY, raw, {})) || {};
   } catch {
     deletedIds = {};
   }

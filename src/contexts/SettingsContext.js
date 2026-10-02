@@ -2,12 +2,13 @@
 // Offline-first settings: AsyncStorage is the primary store.
 // Firebase syncs when available but never blocks the UI.
 
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ref, onValue, set } from 'firebase/database';
 import { db } from '../../firebaseConfig';
 import { useAuth } from './AuthContext';
 import { DB_PATHS, dbPath } from '../shared/schema';
+import { safeParse } from '../utils/safeStorage';
 
 const SETTINGS_STORAGE_KEY = '@aac_settings';
 
@@ -22,7 +23,16 @@ const defaultSettings = {
   cloudSuggestionsEnabled: true,  // allow sending sentence context to the AI backend
   scanMode: 'auto',   // 'auto' | 'step'
   scanSpeed: 1500,     // ms between auto-scan steps
+  // Communication preferences — defaults preserve the original board layout
+  // and behaviour; users opt in to changes.
+  predictionEnabled: true,   // show the word-suggestion strip
+  speakWordsOnTap: true,     // speak each word as it is added
+  textScale: 1,              // board text size: 1 | 1.25 | 1.5
+  showVoiceStyles: true,     // show the voice-style bar on the board
+  showScanControls: true,    // show the switch-scanning bar on the board
 };
+
+export { defaultSettings };
 
 export const SettingsContext = createContext({
   settings: defaultSettings,
@@ -34,14 +44,18 @@ export function SettingsProvider({ children }) {
   const [settings, setSettings] = useState(defaultSettings);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  // Latest settings, so rapid successive updates build on each other instead
+  // of on a stale render's copy (which silently dropped earlier changes).
+  const latestSettings = useRef(defaultSettings);
+  latestSettings.current = settings;
 
   // Load from AsyncStorage first (instant, offline-safe)
   useEffect(() => {
     (async () => {
       try {
         const stored = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored);
+        const parsed = await safeParse(SETTINGS_STORAGE_KEY, stored, null);
+        if (parsed && typeof parsed === 'object') {
           setSettings(prev => ({ ...prev, ...parsed }));
         }
       } catch (e) {
@@ -67,6 +81,7 @@ export function SettingsProvider({ children }) {
           const remote = snapshot.val();
           setSettings(prev => {
             const merged = { ...prev, ...remote };
+            latestSettings.current = merged;
             // Persist the merged result locally
             AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(merged)).catch(() => {});
             return merged;
@@ -84,7 +99,8 @@ export function SettingsProvider({ children }) {
 
   // Update settings: write to AsyncStorage immediately, sync to Firebase if possible
   const updateSettings = useCallback(async (updates) => {
-    const newSettings = { ...settings, ...updates };
+    const newSettings = { ...latestSettings.current, ...updates };
+    latestSettings.current = newSettings;
     setSettings(newSettings);
 
     // Write locally first (always succeeds)
@@ -104,7 +120,7 @@ export function SettingsProvider({ children }) {
       // Firebase sync failure is acceptable — local is source of truth
       console.warn('Firebase settings sync failed (will retry later):', e.message);
     }
-  }, [settings, user]);
+  }, [user]);
 
   return (
     <SettingsContext.Provider value={{ settings, loading, updateSettings }}>

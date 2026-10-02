@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ScrollView, View, Text, TextInput, Button, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity, Image } from 'react-native';
-import { speak } from '../services/speechService';
+import { speak, buildSpeechOptions } from '../services/speechService';
 import { StatusBar } from 'expo-status-bar';
 import { searchPictograms } from '../services/arasaacService';
 import { getAISuggestions } from '../services/getAISuggestions';
@@ -125,11 +125,7 @@ export default function EasySentenceBuilderScreen() {
   const speakSentence = () => {
     const text = sentenceWords.join(' ');
     if (!text.trim()) return;
-    speak(text, {
-      rate: settings.speechRate,
-      pitch: settings.speechPitch,
-      voice: settings.speechVoice,
-    });
+    speak(text, buildSpeechOptions(settings));
     addSentenceToHistory(text).catch(() => {});
     if (aiEnabled && sentenceWords.length > 0) {
       recordSentenceSpoken(sentenceWords).catch(() => {});

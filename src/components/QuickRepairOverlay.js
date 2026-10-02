@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { speak } from '../services/speechService';
+import { speak, buildSpeechOptions } from '../services/speechService';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, radii, spacing } from '../theme';
 import { t } from '../i18n/strings';
@@ -51,11 +51,7 @@ export default function QuickRepairOverlay() {
   const wasScanningBefore = useRef(false);
 
   const handlePhrase = useCallback((phrase) => {
-    speak(phrase.label, {
-      rate: settings.speechRate,
-      pitch: settings.speechPitch,
-      voice: settings.speechVoice,
-    });
+    speak(phrase.label, buildSpeechOptions(settings));
   }, [settings]);
 
   // When the modal opens, save the underlying screen's scan context and take

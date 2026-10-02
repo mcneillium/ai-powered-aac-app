@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, radii, spacing } from '../theme';
-import { speak } from '../services/speechService';
+import { speak, buildSpeechOptions } from '../services/speechService';
 import { getAllContextPacks, getContextPack } from '../data/contextPacks';
 import { StatusBar } from 'expo-status-bar';
 import { t } from '../i18n/strings';
@@ -36,11 +36,7 @@ export default function ContextPackScreen() {
   const numColumns = settings.gridSize || 3;
 
   const speakPhrase = useCallback((phrase) => {
-    speak(phrase.label, {
-      rate: settings.speechRate,
-      pitch: settings.speechPitch,
-      voice: settings.speechVoice,
-    });
+    speak(phrase.label, buildSpeechOptions(settings));
   }, [settings]);
 
   const renderPackSelector = ({ item }) => {

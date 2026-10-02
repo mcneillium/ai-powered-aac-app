@@ -13,7 +13,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, radii, spacing } from '../theme';
-import { speak } from '../services/speechService';
+import { speak, buildSpeechOptions } from '../services/speechService';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
@@ -72,11 +72,7 @@ export default function CombinedImageScreen() {
   }, []);
 
   const speakPhrase = (text) => {
-    speak(text, {
-      rate: settings.speechRate,
-      pitch: settings.speechPitch,
-      voice: settings.speechVoice,
-    });
+    speak(text, buildSpeechOptions(settings));
   };
 
   const pickImage = async () => {

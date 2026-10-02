@@ -3,6 +3,7 @@
 // Survives app restarts. Used by AACBoardScreen and history views.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParse } from '../utils/safeStorage';
 
 const STORAGE_KEY = '@aac_sentence_history';
 const MAX_ENTRIES = 100;
@@ -14,7 +15,8 @@ export async function loadSentenceHistory() {
   if (loaded) return history;
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    history = raw ? JSON.parse(raw) : [];
+    history = await safeParse(STORAGE_KEY, raw, []);
+    if (!Array.isArray(history)) history = [];
     loaded = true;
   } catch {
     history = [];

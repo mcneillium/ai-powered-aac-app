@@ -45,6 +45,7 @@ import VocabManagerScreen from './src/screens/VocabManagerScreen';
 import { loadImprovedModel } from './src/services/improvedModelLoader';
 import { loadAIProfile, recordSessionStart, flushAIProfile } from './src/services/aiProfileStore';
 import { loadCustomVocab } from './src/services/customVocabStore';
+import { loadPronunciations } from './src/services/pronunciationStore';
 
 const Tab = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -58,6 +59,7 @@ loadAIProfile()
   .then(() => recordSessionStart())
   .catch(err => console.warn('AI profile load failed (non-blocking):', err));
 loadCustomVocab().catch(err => console.warn('Custom vocab load failed (non-blocking):', err));
+loadPronunciations().catch(err => console.warn('Pronunciation load failed (non-blocking):', err));
 
 const TAB_ICONS = {
   'AAC Board': 'grid-outline',

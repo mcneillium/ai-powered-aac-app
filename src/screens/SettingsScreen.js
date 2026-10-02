@@ -18,7 +18,7 @@ import { Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, brand } from '../theme';
-import { speak, getAvailableVoices } from '../services/speechService';
+import { speak, getAvailableVoices, buildSpeechOptions } from '../services/speechService';
 import { resetAIProfile, hasLearnedData } from '../services/aiProfileStore';
 import packageJson from '../../package.json';
 
@@ -52,11 +52,7 @@ export default function SettingsScreen() {
   }, []);
 
   const testSpeech = () => {
-    speak('This is how I will sound when communicating.', {
-      rate: settings.speechRate,
-      pitch: settings.speechPitch,
-      voice: settings.speechVoice,
-    });
+    speak('This is how I will sound when communicating.', buildSpeechOptions(settings));
   };
 
   if (settingsLoading) {

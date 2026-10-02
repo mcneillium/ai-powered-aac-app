@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, spacing, radii } from '../theme';
-import { speak } from '../services/speechService';
+import { speak, buildSpeechOptions } from '../services/speechService';
 import { addSentenceToHistory } from '../services/sentenceHistoryStore';
 import { recordWordSelection } from '../services/aiProfileStore';
 import DisplayMode from '../components/DisplayMode';
@@ -125,11 +125,7 @@ export default function EmotionScreen() {
 
   const speakNow = useCallback(() => {
     if (!sentence) return;
-    speak(sentence, {
-      rate: settings.speechRate,
-      pitch: settings.speechPitch,
-      voice: settings.speechVoice,
-    });
+    speak(sentence, buildSpeechOptions(settings));
     // Save to sentence history so it appears in AAC Board history panel
     addSentenceToHistory(sentence).catch(() => {});
     // Track emotion word for AI profile learning (respects the AI opt-out)
@@ -139,7 +135,7 @@ export default function EmotionScreen() {
   }, [sentence, settings, emotion]);
 
   const speakDirect = useCallback((phrase) => {
-    speak(phrase, { rate: settings.speechRate, pitch: settings.speechPitch, voice: settings.speechVoice });
+    speak(phrase, buildSpeechOptions(settings));
     addSentenceToHistory(phrase).catch(() => {});
   }, [settings]);
 

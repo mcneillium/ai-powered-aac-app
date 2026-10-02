@@ -3,8 +3,12 @@
 // Favourites are stored in AsyncStorage and optionally synced to Firebase.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeParse } from '../utils/safeStorage';
 
 const STORAGE_KEY = '@aac_favourites';
+// Never silently drop a saved favourite: once full, new ones are refused and
+// the caller tells the user, rather than deleting the oldest.
+export const MAX_FAVOURITES = 200;
 let favourites = [];
 let loaded = false;
 
@@ -12,7 +16,8 @@ export async function loadFavourites() {
   if (loaded) return favourites;
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    favourites = raw ? JSON.parse(raw) : [];
+    favourites = await safeParse(STORAGE_KEY, raw, []);
+    if (!Array.isArray(favourites)) favourites = [];
     loaded = true;
   } catch {
     favourites = [];
@@ -31,17 +36,16 @@ export async function addFavourite(phrase) {
   if (!trimmed) return;
 
   // Don't add duplicates
-  if (favourites.some(f => f.phrase === trimmed)) return;
+  const existing = favourites.find(f => f.phrase === trimmed);
+  if (existing) return existing;
+  if (favourites.length >= MAX_FAVOURITES) return null;
 
   const entry = {
-    id: `fav_${Date.now()}`,
+    id: `fav_${Date.now()}_${favourites.length}`,
     phrase: trimmed,
     createdAt: Date.now(),
   };
-  favourites.unshift(entry);
-
-  // Cap at 50 favourites
-  if (favourites.length > 50) favourites = favourites.slice(0, 50);
+  favourites = [entry, ...favourites];
 
   await saveFavourites();
   return entry;
