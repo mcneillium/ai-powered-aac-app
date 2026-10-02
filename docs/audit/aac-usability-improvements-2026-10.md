@@ -68,3 +68,125 @@ AI suggestions are still only added when the user taps one. Nothing is spoken, s
 - **The bundled prediction model fails to load on web.** It was already non-blocking, and the board keeps working without it.
 - **Symbol licensing.** ARASAAC is NonCommercial. If the app adds ads, in-app purchases or a paid tier, switch the offline symbols to Mulberry (CC BY-SA 4.0) or OpenMoji (CC BY-SA 4.0).
 - **No backup export or import yet.** Open Board Format (OBF/OBZ) is the de-facto open format for boards and the recommended next step.
+
+---
+
+# Phase 2 — Reliability and release readiness (October 2026)
+
+Evidence levels in this section:
+- **[auto]** automated tests;
+- **[browser]** the real app rendered by react-native-web in headless Chromium;
+- **[native-build]** compiled with the Android SDK/Gradle in this environment;
+- **[emulator]** Android emulator;
+- **[device]** a physical device.
+
+No [device] checks were possible here. See `docs/release/device-test-checklist.md`.
+
+## 1. Startup without Firebase
+- **Before.** With no `EXPO_PUBLIC_FIREBASE_*` variables the app showed a blank screen. The browser console showed a fatal error from `getDatabase()`.
+- **Now.** `firebaseConfig.js` validates the config and initialises inside `try/catch`. It exports a nullable `db`/`auth` and `firebaseStatus`, and never throws. Consumers no longer call `getAuth()` or `getDatabase()`, both of which throw when no Firebase app exists.
+- **Where the notice appears.** The "cloud unavailable" notice appears only on Login, Sign up, Profile and Online suggestions.
+- **[browser]** A build with no Firebase variables behaves as follows:
+  - the board renders;
+  - word and sentence speech, voice styles and the pronunciation override work;
+  - Profile shows the notice.
+- **Settings data-loss race.** A cloud snapshot arriving before local settings loaded was saved over them. It is fixed: sync starts only after the local load, and updates wait for it.
+- **Merge rules.** Null or partial cloud values never erase local ones. `speechVoice` and `compactLayout` are device-only and never synced.
+- **[auto]** `firebaseConfig.test.js` covers missing, malformed, throwing and valid configuration. `settingsMerge.test.js` and `offlineStartup.test.js` cover the merge rules and the offline start.
+
+## 2. Speech failure handling
+
+Defects were found by reading the native `expo-speech` sources (Android `SpeechModule.kt`, iOS `SpeechModule.swift`) and the phase-1 code:
+
+| Defect | Fix |
+|---|---|
+| Two rapid taps could both play, because `speak()` awaited before calling the engine | Each `speak()` claims a generation before any `await`. Stale generations never reach the engine |
+| The "retry with default voice" path reacted to the error browsers fire on cancel, so speech could restart after Stop | Stale callbacks are ignored. A retry happens only before anything has been heard |
+| Android with no TTS engine: `getVoices` never resolves, so with a saved voice `speak()` hung | Voice lookup times out after 1.5 s |
+| iOS rejects an unknown voice without any error event | No start within 5 s with a custom voice → retry with the default voice |
+| An error mid-queue let the later chunks keep playing | A final error cancels the queue |
+| Speaking state could stay stuck | It clears on done, stopped, error, or a synchronous throw. A watchdog queries `isSpeakingAsync`. A late start restores the state |
+
+- **[auto]** 21 speech-reliability tests. Nine of them fail against the phase-1 implementation.
+- **[browser]**
+  - 6 rapid word taps produced 6 single utterances.
+  - 5 rapid taps on Speak produced 5 restarts with no overlap.
+  - The no-voice notice appears in headless Chromium, which has no voices.
+
+**When no usable offline voice is installed:**
+- **Android.** If no engine initialises, nothing is spoken. After 5 s the board shows a notice, announced to assistive tech, saying no voice responded. The message stays on screen and Show on screen still works. Settings explains how to install a voice. If an engine exists but lacks data for the language, Android falls back to the device locale.
+- **iOS.** Built-in voices are always present, so speech normally works offline. The documented exception is silent mode: expo-speech is silent while the ringer switch is off.
+- **Stop.** Clear stops speech immediately, and Undo restores the sentence. Speak deliberately stays Speak: AAC users often tap it repeatedly to repeat, and a Speak/Stop toggle could get stuck.
+
+## 3. Small screens: opt-in compact layout
+
+**Investigation [browser], 320×640, defaults:**
+
+| Element | Height |
+|---|---|
+| Header | 64px |
+| Message | 64px |
+| Two rows of actions | ~100px |
+| Voice styles | 48px |
+| Scan bar | 48px |
+| Suggestions | 56px |
+| Page row | 56px |
+| Tab bar | 60px |
+
+That left **2 full rows** of words, which confirms the report.
+
+**Compact layout** is set in Settings › Board & Communication. It is off by default and never turned on automatically. Settings mentions it only on screens shorter than 700pt.
+- One fixed row: Speak, Delete, Clear, Undo, Quick phrases, More.
+- The More menu holds favourites, history, add favourite, show on screen, camera and voice style. Its items keep a fixed order and are disabled, never hidden.
+- The header is hidden. The page row has icon buttons for Home, Back, Find, Scan and Settings.
+- The message area is exactly one line.
+- Scanning: Next and Select appear in a strip overlaid at the bottom.
+- Scan mode and speed are also in Settings.
+
+Results [browser], measured from the DOM:
+
+| Viewport | Insets (top/bottom) | Text | Full rows | Grid top stable across empty / words / long sentence / clear / scanning | Controls < 44px |
+|---|---|---|---|---|---|
+| 320×640 standard | 0/0 | 1× | 2 | yes (395px, same as phase 1) | none |
+| 320×640 compact | 0/0 | 1× | **5** | yes | none |
+| 375×667 compact | 20/0 | 1.5× | 4 | yes | none |
+| 390×844 compact | 47/34 | 1× | 7 | yes | none |
+| 820×1180 standard | 24/20 | 1× | 9 | yes | none |
+
+- **Grid shift fixed.** The suggestion row now has a fixed height. Previously it grew when a chip had a reason line, which moved the grid. The standard layout stays exactly 56px tall, so existing users' layout is unchanged.
+- **Simulated insets.** These were produced by overriding the `env(safe-area-inset-*)` measurement in the test harness. They are not real device insets.
+
+## 4. Accessibility checks (browser level only)
+- **[browser]** Speak, Delete, Clear and Undo are each separate named `role=button` elements in both layouts. The sentence element contains no buttons.
+- **[browser]** Keyboard Tab order follows the visual order:
+  - standard: Speak → Delete → Clear → Favourites → History → Camera → Add favourite → Show on screen → Quick phrases → voice styles;
+  - compact: Speak → Delete → Clear → Quick → More → Find → Scan → Settings → words.
+  - Disabled controls are skipped by keyboard focus.
+- **Not claimed:** TalkBack, VoiceOver, Android Switch Access and iOS Switch Control. These need device testing (checklist sections C and D).
+
+## 5. Licensing
+See `docs/legal/licensing-review.md`. Its key claims were re-checked against the primary sources.
+- **Added:** a Credits & open-source licences screen. It covers the ARASAAC credit and terms link, a CHILDES/TalkBank citation, the icon fonts, and licence texts for the 96 packages in the shipped bundle.
+- **Added:** a generator script and a guard test.
+- **Not changed:** no symbol set was replaced.
+
+## 6. Code review
+An independent review of this phase found five issues, all fixed with regression tests (commit `bb3f59b`):
+- the speech queue after a final error;
+- the iOS silent voice failure;
+- the late-start state;
+- iOS modal-after-modal in the More menu;
+- device-only settings syncing.
+
+## 7. Native build [native-build]
+- **Toolchain.** Android SDK (platform 36, build-tools 36, NDK 27.1, CMake 3.22) and Java 21 / Gradle 8.14 were installed in this environment.
+- **Build steps.** `expo prebuild` and `./gradlew assembleRelease` were run in a separate copy of the repo. `android/` stays git-ignored (CNG).
+- **Build result.** `app-release.apk` built successfully: 69 MB, arm64-v8a + x86_64, targetSdk 36.
+  - It was built with **no `EXPO_PUBLIC_FIREBASE_*` variables**.
+  - It is signed with the template debug key; it is not a store artefact.
+- **Bundle contents.** The Hermes bundle in the APK contains this phase's code (string checks for the Firebase status, compact layout, licences screen and speech notice).
+- **Environment note.** Maven Central rate-limited this container (HTTP 429). The build used Google's Maven Central mirror through a local Gradle init script; the repo is unchanged.
+- **Release-readiness finding.** The merged release manifest requests `SYSTEM_ALERT_WINDOW`, `READ_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE`, none of which `app.json` declares; they come from dependencies. `RECORD_AUDIO` is declared but unused.
+  - Consider blocking them with `android.blockedPermissions` in `app.json`, after confirming nothing needs them.
+  - Left unchanged here because it can affect development builds.
+- **iOS.** It cannot be built or simulated here: this environment is Linux, with no Xcode or macOS. Every iOS item is a device/simulator task in the checklist.
