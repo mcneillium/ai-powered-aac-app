@@ -1,5 +1,23 @@
 # Voice PR #7 — test on Samsung Galaxy S24 Ultra
 
+## Update 03/10/2026: "Voice PR7 Test 2", installs alongside, no uninstall
+- **Why a new name.** Earlier test APKs were signed with a key from a temporary cloud
+  environment, and that key is gone. A build signed with the new local test key
+  (certificate SHA-256 `4D:A3:19:45:…:3F:1D`) cannot update the "Voice PR7 Test" on
+  your phone.
+- **What it is.** The phone build is therefore a **separate test app**:
+  - package `com.elpabloawakens.aipoweredaacapp.prtest2`, named **"Voice PR7 Test 2"**;
+  - it installs next to "Voice PR7 Test" and your real "Voice", and changes neither;
+  - nothing needs uninstalling, and the old test app keeps its data;
+  - "Voice PR7 Test 2" starts with empty test data, and its own data survives future
+    updates signed with the same key.
+- **File.** `Voice-PR7-Test-2-<commit>.apk`, with its SHA-256 in a `.sha256.txt` next to
+  it. It is built from that commit by
+  `PRTEST_ID=prtest2 PRTEST_NAME="Voice PR7 Test 2" node scripts/native-ui/make-test-identity.js`
+  after `expo prebuild --clean`, from a clone with no `.env` (so no cloud).
+- **Emulator builds** keep the `.prtest` identity ("Voice PR7 Test") and update in place.
+- **The key** stays outside the repo, in `%LOCALAPPDATA%\VoiceTest\`.
+
 **Download:** `Voice-PR7-test-35914e5.zip` (28 MB), containing
 `Voice-PR7-test-35914e5.apk` (32 MB, arm64 for the S24 Ultra), built from PR #7 head `35914e5`.
 APK SHA-256: `920a6aa743b5a75d23d3277770a131a1b0550e74f7907bf5a53e394c5c404b36`

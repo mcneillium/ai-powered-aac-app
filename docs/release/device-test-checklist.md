@@ -66,6 +66,7 @@ for section A; note the installed TTS engine (Android: Settings › Accessibilit
 | E5 | Notch/Dynamic Island device, gesture navigation, landscape not required (portrait lock) | Nothing hidden under the status bar or home indicator; tab bar above the home indicator |
 | E6 | OS font size at maximum | Text remains readable; no overlapping controls |
 | E7 | Standard layout (compact off) on an existing install | Layout identical to the previous release (no moved buttons) |
+| E8 | Build a sentence, open Android Settings › Display › Font size, change it, return to Voice | The sentence and page are still there; no text cut off; the app reloads once (a brief redraw) |
 
 ## F. Data preservation
 | # | Steps | Expected |
@@ -73,3 +74,52 @@ for section A; note the installed TTS engine (Android: Settings › Accessibilit
 | F1 | Install previous release, add favourites/history/custom words/settings; upgrade to this build | All data intact; compact layout off |
 | F1b | After upgrading, add a pronunciation (new in this build), close and reopen the app | Pronunciation still there and still applied |
 | F2 | Upgrade with Firebase unreachable | Same as F1 |
+
+## G. Camera, gallery and permissions (added 02/10/2026)
+| # | Steps | Expected |
+|---|---|---|
+| G1 | Open Camera from the board for the first time | Only the camera prompt appears. No "photos and media" or microphone prompt (Android 12 and older showed a storage prompt before this change) |
+| G2 | Deny it, then tap Camera | "Camera permission needed" explanation; no crash |
+| G3 | Allow it, take a photo | Preview, then a description; offline: "Could not describe this image — check your connection" |
+| G4 | Gallery: pick a photo | The system picker opens with no permission prompt; the photo is processed as in G3 |
+| G5 | Settings › Apps › Voice › Permissions | Camera only; no Microphone, Files or Media |
+
+## Recorded results
+
+Emulator runs, 02/10/2026. Full method and values:
+`docs/audit/aac-usability-improvements-2026-10.md` (Phase 3).
+- Emulators: Android 15 / API 35 Pixel 7 profile, and Android 11 / API 30 Pixel 4 profile.
+- TTS: Google Speech Services.
+- App: separate "Voice PR7 Test", offline, no Firebase config.
+
+**"Emulator PASS" is not a device result.** No physical device has been tested yet.
+
+| Item | Emulator result | Still needs a device or a person |
+|---|---|---|
+| A1, A2 (offline start, words) | PASS | Real phone |
+| A3 cloud notice | Partly: the Settings AI section shows it and the board has no cloud notice; Profile and Login not opened | Yes |
+| A4 favourites and history after restart | PASS | Real phone |
+| A5 cloud sync | Not tested (test build has no Firebase) | Yes |
+| B1 speed 0.5× | Setting applied; engine audio 1.36× longer than 1× | Listen: is it clearly slower? |
+| B2, B3 voice style, chosen voice | Not tested | Listen |
+| B4 missing voice id | Not tested natively | Yes |
+| B5 pronunciation | Saved; the screen keeps the written word; the engine gets the request | Listen: do you hear the substitution? |
+| B6 ~5,000 characters | 2 chunks, about 334 s of continuous engine audio | Listen for gaps or order |
+| B7 Clear mid-speech, Undo | Audio stopped by the first sample (~0.2 s); Undo restores | Listen |
+| B8 6 fast word taps | All added; never 2 TTS players at once | Listen |
+| B9 5× Speak | Never 2 players at once | Listen |
+| B10 no TTS engine | Notice after 6.9 s; message kept; app responsive | On the phone, only with a spare engine setting |
+| B11 iOS silent mode | Not possible here | iPhone |
+| B12 background mid-utterance | Not tested | Yes |
+| C1 to C6 TalkBack and VoiceOver | **Not tested.** No screen reader was used | Yes |
+| D1 to D5 switch access, external keys | **Not tested** | Yes |
+| E1, E2 rows: standard 3, compact 7 (1080×2400) | PASS | S24 Ultra counts |
+| E3 grid stable (standard and compact, and across pages) | PASS (after fix D2) | Yes |
+| E4 compact + extra large button text | Not tested | Yes |
+| E5 notch, gestures, status bar | Offline banner now below the status bar (after fix D3) | Real insets on the S24 |
+| E6 maximum font | No overlapping controls at 2.0; chips fit (after fix D4); tab labels truncate with "…" | Yes |
+| E8 change the system font size while Voice is open (added 03/10/2026) | Sentence and page kept; layout identical to a fresh start at 1.3, 2.0 and 1.0 (Android 15) and at 1.3 and 1.0 (Android 11); dark mode does not reload (after fix D5) | On the S24: One UI font size and font style, with TalkBack on and off |
+| E7 standard layout unchanged | Grid top identical to baseline offline (y=1393) | Yes |
+| F1, F1b upgrade in place | PASS for the test app (baseline → fixed, same test key) | Store app → release-key build |
+| F2 | Not tested | Yes |
+| G1 to G5 camera, gallery, permissions | PASS on Android 15 and Android 11 (G5 checked from the APK, not in Settings) | Real camera on the S24 |

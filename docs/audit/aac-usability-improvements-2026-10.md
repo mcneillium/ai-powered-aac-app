@@ -189,7 +189,267 @@ An independent review of this phase found five issues, all fixed with regression
 - **Release-readiness finding.** The merged release manifest requests `SYSTEM_ALERT_WINDOW`, `READ_EXTERNAL_STORAGE` and `WRITE_EXTERNAL_STORAGE`, none of which `app.json` declares; they come from dependencies. `RECORD_AUDIO` is declared but unused.
   - Consider blocking them with `android.blockedPermissions` in `app.json`, after confirming nothing needs them.
   - Left unchanged here because it can affect development builds.
+  - **Resolved in Phase 3.** The permissions were attributed from the Gradle merger
+    reports and blocked; the release and debug APKs were checked separately (see Phase 3,
+    Permissions).
 - **Emulator [emulator]: not achieved.** The container has no `/dev/kvm` and no `vmx`/`svm` CPU flags; `emulator -accel-check` reports "KVM requires a CPU that supports vmx or svm".
   - An Android 34 x86_64 image started with `-accel off`, but after about 40 minutes adb still reported the device `offline` and boot never completed.
   - So no on-emulator run or speech check was possible. All runtime behaviour on Android is still unverified natively and is a device task.
 - **iOS.** It cannot be built or simulated here: this environment is Linux, with no Xcode or macOS. Every iOS item is a device/simulator task in the checklist.
+
+---
+
+# Phase 3 — Native Android testing (02/10/2026)
+
+Evidence levels follow Phase 2:
+- **[emulator]** checks ran on a real Android system image, with real native code, the
+  real TTS engine and the real permission dialogs;
+- **[auto]** checks are Jest tests;
+- **[device]** would mean a physical phone. **No [device] check was possible in this
+  phase.** The S24 Ultra was never connected over USB: Windows saw it only over
+  Bluetooth, and `adb devices` stayed empty for the whole session.
+
+## Environment
+- **Host and toolchain.** Windows 11 on an Intel Core Ultra 9 285K, with WHPX
+  acceleration (`emulator -accel-check`: "WHPX(10.0.26200) is installed and usable").
+  Temurin JDK 17.0.20.1, Android SDK platform 36, build-tools 36.0.0, NDK 27.1.12297006,
+  Gradle 8.14.3, emulator 37.2.12.0. All were installed per-user from Google and Adoptium,
+  with checksums verified.
+- **Emulator A.** Android 15 (API 35), `google_apis_playstore` x86_64, Pixel 7 profile
+  (1080×2400, 420 dpi, status bar 136 px). TTS: Google Speech Services
+  `googletts.google-speech-apk_20240319.00`; it dispatched to `en-us-x-iog-lstm-embedded`.
+- **Emulator B.** Android 11 (API 30), `google_apis` x86_64, Pixel 4 profile
+  (1080×2280). TTS: Google Speech Services 22.10.313224691.
+- **App under test.** The separate test app "Voice PR7 Test"
+  (`com.elpabloawakens.aipoweredaacapp.prtest`). It was built from a clone with no `.env`,
+  so it has no Firebase and no API keys. It is signed with a new local test key: SHA-256
+  of the certificate `4d:a3:19:45:…:3f:1d`; the key lives outside the repo.
+- **Builds.** Baseline = PR head `5179896`, APK SHA-256 `1a6453a8…71b0`. Fixed = the
+  same commit plus this phase's changes (source files byte-identical to this commit),
+  APK SHA-256 `73911ca0…09ee`.
+- **Offline.** Every UI run happened in airplane mode.
+- **Automation.** `scripts/native-ui/` (adb, UiAutomator dumps, `input`). Each check
+  records PASS/FAIL with the measured value. Screenshots and permission dumps:
+  `docs/audit/native-android-2026-10/`.
+
+## How speech was measured
+- **API call reached the engine:** Google TTS logs `Synthesis request` per utterance
+  or chunk.
+- **Engine produced audio:** an `AudioTrack` in the TTS process goes `state:started` in
+  `dumpsys audio` and logs `N frames delivered`.
+- **Not measured:** whether a person heard it, or how it sounded. That is listed for the
+  device test below.
+
+## Defects found natively, fixed, each with a regression test
+
+| # | Reproduced [emulator] on the baseline | Fix | Test |
+|---|---|---|---|
+| D1 | Every camera **and** gallery photo ended in "Could not process this image". Logcat: `[Camera] base64 read failed: Cannot read property 'Base64' of undefined`. In expo-file-system 19 (SDK 54), `readAsStringAsync` and `EncodingType` are stubs on the main export | `src/services/imageFile.js` reads through `expo-file-system/legacy` | `imageFile.test.js`: the read, a failure, a timeout, and a guard that no app file uses legacy-only APIs from the main entry. The guard fails on the old `CameraScreen.js` |
+| D2 | The grid kept the previous page's scroll offset. After scrolling Home and opening People, People's first row was at y=1379 instead of 1393, and Home stayed shifted after the round trip. Button positions depended on earlier scrolling | `useScrollToTopOnChange`: the grid returns to the top on every page change | `useScrollToTopOnChange.test.js` (4 tests) |
+| D3 | Offline banner drawn under the Android 15 edge-to-edge status bar: banner 0–68 px, status bar 0–136 px, over the clock and icons. White on `#E8A070` measured 2.17:1 | The banner takes the status-bar inset and screens below receive top 0, so the offline layout shift stays the same as before. The children stay in one provider, so connectivity changes never remount navigation or lose the sentence. Colour `#9C4A12` gives 6.17:1 | `offlineBanner.test.js` (inset, online, no remount, contrast). All 4 fail on the old component |
+| D4 | At system font scale 2.0 the suggestion chips' second line ("used often") was cut off by the fixed-height strip | The strip height is unchanged, so nothing moves. The reason line is dropped when it can't fit (it stays in the accessibility label), and the word's own scaling is capped to what fits. Default sizes are unchanged | `suggestionChipFit.test.js` (10 tests, including every text-size × font-scale combination fits) |
+
+Verified after the fix [emulator, Android 15]:
+- **D1:** camera capture and gallery pick both logged `has base64: true`. The offline
+  build then showed "Could not describe this image — check your connection", the
+  expected offline result.
+- **D2:** Food page grid top y=1393, the same as empty, words, long sentence and cleared.
+- **D3:** banner text at y=146–193, below the 136 px status bar. The grid top stayed at
+  y=1393, the same as the baseline offline, so no button moved.
+- **D4:** at font 2.0, 0 reason lines rendered and chips show whole words. At font 1.0,
+  all 5 reason lines are still shown.
+
+## Permissions (merged manifests and APKs, measured)
+
+| Permission | Who adds it (Gradle merger report) | Release before → after | Debug before → after |
+|---|---|---|---|
+| `SYSTEM_ALERT_WINDOW` | Expo's prebuild template, in the main manifest **and** in `android/app/src/debug` + `src/debugOptimized`; also `react-android` (debug variant). Correction: earlier notes put it in React Native's debug manifest only | present → **removed** | present → **kept** (the template's debug manifest outranks the block, so dev overlays still work) |
+| `READ_EXTERNAL_STORAGE` | Expo template (main manifest), `expo-file-system` 19.0.21, `expo-image-picker` 17.0.10 | present → **removed** | present → removed |
+| `WRITE_EXTERNAL_STORAGE` | as above | present → **removed** | present → removed |
+| `RECORD_AUDIO` | `app.json` `android.permissions`, the `expo-camera` plugin, and the `expo-camera` 17.0.10 library manifest | present → **removed** | present → removed |
+
+- **What changed.** `app.json` now has:
+  - `android.permissions: ["CAMERA"]`;
+  - the `expo-camera` plugin with `recordAudioAndroid: false`;
+  - `android.blockedPermissions` for the four permissions above.
+
+  `CameraScreen.js` no longer calls `requestMediaLibraryPermissionsAsync()` on mount. The
+  result was never used, and `launchImageLibraryAsync` checks no permission on Android in
+  expo-image-picker 17.
+- **Release APK now requests:** `CAMERA`, `INTERNET`, `VIBRATE`,
+  `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`, plus the package's own receiver permission.
+- **Debug APK:** the same set plus `SYSTEM_ALERT_WINDOW`.
+- **Before the fix [emulator, Android 11]:** opening Camera asked "Allow Voice PR7 Test
+  to access photos and media on your device?".
+- **After the fix, Android 11 and Android 15:**
+  - no storage prompt;
+  - camera prompt → deny → the in-app explanation "Camera permission needed";
+  - grant from the system prompt → preview → capture → photo read;
+  - gallery → photo returned and read. On Android 11 this went through the system
+    document picker, selected with the keyboard, because that picker ignored injected
+    taps.
+- **iOS.** `NSMicrophoneUsageDescription` was left in `app.json`; it can't be tested here.
+
+## Native results, fixed build [emulator]
+All recorded checks below **passed** on Android 15 unless noted; per-check values are in
+each run's `steps.log`.
+- **A. Offline:**
+  - offline start with no crash-buffer entries;
+  - banner below the status bar.
+- **Editing:**
+  - build "I want help";
+  - Delete → "I want";
+  - Undo → "I want help";
+  - a 15-word sentence;
+  - Clear → empty;
+  - Undo → the whole sentence restored.
+  - Starters such as "I want" add two words, so Delete removes one word. That's by
+    design (`handleButtonPress` splits `multiWord`).
+- **Grid position:** first row at y=1393 for empty, one word, long sentence, cleared and
+  another page.
+- **F. History and favourites:**
+  - the spoken sentence appears in history, and tapping it replaces the sentence;
+  - the favourite is listed;
+  - both survived a restart.
+- **Upgrade in place** (baseline → fixed, same test key, `adb install -r`):
+  - onboarding not shown again;
+  - favourite, history, speech speed (1×, the last value set) and pronunciation all kept;
+  - compact layout still off.
+- **B. Settings and speech:**
+  - B1: speed 0.5× selected.
+  - B5: pronunciation "help" → "help me please" saved; the screen still shows "help";
+    the engine received the request.
+  - Restart: 0.75× and the pronunciation were kept, and the pronunciation still applies.
+  - Engine audio for "help me please": 0.5× = 37,440 frames, 1× = 27,480 frames, a ratio
+    of 1.36. This shows a longer utterance, not that it sounds noticeably slower.
+- **B8:** 6 word taps in 86 ms → all 6 added, never more than 1 TTS player at once.
+- **B9:** 5 rapid Speak taps → never 2 players at once, and no player stuck afterwards.
+- **B7:** Clear while speaking → the engine's player had already stopped by the first
+  sample (about 0.2 s after the tap) and stayed stopped for 1.8 s; Undo restored the
+  message.
+- **B6:** about 5,000 characters → 2 synthesis requests (chunked), about 334 s of
+  continuous engine audio, no silent sample inside playback. Note that the
+  pronunciation field holds at most 5,000 characters.
+- **B10:** Google TTS disabled (emulator only) → "No speech voice responded…" appeared
+  6.9 s after the tap, including UI polling time. The message stayed on screen, the app
+  stayed responsive, and a tap passed through the notice (`pointerEvents="none"`, hides
+  after 8 s).
+- **E. Layout:**
+  - standard layout: 3 full word rows above the tab bar;
+  - compact: 7, with Settings reachable from the page row and the grid top stable at
+    y=748 while typing and clearing;
+  - font scale 2.0: no overlapping tappable controls.
+  - Tab labels truncate with "…" at 2.0.
+- **Camera (Android 15 and 11):** all the camera checks above.
+- **Android 11:** board sections were not run (the shorter screen hides row 4 behind
+  the tab bar); camera and permission checks were run there.
+
+## Corrections to the test harness during this phase
+These failures were in the test harness, not the app. Each was investigated, and the
+run repeated or re-evaluated:
+- taps on buttons hidden behind the tab bar;
+- text typed while the on-screen keyboard covered the second field;
+- a persistence check expecting a speed the run never set;
+- a "small control" that was a chip clipped at the strip edge;
+- `pm revoke` killing the app.
+
+## Not verified natively (still needs the phone or a person)
+- Anything on the S24 Ultra or any physical device: real One UI, Samsung TTS, gesture
+  insets, real camera image quality.
+- Audible speech: speed perception, pronunciation sound, voice choice, volume and the
+  output route.
+- TalkBack, VoiceOver, Android Switch Access and iOS Switch Control. UiAutomator labels
+  were read, but **no screen reader or switch was used**.
+- **Online behaviour of the test build.** It has no keys, and turning the network on
+  would have sent requests to the production AI endpoints.
+- **A system font size change while the app is running.** On Android 15 the layout
+  stayed sized for the old scale until the app restarted; text was clipped until then.
+  Fixed in Phase 4, below.
+- iOS: no macOS here.
+
+---
+
+# Phase 4 — Live system font size change; reproducible build (03/10/2026)
+
+All results in this phase are **[emulator]**: Android 15 / API 35 (Pixel 7 profile,
+maximum system font scale 2.0) and Android 11 / API 30 (Pixel 4 profile, maximum 1.3).
+**These are not S24 Ultra results.** No screen reader, switch or human listener was
+involved.
+
+## Defect D5: changing the system font size while Voice is open
+**Reproduced on the Phase 3 build** (Android 15, sentence "I want help" on screen):
+- **The sentence was erased.** It was lost both from 1.0 to 1.3 and from 2.0 to 1.0.
+  Android relaunched the activity (Expo's `configChanges` lacks `fontScale`), and React
+  Native re-ran the app, logging `Running "main"`.
+- **Text was cut off until the app was restarted** ("Communi…", "Tap words to build a",
+  "Sca", and "h…" on the suggestion chips). React Native lays text out with display
+  metrics read at start-up, and Android then draws it at the new size.
+
+**Approaches tried and measured before the fix:**
+
+| Approach | Sentence | Layout after live change |
+|---|---|---|
+| `fontScale` in `configChanges` only | kept | still the old layout (identical bounds) |
+| + React Native 0.81 `enableFontScaleChangesUpdatingLayout` flag | kept | still the old layout, with more text cut off. The flag is off in every React Native channel, can only be set with `dangerouslyForceOverride` (`override()` crashed at launch: "Feature flags cannot be overridden more than once"), and forcing a re-measure or a resize did not apply it. **Rejected.** |
+| + refresh the display metrics and `ReactHost.reload()` | lost, unless restored | **identical to a fresh start** |
+
+**Fix:**
+- **Config plugin** `plugins/withFontScaleConfigChange.js`, applied from `app.json`:
+  - it adds `fontScale` to the main activity's `configChanges`;
+  - `MainActivity` records the font scale at start-up;
+  - only on a real font-scale change, it calls
+    `DisplayMetricsHolder.initDisplayMetrics(this)` and then
+    `reactHost.reload("system font size changed")`.
+- **Board draft** (`src/services/sentenceDraft.js`): the board keeps the sentence and the
+  current page as a short-lived draft and restores them after the reload. A draft is
+  restored only when the font scale differs from when it was saved and it is under 2
+  minutes old, so an ordinary launch still starts empty.
+
+**Verified [emulator]:**
+- **Android 15.** A sentence was built, then the font scale changed live
+  1.0 → 1.3 → 2.0 → 1.0 (`scripts/native-ui/fontscale-compare.js`):
+  - the sentence was kept at every step;
+  - the bounds matched a fresh start at the same scale for the header, sentence, Speak,
+    Delete, the first suggestion chip, the "I want" and "like" grid buttons, Home and
+    Find. The comparison script's own result was "all key bounds identical";
+  - no crash;
+  - one reload per change.
+- **Android 11** (1.0 → 1.3 → 1.0): the same result.
+- **State checks, Android 15** (`fontscale-state.js`):
+  - "I want she" on the People page at 1.0 → 1.5: sentence and page restored, exactly
+    one reload;
+  - dark mode on: no reload, sentence kept;
+  - an ordinary restart at the same font size starts with an empty sentence.
+- **Automated tests:**
+  - `sentenceDraft.test.js` (6): restore, same-scale start, stale draft, consumed once,
+    corrupt input, storage failure;
+  - `fontScalePlugin.test.js` (5): app.json applies it, `configChanges`, the generated
+    activity code, idempotence, no feature-flag overrides.
+- **Not verified:** the reload with TalkBack running (focus and announcements after a
+  reload need a person); compact layout during a live change; Samsung's own font-size
+  and font-style settings on the S24.
+
+## Permissions from the committed configuration
+- **Reproducible build.** A clean `git clone` of `1d84543` (no `.env`), then
+  `npm ci --legacy-peer-deps`, `expo prebuild --clean`, the test identity, and
+  `assembleRelease assembleDebug`.
+- **Release APK requests:** `CAMERA`, `INTERNET`, `VIBRATE`, `ACCESS_NETWORK_STATE`,
+  `ACCESS_WIFI_STATE`.
+- **Debug APK:** the same plus `SYSTEM_ALERT_WINDOW`.
+- **Both APKs:** `configChanges` `0x400007b0`, which includes `fontScale`.
+- Files: `committed-release-apk-permissions.txt` and `committed-debug-apk-permissions.txt`.
+
+**Development overlays still work in debug [emulator]:**
+- **Setup.** The debug build was installed as a separate `….prtest.debug` app and loaded
+  its JS from Metro (1,229 modules).
+- **Prompt.** Expo's developer menu › Performance monitor opened Android's "Display over
+  other apps" settings. Only **one** "Voice PR7 Test" was listed: the debug build. The
+  release build declares no overlay permission, so it is absent.
+- **Result.** After allowing it, React Native's performance monitor ("UI: 60.0 fps")
+  appeared as an `APPLICATION_OVERLAY` window owned by the debug package.
+
+## Checks on the committed tree (clean clone of `1d84543`)
+- `npm run lint`: 0 errors, 15 warnings, the same set as before this PR's phases.
+- `npx jest --no-coverage --forceExit`: **31 suites, 224 tests, all passing**.
+- `npx expo config --type public`: OK.
+- `npx expo export --platform android`: OK.

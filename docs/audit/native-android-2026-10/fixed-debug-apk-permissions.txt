@@ -1,0 +1,9 @@
+package: com.elpabloawakens.aipoweredaacapp.prtest
+uses-permission: name='android.permission.SYSTEM_ALERT_WINDOW'
+uses-permission: name='android.permission.CAMERA'
+uses-permission: name='android.permission.INTERNET'
+uses-permission: name='android.permission.VIBRATE'
+uses-permission: name='android.permission.ACCESS_NETWORK_STATE'
+uses-permission: name='android.permission.ACCESS_WIFI_STATE'
+permission: com.elpabloawakens.aipoweredaacapp.prtest.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+uses-permission: name='com.elpabloawakens.aipoweredaacapp.prtest.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'
