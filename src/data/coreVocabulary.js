@@ -282,3 +282,40 @@ function getCustomButtons() {
 export function getHomePage() {
   return getPage('home');
 }
+
+/**
+ * Search every page (including custom words) for words matching a query.
+ * Results include the page each word lives on, so the user can learn its
+ * location instead of always relying on search. Navigation buttons are
+ * excluded. Words starting with the query rank before words containing it.
+ *
+ * @param {string} query
+ * @param {number} [limit=30]
+ * @returns {{ button: VocabButton, pageId: string, pageLabel: string }[]}
+ */
+export function searchVocabulary(query, limit = 30) {
+  const q = typeof query === 'string' ? query.trim().toLowerCase() : '';
+  if (!q) return [];
+  const starts = [];
+  const contains = [];
+  const seen = new Set();
+  for (const pageId of getPageIds()) {
+    const page = getPage(pageId);
+    if (!page) continue;
+    for (const button of page.buttons) {
+      if (button.navigateTo) continue;
+      const label = (button.label || '').toLowerCase();
+      const key = `${pageId}:${label}`;
+      if (seen.has(key)) continue;
+      const result = { button, pageId, pageLabel: page.label };
+      if (label.startsWith(q) || label.split(' ').some(w => w.startsWith(q))) {
+        seen.add(key);
+        starts.push(result);
+      } else if (label.includes(q)) {
+        seen.add(key);
+        contains.push(result);
+      }
+    }
+  }
+  return [...starts, ...contains].slice(0, limit);
+}

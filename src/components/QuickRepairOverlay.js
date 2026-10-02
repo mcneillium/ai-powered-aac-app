@@ -104,7 +104,7 @@ export default function QuickRepairOverlay() {
   const screenWidth = Dimensions.get('window').width;
   const numCols = screenWidth > 500 ? 4 : 3;
 
-  const scanRing = { borderColor: '#FF6600', borderWidth: 4 };
+  const scanRing = { borderColor: palette.focusRing, borderWidth: 4 };
 
   return (
     <>

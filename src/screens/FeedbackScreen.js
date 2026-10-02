@@ -171,7 +171,7 @@ export default function FeedbackScreen() {
           accessibilityLabel="Submit feedback"
         >
           <Ionicons name="send-outline" size={20} color="#FFF" />
-          <Text style={styles.submitText}>Submit</Text>
+          <Text style={[styles.submitText, { color: palette.buttonText }]}>Submit</Text>
         </TouchableOpacity>
       )}
     </ScrollView>

@@ -44,3 +44,38 @@ describe('theme', () => {
     expect(brand.primaryColor).toBeTruthy();
   });
 });
+
+// WCAG contrast — filled action colours carry icons/text in buttonText.
+function luminance(hex) {
+  const h = hex.replace('#', '');
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16) / 255)
+    .map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function contrast(a, b) {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+describe('theme contrast (WCAG AA)', () => {
+  const filled = ['primary', 'danger', 'info', 'success', 'warning', 'accent'];
+  Object.entries(palettes).forEach(([name, p]) => {
+    test(`${name}: buttonText on filled colours is at least 4.5:1`, () => {
+      filled.forEach(key => {
+        expect({ key, ratio: contrast(p.buttonText, p[key]) >= 4.5 }).toEqual({ key, ratio: true });
+      });
+    });
+
+    test(`${name}: body and secondary text are at least 4.5:1 on surfaces`, () => {
+      ['background', 'surface', 'cardBg', 'chipBg'].forEach(bg => {
+        expect(contrast(p.text, p[bg])).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(p.textSecondary, p[bg])).toBeGreaterThanOrEqual(4.5);
+      });
+    });
+
+    test(`${name}: scan focus ring is visible against the background (3:1)`, () => {
+      expect(p.focusRing).toBeDefined();
+      expect(contrast(p.focusRing, p.background)).toBeGreaterThanOrEqual(3);
+    });
+  });
+});

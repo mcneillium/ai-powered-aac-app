@@ -60,3 +60,32 @@ describe('coreVocabulary', () => {
     });
   });
 });
+
+describe('searchVocabulary', () => {
+  const { searchVocabulary } = require('../data/coreVocabulary');
+
+  test('finds words on other pages and reports the page', () => {
+    const results = searchVocabulary('pain');
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].pageLabel).toBeTruthy();
+    expect(results[0].button.label.toLowerCase()).toContain('pain');
+  });
+
+  test('ranks words that start with the query first', () => {
+    const results = searchVocabulary('he');
+    const firstContains = results.findIndex(r =>
+      !r.button.label.toLowerCase().split(' ').some(w => w.startsWith('he')));
+    const lastStarts = results.map(r =>
+      r.button.label.toLowerCase().split(' ').some(w => w.startsWith('he'))).lastIndexOf(true);
+    if (firstContains !== -1) expect(lastStarts).toBeLessThan(firstContains);
+  });
+
+  test('never returns navigation buttons', () => {
+    expect(searchVocabulary('food').every(r => !r.button.navigateTo)).toBe(true);
+  });
+
+  test('returns nothing for empty queries', () => {
+    expect(searchVocabulary('')).toEqual([]);
+    expect(searchVocabulary('   ')).toEqual([]);
+  });
+});

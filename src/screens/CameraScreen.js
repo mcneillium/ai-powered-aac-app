@@ -348,6 +348,8 @@ export default function CombinedImageScreen() {
 
 function PhraseGroup({ label, icon, color, phrases, speakPhrase, palette }) {
   if (!phrases || phrases.length === 0) return null;
+  // Group colours are palette accents, so use the palette's matching foreground.
+  const textColor = palette.buttonText;
   return (
     <View style={styles.phrasesContainer}>
       <View style={styles.phrasesHeader}>
@@ -363,7 +365,7 @@ function PhraseGroup({ label, icon, color, phrases, speakPhrase, palette }) {
             accessibilityRole="button"
             accessibilityLabel={`${label}: ${phrase}`}
           >
-            <Text style={[styles.phraseChipText, { color: '#FFF' }]}>{phrase}</Text>
+            <Text style={[styles.phraseChipText, { color: textColor }]}>{phrase}</Text>
           </TouchableOpacity>
         ))}
       </View>
