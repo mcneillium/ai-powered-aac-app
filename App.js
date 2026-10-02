@@ -123,7 +123,9 @@ function MainApp() {
         <Tab.Screen
           name="AAC Board"
           component={AACBoardScreen}
-          options={{ title: 'Communicate' }}
+          // Compact layout (opt-in) hides this header to give the word grid
+          // more room; Settings is then reachable from the board's page row.
+          options={{ title: 'Communicate', headerShown: settings.compactLayout !== true }}
         />
         <Tab.Screen
           name="Contexts"
@@ -263,6 +265,9 @@ const styles = StyleSheet.create({
   },
   headerBtn: {
     marginRight: Platform.OS === 'ios' ? 16 : 12,
-    padding: 4,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -57,6 +57,8 @@ const STRINGS = {
     findWordAdd: 'Add to sentence',
     findWordShowPage: 'Show where it is',
     close: 'Close',
+    moreActions: 'More actions',
+    moreActionsLabel: 'More actions: favourites, history, show on screen, camera, voice style',
     speechUnavailable: 'No speech voice responded. Your message is still on screen. Check that a text-to-speech voice is installed in your device settings.',
     speechFailed: 'Speech stopped with an error. Your message is still on screen. Tap Speak to try again.',
 

@@ -57,6 +57,8 @@ import { getAACPhraseSuggestions } from '../services/vertexAISuggestions';
 import DisplayMode from '../components/DisplayMode';
 import VoicePresetPicker from '../components/VoicePresetPicker';
 import WordFinder from '../components/WordFinder';
+import MoreActionsMenu from '../components/MoreActionsMenu';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { openQuickPhrases, setQuickPhrasesButtonHidden } from '../components/QuickRepairOverlay';
 import {
   setScanItems, setScanMode, setScanSpeed, getScanState,
@@ -87,6 +89,8 @@ export default function AACBoardScreen() {
   // history can be undone. Cleared once the user adds a new word.
   const [undoWords, setUndoWords] = useState(null);
   const [showFinder, setShowFinder] = useState(false);
+  const [showMore, setShowMore] = useState(false);
+  const insets = useSafeAreaInsets();
   const [speechProblem, setSpeechProblem] = useState(null); // null | 'unavailable' | 'failed'
   const sentenceBarRef = useRef(null);
   const sentenceScrollRef = useRef(null);
@@ -113,6 +117,9 @@ export default function AACBoardScreen() {
   const predictionEnabled = settings.predictionEnabled !== false;
   const speakWordsOnTap = settings.speakWordsOnTap !== false;
   const textScale = settings.textScale || 1;
+  // Opt-in layout for small screens. Never switched on automatically, so
+  // existing users' button positions only change if they choose it.
+  const compact = settings.compactLayout === true;
 
   // One set of speech options for every utterance on this screen, so the
   // user's voice, speed and pitch (plus the chosen voice style) always apply.
@@ -562,6 +569,7 @@ export default function AACBoardScreen() {
   }, [handleButtonPress, numColumns, palette, settings.theme, isScanFocused, textScale, scanRingStyle]);
 
   const hasWords = sentenceWords.length > 0;
+  const sentenceLineHeight = Math.round(26 * textScale);
   const showScanBar = settings.showScanControls !== false || scanActive;
   const isHome = currentPageId === 'home';
 
@@ -586,8 +594,96 @@ export default function AACBoardScreen() {
     </TouchableOpacity>
   );
 
+  const speakButton = actionButton({
+    onPress: speakSentence,
+    icon: 'volume-high',
+    iconSize: 24,
+    bg: palette.primary,
+    label: hasWords ? `Speak sentence: ${sentenceWords.join(' ')}` : 'Speak button. Build a sentence first.',
+    disabled: !hasWords,
+    scanId: 'speak',
+    style: styles.speakBtn,
+  });
+  const deleteButton = actionButton({
+    onPress: removeLastWord, icon: 'backspace-outline', bg: palette.danger,
+    label: t('deleteLastWord'), disabled: !hasWords, scanId: 'backspace',
+  });
+  const clearButton = actionButton({
+    onPress: clearSentence, icon: 'trash-outline', bg: palette.danger,
+    label: t('clearSentence'), disabled: !hasWords, scanId: 'clear',
+  });
+  const toggleFavourites = () => { setShowFavourites(f => !f); setShowHistory(false); };
+  const toggleHistory = () => { setShowHistory(h => !h); setShowFavourites(false); };
+  const favListButton = actionButton({
+    onPress: toggleFavourites, icon: 'star', iconSize: 18, bg: palette.warning,
+    label: showFavourites ? t('hideFavourites') : t('showFavourites'),
+  });
+  const historyButton = actionButton({
+    onPress: toggleHistory, icon: 'time-outline', iconSize: 18, bg: palette.info,
+    label: showHistory ? t('hideHistory') : t('showHistory'),
+  });
+  const cameraButton = actionButton({
+    onPress: () => navigation.navigate('Camera'),
+    icon: 'camera-outline', iconSize: 18, bg: palette.accent,
+    label: t('openCamera'),
+  });
+  const undoButton = actionButton({
+    onPress: undo, icon: 'arrow-undo-outline', iconSize: 18, bg: palette.chipBg, fg: palette.text,
+    label: undoWords ? t('undoLabel') : t('nothingToUndo'), disabled: !undoWords, scanId: 'undo',
+  });
+  const favToggleButton = actionButton({
+    onPress: handleToggleFavourite,
+    icon: isCurrentFavourite ? 'star' : 'star-outline',
+    iconSize: 18,
+    bg: isCurrentFavourite ? palette.warning : palette.chipBg,
+    fg: isCurrentFavourite ? palette.buttonText : palette.text,
+    label: isCurrentFavourite ? t('removeFromFavourites') : t('addToFavourites'),
+    disabled: !hasWords,
+  });
+  const displayButton = actionButton({
+    onPress: () => setDisplayMode('display'),
+    icon: 'tv-outline', iconSize: 18, bg: palette.chipBg, fg: palette.text,
+    label: t('showOnScreen'),
+    disabled: !hasWords,
+  });
+  const quickButton = actionButton({
+    onPress: openQuickPhrases,
+    icon: 'flash', iconSize: 18, bg: palette.primary,
+    label: t('quickPhrasesLabel'),
+  });
+  const moreButton = actionButton({
+    onPress: () => setShowMore(true),
+    icon: 'ellipsis-horizontal', iconSize: 20, bg: palette.chipBg, fg: palette.text,
+    label: t('moreActionsLabel'),
+  });
+  const moreItems = [
+    { key: 'favs', icon: 'star', label: showFavourites ? t('hideFavourites') : t('showFavourites'), onPress: toggleFavourites },
+    { key: 'history', icon: 'time-outline', label: showHistory ? t('hideHistory') : t('showHistory'), onPress: toggleHistory },
+    {
+      key: 'favToggle', icon: isCurrentFavourite ? 'star' : 'star-outline',
+      label: isCurrentFavourite ? t('removeFromFavourites') : t('addToFavourites'),
+      onPress: handleToggleFavourite, disabled: !hasWords,
+    },
+    { key: 'display', icon: 'tv-outline', label: t('showOnScreen'), onPress: () => setDisplayMode('display'), disabled: !hasWords },
+    { key: 'camera', icon: 'camera-outline', label: t('openCamera'), onPress: () => navigation.navigate('Camera') },
+  ];
+
+  // Small square icon button used by the compact page row.
+  const iconButton = ({ onPress, icon, label, disabled, active }) => (
+    <TouchableOpacity
+      onPress={onPress}
+      disabled={disabled}
+      style={[styles.iconBtn, { backgroundColor: active ? palette.focusRing : palette.surface }, disabled && styles.disabled]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled, selected: !!active }}
+    >
+      <Ionicons name={icon} size={20} color={active ? '#000' : palette.text} />
+    </TouchableOpacity>
+  );
+
   return (
-    <View style={[styles.container, { backgroundColor: palette.background }]}>
+    <View style={[styles.container, { backgroundColor: palette.background }, compact && { paddingTop: insets.top }]}>
       {/* Sentence bar — words on top, actions below */}
       <View
         ref={sentenceBarRef}
@@ -597,7 +693,9 @@ export default function AACBoardScreen() {
             whole bar hid the action buttons from VoiceOver / Switch Control. */}
         <ScrollView
           ref={sentenceScrollRef}
-          style={{ height: Math.round(64 * textScale) }}
+          // Standard: two lines. Compact: exactly one line (no half-cut line);
+          // earlier words scroll and the whole message can be shown on screen.
+          style={{ height: compact ? sentenceLineHeight + 8 : Math.round(64 * textScale) }}
           contentContainerStyle={styles.sentenceWords}
           onContentSizeChange={() => sentenceScrollRef.current?.scrollToEnd({ animated: false })}
           accessible
@@ -617,7 +715,7 @@ export default function AACBoardScreen() {
             sentenceWords.map((word, i) => (
               <Text
                 key={`${i}-${word}`}
-                style={[styles.sentenceWord, { color: palette.text, fontSize: Math.round(20 * textScale) }]}
+                style={[styles.sentenceWord, { color: palette.text, fontSize: Math.round(20 * textScale), lineHeight: sentenceLineHeight }]}
               >
                 {word}
               </Text>
@@ -625,75 +723,27 @@ export default function AACBoardScreen() {
           )}
         </ScrollView>
 
-        {/* Action buttons — fixed order so their positions never move */}
-        <View style={styles.sentenceActions}>
-          {actionButton({
-            onPress: speakSentence,
-            icon: 'volume-high',
-            iconSize: 24,
-            bg: palette.primary,
-            label: hasWords ? `Speak sentence: ${sentenceWords.join(' ')}` : 'Speak button. Build a sentence first.',
-            disabled: !hasWords,
-            scanId: 'speak',
-            style: styles.speakBtn,
-          })}
-          {actionButton({
-            onPress: removeLastWord, icon: 'backspace-outline', bg: palette.danger,
-            label: t('deleteLastWord'), disabled: !hasWords, scanId: 'backspace',
-          })}
-          {actionButton({
-            onPress: clearSentence, icon: 'trash-outline', bg: palette.danger,
-            label: t('clearSentence'), disabled: !hasWords, scanId: 'clear',
-          })}
-          {actionButton({
-            onPress: () => { setShowFavourites(f => !f); setShowHistory(false); },
-            icon: 'star', iconSize: 18, bg: palette.warning,
-            label: showFavourites ? t('hideFavourites') : t('showFavourites'),
-          })}
-          {actionButton({
-            onPress: () => { setShowHistory(h => !h); setShowFavourites(false); },
-            icon: 'time-outline', iconSize: 18, bg: palette.info,
-            label: showHistory ? t('hideHistory') : t('showHistory'),
-          })}
-          {actionButton({
-            onPress: () => navigation.navigate('Camera'),
-            icon: 'camera-outline', iconSize: 18, bg: palette.accent,
-            label: t('openCamera'),
-          })}
-          {actionButton({
-            onPress: undo, icon: 'arrow-undo-outline', iconSize: 18, bg: palette.chipBg, fg: palette.text,
-            label: undoWords ? t('undoLabel') : t('nothingToUndo'), disabled: !undoWords, scanId: 'undo',
-          })}
-          {actionButton({
-            onPress: handleToggleFavourite,
-            icon: isCurrentFavourite ? 'star' : 'star-outline',
-            iconSize: 18,
-            bg: isCurrentFavourite ? palette.warning : palette.chipBg,
-            fg: isCurrentFavourite ? palette.buttonText : palette.text,
-            label: isCurrentFavourite ? t('removeFromFavourites') : t('addToFavourites'),
-            disabled: !hasWords,
-          })}
-          {actionButton({
-            onPress: () => setDisplayMode('display'),
-            icon: 'tv-outline', iconSize: 18, bg: palette.chipBg, fg: palette.text,
-            label: t('showOnScreen'),
-            disabled: !hasWords,
-          })}
-          {actionButton({
-            onPress: openQuickPhrases,
-            icon: 'flash', iconSize: 18, bg: palette.primary,
-            label: t('quickPhrasesLabel'),
-          })}
-        </View>
+        {/* Action buttons — fixed order so their positions never move.
+            Compact layout: one row of core actions + More. */}
+        {compact ? (
+          <View style={[styles.sentenceActions, styles.sentenceActionsCompact]}>
+            {speakButton}{deleteButton}{clearButton}{undoButton}{quickButton}{moreButton}
+          </View>
+        ) : (
+          <View style={styles.sentenceActions}>
+            {speakButton}{deleteButton}{clearButton}{favListButton}{historyButton}
+            {cameraButton}{undoButton}{favToggleButton}{displayButton}{quickButton}
+          </View>
+        )}
       </View>
 
       {/* Voice preset picker (optional) */}
-      {settings.showVoiceStyles !== false && (
+      {!compact && settings.showVoiceStyles !== false && (
         <VoicePresetPicker activePreset={voicePreset} onSelect={setVoicePreset} />
       )}
 
       {/* Scan control bar (optional; always shown while scanning so it can be stopped) */}
-      {showScanBar && (
+      {!compact && showScanBar && (
       <View style={[styles.scanBar, { backgroundColor: palette.surface, borderColor: palette.border }]}>
         <TouchableOpacity
           onPress={toggleScan}
@@ -864,7 +914,10 @@ export default function AACBoardScreen() {
           suggestions appear or disappear (protects learned motor plans). */}
       {predictionEnabled && (
         <View
-          style={[styles.suggestionsBar, { backgroundColor: palette.surface, minHeight: Math.round(56 * Math.min(textScale, 1.25)) }]}
+          // A fixed height (not minHeight): chips with a reason line are
+          // taller than an empty row, and the grid must not move when they
+          // appear. Compact layout uses the same height for that reason.
+          style={[styles.suggestionsBar, { backgroundColor: palette.surface, height: Math.round(56 * Math.min(textScale, 1.25)) }]}
         >
           <Ionicons name="sparkles-outline" size={16} color={palette.textSecondary} style={{ marginRight: 4 }} />
           {suggestions.length === 0 ? (
@@ -901,8 +954,25 @@ export default function AACBoardScreen() {
         </View>
       )}
 
-      {/* Navigation row — always present (also on Home) so the grid starts
-          at the same place on every page. */}
+      {/* Compact page row: icon-only buttons, plus Scan and Settings (the
+          board header is hidden in compact layout). Always present. */}
+      {compact ? (
+        <View style={[styles.breadcrumb, styles.breadcrumbCompact]}>
+          {iconButton({ onPress: goHome, icon: 'home-outline', label: t('goHome'), disabled: isHome })}
+          {iconButton({ onPress: goBack, icon: 'arrow-back', label: t('goBack'), disabled: pageHistory.length === 0 })}
+          <Text style={[styles.pageTitle, { color: palette.text, flex: 1 }]} numberOfLines={1} accessibilityRole="header">
+            {currentPage.label}
+          </Text>
+          {iconButton({ onPress: () => setShowFinder(true), icon: 'search', label: t('findWordLabel') })}
+          {settings.showScanControls !== false && iconButton({
+            onPress: toggleScan, icon: scanActive ? 'stop' : 'scan-outline',
+            label: scanActive ? t('stopScanning') : t('startScanning'), active: scanActive,
+          })}
+          {iconButton({ onPress: () => navigation.navigate('Settings'), icon: 'settings-outline', label: 'Open settings' })}
+        </View>
+      ) : (
+      // Standard navigation row — always present (also on Home) so the grid
+      // starts at the same place on every page.
       <View style={styles.breadcrumb}>
         <TouchableOpacity
           onPress={goHome}
@@ -939,13 +1009,19 @@ export default function AACBoardScreen() {
           <Text style={[styles.breadcrumbText, { color: palette.text }]}>{t('findWord')}</Text>
         </TouchableOpacity>
       </View>
+      )}
 
       {/* Speech problem notice — overlays (does not move the grid) and lets
           taps pass through to the buttons underneath. */}
       {speechProblem && (
         <View
           pointerEvents="none"
-          style={[styles.speechNotice, { backgroundColor: palette.text }]}
+          style={[
+            styles.speechNotice,
+            // Sit above the tab bar and above the compact scanning strip so
+            // neither is covered.
+            { backgroundColor: palette.text, bottom: 60 + insets.bottom + (compact && scanActive ? 76 : 12) },
+          ]}
           accessibilityLiveRegion="assertive"
           accessibilityRole="alert"
         >
@@ -956,13 +1032,51 @@ export default function AACBoardScreen() {
         </View>
       )}
 
+      {/* Compact layout scanning strip: overlays the bottom of the grid
+          instead of inserting a row, so words do not move when scanning
+          starts. Scan mode and speed are set in Settings. */}
+      {compact && scanActive && (
+        <View style={[styles.scanStrip, { backgroundColor: palette.surface, borderColor: palette.focusRing, bottom: 60 + insets.bottom }]}>
+          <TouchableOpacity
+            onPress={toggleScan}
+            style={[styles.scanOptionBtn, { backgroundColor: palette.focusRing }]}
+            accessibilityRole="button"
+            accessibilityLabel={t('stopScanning')}
+          >
+            <Text style={[styles.scanOptionText, { color: '#000' }]}>{t('stopScanning')}</Text>
+          </TouchableOpacity>
+          {getScanState().scanMode === 'step' ? (
+            <>
+              <TouchableOpacity onPress={advanceScan} style={[styles.scanOptionBtn, { backgroundColor: palette.info }]}
+                accessibilityRole="button" accessibilityLabel={t('scanNext')}>
+                <Text style={[styles.scanOptionText, { color: palette.buttonText }]}>{t('scanNext')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={selectCurrent} style={[styles.scanOptionBtn, { backgroundColor: palette.primary }]}
+                accessibilityRole="button" accessibilityLabel={t('scanSelect')}>
+                <Text style={[styles.scanOptionText, { color: palette.buttonText }]}>{t('scanSelect')}</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Text style={[styles.scanHintText, { color: palette.text }]}>{t('scanningSelectHint')}</Text>
+          )}
+        </View>
+      )}
+
+      <MoreActionsMenu
+        visible={showMore}
+        onClose={() => setShowMore(false)}
+        items={moreItems}
+        voicePreset={voicePreset}
+        onSelectVoicePreset={setVoicePreset}
+      />
+
       {/* Vocabulary grid */}
       <FlatList
         data={currentPage.buttons}
         keyExtractor={(item) => item.id}
         numColumns={numColumns}
         key={`grid-${numColumns}`}
-        contentContainerStyle={styles.grid}
+        contentContainerStyle={[styles.grid, compact && scanActive && { paddingBottom: 150 }]}
         renderItem={renderButton}
         extraData={scanFocusIndex}
         removeClippedSubviews={false}
@@ -1014,8 +1128,17 @@ const styles = StyleSheet.create({
   historyMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
   rowIconBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   disabled: { opacity: 0.4 },
+  sentenceActionsCompact: { flexWrap: 'nowrap', justifyContent: 'space-between' },
+  breadcrumbCompact: { gap: 6, paddingVertical: 4 },
+  iconBtn: { width: 44, height: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  scanStrip: {
+    position: 'absolute', left: 8, right: 8, zIndex: 15,
+    flexDirection: 'row', alignItems: 'center', gap: 8, padding: 6,
+    borderRadius: 12, borderWidth: 2,
+  },
+  scanHintText: { flex: 1, fontSize: 13, fontWeight: '600' },
   speechNotice: {
-    position: 'absolute', left: 12, right: 12, bottom: 96, zIndex: 20,
+    position: 'absolute', left: 12, right: 12, zIndex: 20,
     flexDirection: 'row', alignItems: 'center', gap: 8,
     padding: 12, borderRadius: 10, opacity: 0.95,
   },
@@ -1043,7 +1166,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingVertical: 4,
   },
   suggestionChip: {
     paddingHorizontal: 14,

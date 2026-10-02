@@ -30,6 +30,7 @@ const defaultSettings = {
   textScale: 1,              // board text size: 1 | 1.25 | 1.5
   showVoiceStyles: true,     // show the voice-style bar on the board
   showScanControls: true,    // show the switch-scanning bar on the board
+  compactLayout: false,      // opt-in small-screen layout (never enabled automatically)
 };
 
 export { defaultSettings };

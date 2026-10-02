@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
+  useWindowDimensions,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Linking } from 'react-native';
@@ -35,6 +36,8 @@ export default function SettingsScreen() {
   const [voices, setVoices] = useState([]);
   const [loadingVoices, setLoadingVoices] = useState(true);
   const [learnedData, setLearnedData] = useState(false);
+  const { height: windowHeight } = useWindowDimensions();
+  const isSmallScreen = windowHeight < 700;
   const [pronunciations, setPronunciations] = useState([]);
   const [newWritten, setNewWritten] = useState('');
   const [newSpoken, setNewSpoken] = useState('');
@@ -341,6 +344,17 @@ export default function SettingsScreen() {
       <Text style={[styles.sectionTitle, { color: palette.text, borderBottomColor: palette.border }]} accessibilityRole="header">
         Board & Communication
       </Text>
+      {switchRow(
+        'Compact layout',
+        'For small screens. Puts the most-used actions in one row (favourites, history and voice style move into a More menu) and hides the page header, so more words fit. Changes where some buttons are, so it is off unless you turn it on.',
+        settings.compactLayout === true,
+        (val) => updateSettings({ compactLayout: val })
+      )}
+      {isSmallScreen && settings.compactLayout !== true && (
+        <Text style={[styles.helperText, { color: palette.textSecondary, marginTop: -8, marginBottom: 8 }]}>
+          This screen is small. Compact layout shows about twice as many rows of words.
+        </Text>
+      )}
       <Text style={[styles.label, { color: palette.text }]}>Button Text Size</Text>
       <View style={styles.gridSizeRow}>
         {[[1, 'Standard'], [1.25, 'Large'], [1.5, 'Extra large']].map(([scale, name]) => {
@@ -379,6 +393,45 @@ export default function SettingsScreen() {
         settings.showVoiceStyles !== false,
         (val) => updateSettings({ showVoiceStyles: val })
       )}
+      <Text style={[styles.label, { color: palette.text }]}>Switch scanning</Text>
+      <View style={styles.gridSizeRow}>
+        {[['auto', 'Auto scan'], ['step', 'Step scan']].map(([mode, name]) => {
+          const selected = (settings.scanMode || 'auto') === mode;
+          return (
+            <TouchableOpacity
+              key={mode}
+              style={[styles.gridSizeBtn, { backgroundColor: selected ? palette.primary : palette.surface, borderColor: palette.border }]}
+              onPress={() => updateSettings({ scanMode: mode })}
+              accessibilityRole="button"
+              accessibilityLabel={name}
+              accessibilityState={{ selected }}
+            >
+              <Text style={{ color: selected ? palette.buttonText : palette.text, fontSize: 15, fontWeight: '600' }}>{name}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <View style={styles.gridSizeRow}>
+        <TouchableOpacity
+          style={[styles.gridSizeBtn, { backgroundColor: palette.surface, borderColor: palette.border }]}
+          onPress={() => updateSettings({ scanSpeed: Math.min(5000, (settings.scanSpeed || 1500) + 500) })}
+          accessibilityRole="button"
+          accessibilityLabel={`Scan slower. Currently ${((settings.scanSpeed || 1500) / 1000).toFixed(1)} seconds per item`}
+        >
+          <Text style={{ color: palette.text, fontSize: 15, fontWeight: '600' }}>Slower</Text>
+        </TouchableOpacity>
+        <Text style={[styles.label, { color: palette.text, marginTop: 0, alignSelf: 'center' }]}>
+          {((settings.scanSpeed || 1500) / 1000).toFixed(1)}s
+        </Text>
+        <TouchableOpacity
+          style={[styles.gridSizeBtn, { backgroundColor: palette.surface, borderColor: palette.border }]}
+          onPress={() => updateSettings({ scanSpeed: Math.max(500, (settings.scanSpeed || 1500) - 500) })}
+          accessibilityRole="button"
+          accessibilityLabel={`Scan faster. Currently ${((settings.scanSpeed || 1500) / 1000).toFixed(1)} seconds per item`}
+        >
+          <Text style={{ color: palette.text, fontSize: 15, fontWeight: '600' }}>Faster</Text>
+        </TouchableOpacity>
+      </View>
       {switchRow(
         'Show switch scanning bar',
         'Scanning controls on the board for switch users.',
