@@ -3,8 +3,8 @@ import {
   ScrollView, View, Text, TextInput, TouchableOpacity,
   Alert, StyleSheet, ActivityIndicator,
 } from 'react-native';
-import { getDatabase, ref, push } from 'firebase/database';
-import { getAuth } from 'firebase/auth';
+import { ref, push } from 'firebase/database';
+import { auth as cloudAuth, db as cloudDb } from '../../firebaseConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
@@ -14,9 +14,10 @@ import { getPalette } from '../theme';
 const FEEDBACK_QUEUE_KEY = '@aac_feedback_queue';
 
 async function sendEntry(entry) {
-  const uid = getAuth().currentUser?.uid;
-  if (!uid) throw new Error('Not signed in');
-  await push(ref(getDatabase(), `feedback/${uid}`), entry);
+  // Without cloud services, feedback stays queued on the device.
+  const uid = cloudAuth?.currentUser?.uid;
+  if (!uid || !cloudDb) throw new Error('Not signed in');
+  await push(ref(cloudDb, `feedback/${uid}`), entry);
 }
 
 // Send any feedback saved while offline. Entries that fail stay queued.

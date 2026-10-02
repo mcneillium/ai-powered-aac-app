@@ -25,6 +25,7 @@ import {
   loadPronunciations, getPronunciations, setPronunciation, removePronunciation,
 } from '../services/pronunciationStore';
 import packageJson from '../../package.json';
+import CloudUnavailableNotice from '../components/CloudUnavailableNotice';
 
 export default function SettingsScreen() {
   const { settings, loading: settingsLoading, updateSettings } = useSettings();
@@ -414,6 +415,7 @@ export default function SettingsScreen() {
         />
       </View>
 
+      <CloudUnavailableNotice feature="Online suggestions and cloud sync" />
       <View style={styles.switchContainer}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.label, { color: palette.text, marginTop: 0 }]}>Online suggestions</Text>

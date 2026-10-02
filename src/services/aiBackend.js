@@ -18,7 +18,7 @@ export const ENDPOINTS = {
 
 async function getIdToken() {
   try {
-    return (await auth.currentUser?.getIdToken()) || null;
+    return (await auth?.currentUser?.getIdToken()) || null;
   } catch {
     return null;
   }

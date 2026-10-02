@@ -34,6 +34,20 @@ const defaultSettings = {
 
 export { defaultSettings };
 
+/**
+ * Merge cloud settings into local ones. Cloud values only win when they are
+ * real values: a missing, null or non-object snapshot never wipes local
+ * settings. Exported for tests.
+ */
+export function mergeRemoteSettings(local, remote) {
+  if (!remote || typeof remote !== 'object' || Array.isArray(remote)) return local;
+  const merged = { ...local };
+  for (const [key, value] of Object.entries(remote)) {
+    if (value !== null && value !== undefined) merged[key] = value;
+  }
+  return merged;
+}
+
 export const SettingsContext = createContext({
   settings: defaultSettings,
   loading: true,
@@ -48,6 +62,13 @@ export function SettingsProvider({ children }) {
   // of on a stale render's copy (which silently dropped earlier changes).
   const latestSettings = useRef(defaultSettings);
   latestSettings.current = settings;
+  // Resolves once local settings are read. Cloud sync and updates wait for it
+  // so defaults can never be written over the user's saved settings.
+  const localLoaded = useRef(null);
+  if (!localLoaded.current) {
+    let resolve;
+    localLoaded.current = { promise: new Promise(r => { resolve = r; }), resolve };
+  }
 
   // Load from AsyncStorage first (instant, offline-safe)
   useEffect(() => {
@@ -56,13 +77,15 @@ export function SettingsProvider({ children }) {
         const stored = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
         const parsed = await safeParse(SETTINGS_STORAGE_KEY, stored, null);
         if (parsed && typeof parsed === 'object') {
-          setSettings(prev => ({ ...prev, ...parsed }));
+          latestSettings.current = { ...latestSettings.current, ...parsed };
+          setSettings(latestSettings.current);
         }
       } catch (e) {
         console.warn('Failed to load local settings:', e);
       }
       // Always finish loading after local read, even if it fails
       setLoading(false);
+      localLoaded.current.resolve();
     })();
   }, []);
 
@@ -70,8 +93,10 @@ export function SettingsProvider({ children }) {
   // Re-subscribes when the user changes (login/logout)
   useEffect(() => {
     // Anonymous (guest) sessions stay local-only — no cloud settings sync.
+    // Wait for local settings first: a cloud snapshot arriving earlier used to
+    // be merged into defaults and saved over the user's local settings.
     const uid = user && !user.isAnonymous ? user.uid : null;
-    if (!uid) return;
+    if (!uid || !db || loading) return undefined;
 
     const settingsRef = ref(db, dbPath(DB_PATHS.USER_SETTINGS, uid));
     const unsubscribe = onValue(
@@ -80,7 +105,8 @@ export function SettingsProvider({ children }) {
         if (snapshot.exists()) {
           const remote = snapshot.val();
           setSettings(prev => {
-            const merged = { ...prev, ...remote };
+            const merged = mergeRemoteSettings(prev, remote);
+            if (merged === prev) return prev;
             latestSettings.current = merged;
             // Persist the merged result locally
             AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(merged)).catch(() => {});
@@ -95,10 +121,11 @@ export function SettingsProvider({ children }) {
     );
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, loading]);
 
   // Update settings: write to AsyncStorage immediately, sync to Firebase if possible
   const updateSettings = useCallback(async (updates) => {
+    await localLoaded.current.promise;
     const newSettings = { ...latestSettings.current, ...updates };
     latestSettings.current = newSettings;
     setSettings(newSettings);
@@ -113,7 +140,7 @@ export function SettingsProvider({ children }) {
     // Try Firebase sync (non-blocking; guests stay local-only)
     try {
       const uid = user && !user.isAnonymous ? user.uid : null;
-      if (uid) {
+      if (uid && db) {
         await set(ref(db, dbPath(DB_PATHS.USER_SETTINGS, uid)), newSettings);
       }
     } catch (e) {

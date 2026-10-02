@@ -8,8 +8,10 @@ import {
   ActivityIndicator, Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getAuth, signOut, deleteUser } from 'firebase/auth';
-import { getDatabase, ref, remove } from 'firebase/database';
+import { signOut, deleteUser } from 'firebase/auth';
+import { ref, remove } from 'firebase/database';
+import { auth as cloudAuth, db as cloudDb } from '../../firebaseConfig';
+import CloudUnavailableNotice from '../components/CloudUnavailableNotice';
 import { useNavigation } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -28,7 +30,7 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     try {
-      await signOut(getAuth());
+      if (cloudAuth) await signOut(cloudAuth);
     } catch (e) {
       Alert.alert('Error', 'Could not log out. Please try again.');
     }
@@ -45,13 +47,13 @@ export default function ProfileScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const currentUser = getAuth().currentUser;
+              const currentUser = cloudAuth?.currentUser;
               if (!currentUser) return;
               const uid = currentUser.uid;
 
               // Delete all user data from Firebase
               try {
-                const db = getDatabase();
+                const db = cloudDb;
                 await Promise.all([
                   remove(ref(db, `users/${uid}`)),
                   remove(ref(db, `userSettings/${uid}`)),
@@ -129,6 +131,7 @@ export default function ProfileScreen() {
           {account?.email || 'Sign in to sync your settings and data'}
         </Text>
       </View>
+      <CloudUnavailableNotice />
 
       <View style={styles.actions}>
         <TouchableOpacity

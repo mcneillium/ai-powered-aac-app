@@ -4,8 +4,8 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
-import { getDatabase, ref, get } from 'firebase/database';
-import { auth } from '../../firebaseConfig';
+import { ref, get } from 'firebase/database';
+import { auth, db } from '../../firebaseConfig';
 
 const AuthContext = createContext();
 
@@ -16,6 +16,11 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    // Firebase not configured: everyone is a local guest; nothing to wait for.
+    if (!auth) {
+      setLoading(false);
+      return undefined;
+    }
     const unsubscribe = onAuthStateChanged(
       auth,
       async (u) => {
@@ -26,7 +31,6 @@ export function AuthProvider({ children }) {
           } else {
             // Fetch role from database (non-blocking on failure)
             try {
-              const db = getDatabase();
               const snap = await get(ref(db, `users/${u.uid}/role`));
               setRole(snap.exists() ? snap.val() : 'user');
             } catch {

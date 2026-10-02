@@ -1,10 +1,9 @@
 // src/utils/enhancedLogger.js
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getAuth } from 'firebase/auth';
 import packageJson from '../../package.json';
 import { ref, push, set, serverTimestamp } from 'firebase/database';
-import { db } from '../../firebaseConfig';
+import { db, auth as cloudAuth } from '../../firebaseConfig';
 import NetInfo from '@react-native-community/netinfo';
 
 // Maximum number of logs to store locally before auto-sync
@@ -129,7 +128,7 @@ export async function logEvent(action, metadata = {}, level = 'info') {
       return null;
     }
     
-    const auth = getAuth();
+    const auth = cloudAuth || { currentUser: null }; // null when Firebase is not configured
     const currentUser = auth.currentUser;
     
     // Determine user IDs
@@ -220,7 +219,7 @@ async function getDeviceInfo() {
  */
 export async function syncLogsToFirebase() {
   try {
-    const auth = getAuth();
+    const auth = cloudAuth || { currentUser: null }; // null when Firebase is not configured
     if (!auth.currentUser || auth.currentUser.isAnonymous) {
       console.log('Not logged in, skipping sync');
       return false;
