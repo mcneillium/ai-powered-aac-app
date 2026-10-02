@@ -14,7 +14,7 @@ const PKG = process.env.PKG || 'com.elpabloawakens.aipoweredaacapp.prtest';
 const SERIAL = process.env.SERIAL || '';
 const RUN = process.env.RUN || 'run';
 const OUT = path.join(process.env.EVIDENCE_DIR || path.join(process.cwd(), 'native-ui-evidence'), RUN);
-if (!PKG.endsWith('.prtest')) throw new Error(`refusing to drive ${PKG}: only the .prtest test app`);
+if (!/^com\.elpabloawakens\.aipoweredaacapp\.prtest[0-9a-z]*(\.debug)?$/.test(PKG)) throw new Error(`refusing to drive ${PKG}: only .prtest test apps`);
 fs.mkdirSync(OUT, { recursive: true });
 
 const log = [];
