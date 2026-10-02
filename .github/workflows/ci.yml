@@ -40,8 +40,10 @@ jobs:
           EXPO_PUBLIC_FIREBASE_APP_ID: test
           EXPO_PUBLIC_GOOGLE_CLOUD_VISION_API_KEY: test
 
-      - name: Export web bundle (build check)
-        run: npx expo export --platform web
+      # The app ships for Android/iOS only (react-native-web is not a
+      # dependency), so the build check bundles the Android target.
+      - name: Export Android bundle (build check)
+        run: npx expo export --platform android
         env:
           EXPO_PUBLIC_FIREBASE_API_KEY: test
           EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: test.firebaseapp.com
