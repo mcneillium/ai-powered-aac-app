@@ -20,6 +20,7 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
@@ -29,6 +30,9 @@ import { speak, stop, buildSpeechOptions, subscribeSpeechStatus } from '../servi
 import { getHomePage, getPage } from '../data/coreVocabulary';
 import { getAISuggestions } from '../services/getAISuggestions';
 import { useOnDevicePrediction } from '../hooks/useOnDevicePrediction';
+import { useScrollToTopOnChange } from '../hooks/useScrollToTopOnChange';
+import { suggestionChipFit, stripHeight } from '../utils/suggestionChipFit';
+import { saveSentenceDraft, takeSentenceDraftAfterFontChange } from '../services/sentenceDraft';
 import { t } from '../i18n/strings';
 import {
   recordWordSelection,
@@ -94,6 +98,7 @@ export default function AACBoardScreen() {
   const [speechProblem, setSpeechProblem] = useState(null); // null | 'unavailable' | 'failed'
   const sentenceBarRef = useRef(null);
   const sentenceScrollRef = useRef(null);
+  const gridRef = useRef(null);
 
   // The board has its own Quick Phrases button in the action row; hide the
   // floating one here so it never sits on top of a vocabulary button.
@@ -112,11 +117,15 @@ export default function AACBoardScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currentPageId, isFocused]
   );
+  // Every page opens with its first row in the same place.
+  useScrollToTopOnChange(gridRef, currentPageId);
   const aiEnabled = settings.aiPersonalisationEnabled !== false;
   const cloudEnabled = settings.cloudSuggestionsEnabled !== false;
   const predictionEnabled = settings.predictionEnabled !== false;
   const speakWordsOnTap = settings.speakWordsOnTap !== false;
   const textScale = settings.textScale || 1;
+  const { fontScale } = useWindowDimensions();
+  const chipFit = suggestionChipFit({ textScale, fontScale });
   // Opt-in layout for small screens. Never switched on automatically, so
   // existing users' button positions only change if they choose it.
   const compact = settings.compactLayout === true;
@@ -153,6 +162,24 @@ export default function AACBoardScreen() {
     loadSentenceHistory().then(setHistory);
     loadFavourites().then(setFavourites);
   }, []);
+
+  // Changing the system font size reloads the app in place (Android); bring
+  // back the sentence and page the user had, then keep the draft current.
+  const [draftReady, setDraftReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    takeSentenceDraftAfterFontChange()
+      .then((draft) => {
+        if (!alive || !draft) return;
+        setSentenceWords((prev) => (prev.length > 0 ? prev : draft.words));
+        if (draft.pageId !== 'home' && getPage(draft.pageId)) setCurrentPageId(draft.pageId);
+      })
+      .finally(() => { if (alive) setDraftReady(true); });
+    return () => { alive = false; };
+  }, []);
+  useEffect(() => {
+    if (draftReady) saveSentenceDraft(sentenceWords, currentPageId);
+  }, [draftReady, sentenceWords, currentPageId]);
 
   // ── Switch scanning ──
   // Scan order: vocab grid first (main communication), then suggestions, then actions last.
@@ -922,7 +949,7 @@ export default function AACBoardScreen() {
           // A fixed height (not minHeight): chips with a reason line are
           // taller than an empty row, and the grid must not move when they
           // appear. Compact layout uses the same height for that reason.
-          style={[styles.suggestionsBar, { backgroundColor: palette.surface, height: Math.round(56 * Math.min(textScale, 1.25)) }]}
+          style={[styles.suggestionsBar, { backgroundColor: palette.surface, height: stripHeight(textScale) }]}
         >
           <Ionicons name="sparkles-outline" size={16} color={palette.textSecondary} style={{ marginRight: 4 }} />
           {suggestions.length === 0 ? (
@@ -947,9 +974,15 @@ export default function AACBoardScreen() {
                   accessibilityLabel={`Suggestion: ${word}${reason ? `. ${reason}` : ''}`}
                   accessibilityHint="Add this word to your sentence"
                 >
-                  <Text style={[styles.suggestionText, { color: palette.text, fontSize: Math.round(15 * textScale) }]}>{word}</Text>
-                  {reason && (
-                    <Text style={[styles.suggestionReason, { color: palette.textSecondary }]}>{reason}</Text>
+                  <Text
+                    style={[styles.suggestionText, { color: palette.text, fontSize: Math.round(15 * textScale) }]}
+                    maxFontSizeMultiplier={chipFit.wordMaxMultiplier}
+                    numberOfLines={1}
+                  >
+                    {word}
+                  </Text>
+                  {reason && chipFit.showReason && (
+                    <Text style={[styles.suggestionReason, { color: palette.textSecondary }]} numberOfLines={1}>{reason}</Text>
                   )}
                 </TouchableOpacity>
               );
@@ -1077,6 +1110,7 @@ export default function AACBoardScreen() {
 
       {/* Vocabulary grid */}
       <FlatList
+        ref={gridRef}
         data={currentPage.buttons}
         keyExtractor={(item) => item.id}
         numColumns={numColumns}
