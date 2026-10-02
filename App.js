@@ -250,10 +250,11 @@ export default function App() {
         <SettingsProvider>
           <NetworkProvider>
             <SafeAreaProvider>
-              <OfflineBanner />
-              <NavigationContainer>
-                <RootNavigator />
-              </NavigationContainer>
+              <OfflineBanner>
+                <NavigationContainer>
+                  <RootNavigator />
+                </NavigationContainer>
+              </OfflineBanner>
             </SafeAreaProvider>
           </NetworkProvider>
         </SettingsProvider>
