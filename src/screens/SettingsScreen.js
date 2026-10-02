@@ -259,6 +259,12 @@ export default function SettingsScreen() {
         </>
       )}
 
+      {!loadingVoices && voices.length === 0 && (
+        <Text style={[styles.helperText, { color: palette.textSecondary, marginTop: 8 }]} accessibilityLiveRegion="polite">
+          No English text-to-speech voices were found on this device. Speech may not work until a voice is installed (Android: Settings › Accessibility › Text-to-speech; iOS: Settings › Accessibility › Spoken Content › Voices). Messages can always be shown on screen instead.
+        </Text>
+      )}
+
       {/* Test Speech Button */}
       <TouchableOpacity
         style={[styles.testButton, { backgroundColor: palette.primary }]}

@@ -4,21 +4,60 @@
 // All speech output goes through this module.
 //
 // Reliability rules:
-// - Always call Speech.stop() before speaking; never rely on onStart having fired.
-// - Text longer than the platform limit (~4000 chars on Android) fails silently,
-//   so it is split into chunks and queued.
-// - If a saved voice is unavailable on this device (e.g. settings synced from
-//   another phone) or the engine reports an error, retry once with the default voice.
+// - Every speak() gets a generation number; stop() and any newer speak()
+//   invalidate older generations. Callbacks from an old generation are
+//   ignored, so a late error/stop event can never restart speech after Stop,
+//   and two rapid taps can never both play.
+// - Text longer than the platform limit (~4000 chars on Android) fails
+//   silently, so it is split into chunks and queued in order.
+// - A saved voice that is missing on this device (e.g. settings synced from
+//   another phone) is dropped. If the engine reports an error BEFORE the
+//   utterance starts, the remaining text is retried once with the system
+//   default voice. Errors after speech has started are not retried (that
+//   would repeat words the listener already heard).
+// - Voice lookups time out: on Android with no working TTS engine the voice
+//   list never resolves, and speech must not wait on it.
+// - Speaking state cannot get stuck: it clears on done/stopped/error, and a
+//   watchdog checks the engine if no completion event arrives.
+// - If speech never starts (no TTS engine / no voice data), listeners get an
+//   'unavailable' status so the UI can say so; the message stays on screen.
 // - Pronunciation corrections are applied here so every screen benefits; the
 //   on-screen text is never changed.
 
 import * as Speech from 'expo-speech';
 import { applyPronunciations } from './pronunciationStore';
 
-let isSpeaking = false;
-
 // Android's TextToSpeech rejects input over its limit without an error.
 const FALLBACK_MAX_INPUT = 4000;
+const VOICE_LOOKUP_TIMEOUT_MS = 1500;
+const START_TIMEOUT_MS = 5000;
+const WATCHDOG_MIN_MS = 4000;
+
+let generation = 0;
+let isSpeaking = false;
+let watchdogTimer = null;
+let startTimer = null;
+
+// ── Status listeners (UI can show a notice when speech is unavailable) ──
+const statusListeners = new Set();
+let lastStatus = { speaking: false, error: null };
+
+function emitStatus(next) {
+  lastStatus = { ...lastStatus, ...next };
+  statusListeners.forEach(fn => {
+    try { fn(lastStatus); } catch { /* listener errors never affect speech */ }
+  });
+}
+
+/** Subscribe to { speaking, error } changes. Returns an unsubscribe function. */
+export function subscribeSpeechStatus(listener) {
+  statusListeners.add(listener);
+  return () => statusListeners.delete(listener);
+}
+
+export function getSpeechStatus() {
+  return lastStatus;
+}
 
 // ── Expressive Voice Presets ──
 // Rate and pitch are MULTIPLIERS on the user's own voice settings, so a user
@@ -93,6 +132,21 @@ function getMaxInputLength() {
     : FALLBACK_MAX_INPUT;
 }
 
+function clearTimers() {
+  clearTimeout(watchdogTimer);
+  clearTimeout(startTimer);
+  watchdogTimer = null;
+  startTimer = null;
+}
+
+function setIdle() {
+  clearTimers();
+  if (isSpeaking || lastStatus.speaking) {
+    isSpeaking = false;
+    emitStatus({ speaking: false });
+  }
+}
+
 /**
  * Speak text with the user's preferred settings.
  * Stops any current speech before starting.
@@ -108,50 +162,114 @@ function getMaxInputLength() {
 export async function speak(text, options = {}) {
   if (!text || !text.trim()) return;
 
-  // Stop any current speech first
-  await stop();
+  // Claim a new generation BEFORE any await, so a newer tap always wins.
+  const gen = ++generation;
+  clearTimers();
+  await nativeStop();
 
   const spoken = applyPronunciations(text.trim());
   const chunks = chunkText(spoken, getMaxInputLength());
   const voice = await resolveVoice(options.voice);
 
-  chunks.forEach((chunk, i) => {
-    const isLast = i === chunks.length - 1;
-    speakChunk(chunk, options, voice, isLast, true);
-  });
+  // Another speak() or stop() happened while we were waiting.
+  if (gen !== generation) return;
+
+  isSpeaking = true;
+  emitStatus({ speaking: true, error: null });
+  startChunks(gen, chunks, 0, options, voice, true);
 }
 
-function speakChunk(chunk, options, voice, isLast, allowRetry) {
-  const speechOptions = {
-    rate: options.rate ?? 1.0,
-    pitch: options.pitch ?? 1.0,
-    onStart: () => { isSpeaking = true; },
-    onDone: () => {
-      if (!isLast) return;
-      isSpeaking = false;
-      if (options.onDone) options.onDone();
-    },
-    onError: () => {
-      isSpeaking = false;
-      // A missing/broken voice should never leave the user silent: retry
-      // once with the system default voice.
-      if (allowRetry && voice) {
-        speakChunk(chunk, options, null, isLast, false);
+/**
+ * Queue chunks[from..] for one generation. Tracks whether speech actually
+ * started so errors before start can be retried once with the default voice.
+ */
+function startChunks(gen, chunks, from, options, voice, allowRetry) {
+  let started = false;
+
+  // No onStart within the timeout → the engine is missing or has no voice data.
+  startTimer = setTimeout(() => {
+    if (gen !== generation || started) return;
+    setIdle();
+    emitStatus({ error: 'unavailable' });
+  }, START_TIMEOUT_MS);
+
+  for (let i = from; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const isLast = i === chunks.length - 1;
+    const speechOptions = {
+      rate: options.rate ?? 1.0,
+      pitch: options.pitch ?? 1.0,
+      onStart: () => {
+        if (gen !== generation) return;
+        if (!started) {
+          started = true;
+          clearTimeout(startTimer);
+          armWatchdog(gen, chunks.slice(i).join(' '), options.rate ?? 1.0);
+        }
+      },
+      onDone: () => {
+        if (gen !== generation || !isLast) return;
+        setIdle();
+        if (options.onDone) options.onDone();
+      },
+      onStopped: () => {
+        if (gen !== generation) return;
+        setIdle();
+      },
+      onError: () => {
+        if (gen !== generation) return; // stale: e.g. web fires onerror on cancel()
+        if (!started && allowRetry && voice) {
+          // The chosen voice failed before anything was heard: replace this
+          // attempt with the remaining text in the default voice, once.
+          const retryGen = ++generation;
+          clearTimers();
+          nativeStop().then(() => {
+            if (retryGen !== generation) return;
+            startChunks(retryGen, chunks, i, options, null, false);
+          });
+          return;
+        }
+        setIdle();
+        emitStatus({ error: 'failed' });
+      },
+    };
+    if (voice) speechOptions.voice = voice;
+    if (options.language) speechOptions.language = options.language;
+
+    try {
+      // Speech is queued by the native engine, so chunks play in order.
+      const result = Speech.speak(chunk, speechOptions);
+      // Some platforms reject asynchronously (e.g. iOS with an unknown voice
+      // throws natively and never emits an error event).
+      if (result && typeof result.catch === 'function') {
+        result.catch(() => speechOptions.onError());
       }
-    },
-    onStopped: () => { isSpeaking = false; },
-  };
-
-  if (voice) {
-    speechOptions.voice = voice;
+    } catch {
+      speechOptions.onError();
+      return;
+    }
   }
-  if (options.language) {
-    speechOptions.language = options.language;
-  }
+}
 
-  // Speech is queued by the native engine, so chunks play in order.
-  isSpeaking = true;
-  Speech.speak(chunk, speechOptions);
+/**
+ * Safety net for platforms that occasionally never send onDone: after the
+ * expected duration, ask the engine whether it is still speaking.
+ */
+function armWatchdog(gen, text, rate) {
+  // ~15 characters per second at rate 1.0, plus generous slack.
+  const expected = (text.length / (15 * Math.max(rate, 0.1))) * 1000;
+  const delay = Math.max(WATCHDOG_MIN_MS, expected * 1.5 + 2000);
+  clearTimeout(watchdogTimer);
+  watchdogTimer = setTimeout(async () => {
+    if (gen !== generation) return;
+    let still = false;
+    try {
+      still = typeof Speech.isSpeakingAsync === 'function' && await Speech.isSpeakingAsync();
+    } catch { /* assume finished */ }
+    if (gen !== generation) return;
+    if (still) armWatchdog(gen, '', rate);
+    else setIdle();
+  }, delay);
 }
 
 /**
@@ -165,18 +283,22 @@ async function resolveVoice(voiceId) {
   return voices.some(v => v.identifier === voiceId) ? voiceId : null;
 }
 
-/**
- * Stop any current speech output immediately.
- * Always calls the native stop: onStart is not guaranteed to fire on every
- * platform, so the local flag alone is not a reliable signal.
- */
-export async function stop() {
-  isSpeaking = false;
+async function nativeStop() {
   try {
     await Speech.stop();
   } catch {
     // Nothing to stop
   }
+}
+
+/**
+ * Stop any current speech output immediately and invalidate pending
+ * callbacks, so nothing queued or retried can start afterwards.
+ */
+export async function stop() {
+  generation++;
+  setIdle();
+  await nativeStop();
 }
 
 /**
@@ -188,8 +310,9 @@ export function getIsSpeaking() {
 
 /**
  * Get available voices on this device.
- * Non-empty results are cached; an empty list is retried next time because
- * Android can report no voices before its TTS engine has initialised.
+ * Non-empty results are cached; an empty list is retried later because
+ * Android can report no voices before its TTS engine has initialised. The
+ * lookup times out because a missing engine never answers at all.
  */
 let cachedVoices = null;
 let lastEmptyFetch = 0;
@@ -199,12 +322,32 @@ export async function getAvailableVoices() {
   // Don't re-query on every tap while the engine keeps reporting no voices.
   if (lastEmptyFetch && Date.now() - lastEmptyFetch < EMPTY_RETRY_MS) return [];
   try {
-    const voices = await Speech.getAvailableVoicesAsync();
-    if (!Array.isArray(voices) || voices.length === 0) lastEmptyFetch = Date.now();
-    if (Array.isArray(voices) && voices.length > 0) cachedVoices = voices;
-    return voices || [];
+    let timer;
+    const timeout = new Promise(resolve => {
+      timer = setTimeout(() => resolve(null), VOICE_LOOKUP_TIMEOUT_MS);
+    });
+    const voices = await Promise.race([Speech.getAvailableVoicesAsync(), timeout]);
+    clearTimeout(timer);
+    if (!Array.isArray(voices) || voices.length === 0) {
+      lastEmptyFetch = Date.now();
+      return [];
+    }
+    cachedVoices = voices;
+    return voices;
   } catch (e) {
     console.warn('Failed to get available voices:', e);
+    lastEmptyFetch = Date.now();
     return [];
   }
+}
+
+/** Test helper: reset module state. */
+export function _resetSpeechForTests() {
+  generation = 0;
+  isSpeaking = false;
+  clearTimers();
+  cachedVoices = null;
+  lastEmptyFetch = 0;
+  lastStatus = { speaking: false, error: null };
+  statusListeners.clear();
 }

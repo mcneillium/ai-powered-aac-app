@@ -25,7 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette } from '../theme';
-import { speak, stop, buildSpeechOptions } from '../services/speechService';
+import { speak, stop, buildSpeechOptions, subscribeSpeechStatus } from '../services/speechService';
 import { getHomePage, getPage } from '../data/coreVocabulary';
 import { getAISuggestions } from '../services/getAISuggestions';
 import { useOnDevicePrediction } from '../hooks/useOnDevicePrediction';
@@ -87,6 +87,7 @@ export default function AACBoardScreen() {
   // history can be undone. Cleared once the user adds a new word.
   const [undoWords, setUndoWords] = useState(null);
   const [showFinder, setShowFinder] = useState(false);
+  const [speechProblem, setSpeechProblem] = useState(null); // null | 'unavailable' | 'failed'
   const sentenceBarRef = useRef(null);
   const sentenceScrollRef = useRef(null);
 
@@ -120,6 +121,20 @@ export default function AACBoardScreen() {
     [settings, voicePreset]
   );
   const say = useCallback((text) => speak(text, speechOptions), [speechOptions]);
+
+  // Tell the user (once, non-blocking) when speech could not be produced.
+  // The message itself stays on screen, so communication can continue by
+  // showing it (Show on screen button).
+  useEffect(() => {
+    let timer = null;
+    const unsubscribe = subscribeSpeechStatus(({ error }) => {
+      if (!error) return;
+      setSpeechProblem(error);
+      clearTimeout(timer);
+      timer = setTimeout(() => setSpeechProblem(null), 8000);
+    });
+    return () => { unsubscribe(); clearTimeout(timer); };
+  }, []);
 
   // Load persistent data on mount
   useEffect(() => {
@@ -925,6 +940,22 @@ export default function AACBoardScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Speech problem notice — overlays (does not move the grid) and lets
+          taps pass through to the buttons underneath. */}
+      {speechProblem && (
+        <View
+          pointerEvents="none"
+          style={[styles.speechNotice, { backgroundColor: palette.text }]}
+          accessibilityLiveRegion="assertive"
+          accessibilityRole="alert"
+        >
+          <Ionicons name="volume-mute-outline" size={20} color={palette.background} />
+          <Text style={[styles.speechNoticeText, { color: palette.background }]}>
+            {speechProblem === 'unavailable' ? t('speechUnavailable') : t('speechFailed')}
+          </Text>
+        </View>
+      )}
+
       {/* Vocabulary grid */}
       <FlatList
         data={currentPage.buttons}
@@ -983,6 +1014,12 @@ const styles = StyleSheet.create({
   historyMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
   rowIconBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   disabled: { opacity: 0.4 },
+  speechNotice: {
+    position: 'absolute', left: 12, right: 12, bottom: 96, zIndex: 20,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    padding: 12, borderRadius: 10, opacity: 0.95,
+  },
+  speechNoticeText: { flex: 1, fontSize: 15, fontWeight: '600', lineHeight: 20 },
   suggestionsEmpty: { fontSize: 13, fontStyle: 'italic' },
   findBtn: { marginLeft: 'auto' },
   historyTitle: {
