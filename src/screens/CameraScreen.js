@@ -16,33 +16,8 @@ import { getPalette, radii, spacing } from '../theme';
 import { speak, buildSpeechOptions } from '../services/speechService';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system';
 import { callAIBackend, ENDPOINTS } from '../services/aiBackend';
-
-// Timeout wrapper: rejects if promise doesn't resolve in ms
-function withTimeout(promise, ms, label) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
-    ),
-  ]);
-}
-
-// Read file as base64 with a timeout. Returns null on failure.
-async function readBase64(uri, timeoutMs = 8000) {
-  try {
-    const result = await withTimeout(
-      FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }),
-      timeoutMs,
-      'base64 read'
-    );
-    return result;
-  } catch (e) {
-    console.warn('[Camera] base64 read failed:', e.message);
-    return null;
-  }
-}
+import { readImageBase64 as readBase64 } from '../services/imageFile';
 
 export default function CombinedImageScreen() {
   const { settings, loading: settingsLoading } = useSettings();
@@ -61,9 +36,12 @@ export default function CombinedImageScreen() {
     (async () => {
       try {
         await requestPerm();
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-        // Denials are handled at the point of use (openCamera / pickImage)
-        // rather than with an alert on mount.
+        // No media-library permission is requested: launchImageLibraryAsync
+        // uses the system picker, which needs none (expo-image-picker 17
+        // checks no permission for it on Android). Asking would have shown a
+        // storage prompt on Android 12 and older for nothing; the storage
+        // permissions are now blocked in app.json.
+        // Camera denial is handled at the point of use (openCamera).
       } catch (e) {
         console.warn('[Camera] permission request failed:', e.message);
       }
