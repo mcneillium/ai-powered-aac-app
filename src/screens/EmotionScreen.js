@@ -114,7 +114,7 @@ function buildSentence(emotion, intensity, cause, need) {
 
 export default function EmotionScreen() {
   const { settings } = useSettings();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
   const [emotion, setEmotion] = useState(null);
   const [intensity, setIntensity] = useState(null);
   const [cause, setCause] = useState(null);

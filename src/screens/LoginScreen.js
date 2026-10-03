@@ -37,7 +37,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const navigation = useNavigation();
   const { settings } = useSettings();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
 
   const handleLogin = async () => {
     const trimmedEmail = email.trim().toLowerCase();

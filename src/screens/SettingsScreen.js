@@ -31,7 +31,7 @@ import CloudUnavailableNotice from '../components/CloudUnavailableNotice';
 
 export default function SettingsScreen() {
   const { settings, loading: settingsLoading, updateSettings } = useSettings();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
   const navigation = useNavigation();
 
   const [voices, setVoices] = useState([]);

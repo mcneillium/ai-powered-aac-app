@@ -44,7 +44,7 @@ function licenceTextsFor(pkg) {
 
 export default function LicensesScreen() {
   const { settings } = useSettings();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
   const [open, setOpen] = useState(null);
   // Icon fonts first (separate works with their own notices), then packages.
   const data = useMemo(

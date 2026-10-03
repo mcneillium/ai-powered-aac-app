@@ -28,7 +28,7 @@ const CATEGORY_COLORS = {
 
 export default function ContextPackScreen() {
   const { settings } = useSettings();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
   const [activePackId, setActivePackId] = useState(null);
 
   const packs = getAllContextPacks();

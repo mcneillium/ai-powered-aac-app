@@ -148,7 +148,7 @@ function MainApp() {
 function ClassicApp() {
   const insets = useSafeAreaInsets();
   const { settings } = useSettings();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
 
   return (
     <>
@@ -255,7 +255,7 @@ function AppNavigator() {
 
 function RootNavigator() {
   const { settings } = useSettings();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
 
   return (
     <RootStack.Navigator

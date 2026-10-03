@@ -30,7 +30,7 @@ export default function CombinedImageScreen() {
   const [mode, setMode] = useState('describe');
   const cameraRef = useRef(null);
 
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
 
   useEffect(() => {
     (async () => {

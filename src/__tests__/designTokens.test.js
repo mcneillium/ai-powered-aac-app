@@ -1,6 +1,7 @@
 // Voice 2 colour tokens: every text/background pair used for content must
 // reach WCAG AA (4.5:1), in every theme and on every category fill.
 import { colorSchemes, categoryColors } from '../design/tokens';
+import { studioPalettes, getPalette, palettes } from '../theme';
 
 function lum(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -35,4 +36,23 @@ describe.each(Object.keys(colorSchemes))('%s scheme', (name) => {
   test('focus ring is distinguishable from the background (3:1, non-text)', () => {
     expect(contrast(c.focus, c.paper)).toBeGreaterThanOrEqual(3);
   });
+});
+
+// Secondary screens use legacy palette keys filled from these tokens when
+// the new board is in use; their filled buttons must stay readable.
+
+describe.each(Object.keys(studioPalettes))('studio palette %s', (name) => {
+  const p = studioPalettes[name];
+  test.each(['primary', 'danger', 'info', 'success', 'warning', 'accent'])('buttonText on %s is AA', (key) => {
+    expect(contrast(p.buttonText, p[key])).toBeGreaterThanOrEqual(4.5);
+  });
+  test('text on background, card and surface is AA', () => {
+    ['background', 'cardBg', 'surface', 'inputBg'].forEach((bg) => expect(contrast(p.text, p[bg])).toBeGreaterThanOrEqual(4.5));
+  });
+});
+
+test('Classic board keeps its own palette', () => {
+  expect(getPalette('dark', 'classic')).toBe(palettes.dark);
+  expect(getPalette('dark')).toBe(palettes.dark);
+  expect(getPalette('dark', 'studio')).toBe(studioPalettes.dark);
 });

@@ -20,7 +20,7 @@ export default function ProfileScreen() {
   const { settings, loading: settingsLoading } = useSettings();
   const { user } = useAuth();
   const navigation = useNavigation();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
   // Anonymous Firebase sessions exist only so cloud AI calls carry a token —
   // in the UI they are guests.
   const account = user && !user.isAnonymous ? user : null;

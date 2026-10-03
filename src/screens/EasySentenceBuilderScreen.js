@@ -34,7 +34,7 @@ export default function EasySentenceBuilderScreen() {
   const [categoryImages, setCategoryImages] = useState({});
 
   const categories = Object.keys(OFFLINE_CATEGORIES);
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
   const [offlineMode, setOfflineMode] = useState(false);
   // Learning follows the same explicit opt-in as the board.
   const aiEnabled = settings.personalLearning === true && settings.aiPersonalisationEnabled !== false;

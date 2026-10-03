@@ -4,6 +4,8 @@
 // WCAG AA (4.5:1) against buttonText — enforced by theme.test.js.
 // Every screen MUST import from here — no inline palette objects.
 
+import { colorSchemes } from './design/tokens';
+
 // ── Branding constants ──
 export const brand = {
   name: 'Voice',
@@ -125,9 +127,49 @@ export const palettes = {
 };
 
 /**
- * Get the palette for a given theme name.
- * Falls back to 'light' if the theme is unrecognized.
+ * The legacy palette keys filled from the Voice 2 design tokens, so every
+ * secondary screen (Settings, Find, Insights, Login…) takes on the new look
+ * when the new board is in use, without rewriting each screen. Filled
+ * colours stay AA against buttonText (tested in designTokens.test.js).
  */
-export function getPalette(theme) {
+function fromScheme(c) {
+  return {
+    background: c.paper,
+    surface: c.sunk,
+    text: c.ink,
+    textSecondary: c.inkSoft,
+    border: c.line,
+    tabBarBg: c.card,
+    tabBarActive: c.signal,
+    tabBarInactive: c.inkSoft,
+    cardBg: c.card,
+    primary: c.signal,
+    primaryMuted: c.signalSoft,
+    danger: c.danger,
+    info: c.signal,
+    success: c.success,
+    warning: c.danger,
+    inputBg: c.card,
+    inputBorder: c.lineStrong,
+    chipBg: c.sunk,
+    overlay: c.scrim,
+    accent: c.signal,
+    buttonText: c.onSignal,
+    focusRing: c.focus,
+  };
+}
+export const studioPalettes = {
+  light: fromScheme(colorSchemes.light),
+  dark: fromScheme(colorSchemes.dark),
+  highContrast: fromScheme(colorSchemes.highContrast),
+};
+
+/**
+ * Get the palette for a given theme name. With boardLayout 'studio' (the
+ * Voice 2 board) the palette comes from the new design tokens; the Classic
+ * board keeps its familiar colours. Falls back to 'light'.
+ */
+export function getPalette(theme, boardLayout) {
+  if (boardLayout === 'studio') return studioPalettes[theme] || studioPalettes.light;
   return palettes[theme] || palettes.light;
 }

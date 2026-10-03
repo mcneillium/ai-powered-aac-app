@@ -14,7 +14,7 @@ import VoicePresetPicker from './VoicePresetPicker';
 
 export default function MoreActionsMenu({ visible, onClose, items, voicePreset, onSelectVoicePreset }) {
   const { settings } = useSettings();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
   // iOS cannot present another modal (e.g. Show on screen) while this one is
   // still dismissing, so run the chosen action once dismissal has finished.
   const pending = useRef(null);
