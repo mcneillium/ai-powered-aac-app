@@ -1,0 +1,108 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Fredoka:wght@500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;padding:24px;background:#e9e9ee;font-family:'Atkinson Hyperlegible',sans-serif;display:flex;gap:28px}
+.col{display:flex;flex-direction:column;gap:10px;align-items:center}
+.cap{font:700 20px 'Atkinson Hyperlegible';color:#222}.sub{font:15px 'Atkinson Hyperlegible';color:#555;width:400px;text-align:center}
+.phone{width:400px;height:860px;border-radius:36px;overflow:hidden;position:relative;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;padding:0 14px}
+.tile{height:92px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;font-size:19px}
+.emo{font-size:30px;line-height:34px}
+/* A: Soft Studio */
+.a{background:#F6F4EF;color:#1F2433}
+.a .top{padding:18px 18px 10px;display:flex;justify-content:space-between;align-items:center}
+.a .brand{font:700 22px 'Atkinson Hyperlegible';letter-spacing:-.3px}
+.a .mode{background:#fff;border-radius:99px;padding:6px 12px;font-size:14px;border:1.5px solid #E2DED6}
+.a .msg{margin:0 14px;background:#fff;border-radius:24px;padding:16px 16px 12px;box-shadow:0 2px 10px rgba(31,36,51,.07)}
+.a .words{font-size:28px;font-weight:700;min-height:40px}
+.a .acts{display:flex;gap:8px;margin-top:10px}
+.a .speak{flex:1;background:#2263E0;color:#fff;border-radius:16px;height:52px;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:700}
+.a .sq{width:52px;height:52px;border-radius:16px;background:#F0EEE8;display:flex;align-items:center;justify-content:center;font-size:20px}
+.a .sugg{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:12px 14px}
+.a .chip{height:46px;border-radius:14px;background:#E9EEFB;color:#173A8A;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px}
+.a .chip.e{background:transparent;border:1.5px dashed #D9D5CC}
+.a .crumb{display:flex;gap:8px;padding:0 14px 10px;font-size:15px;color:#4A4F5E}
+.a .crumb b{color:#1F2433}
+.a .tile{background:#fff;border-radius:20px;color:#1F2433;border-top:7px solid var(--c);box-shadow:0 1px 4px rgba(31,36,51,.07)}
+.a .tab{position:absolute;left:14px;right:14px;bottom:14px;height:62px;border-radius:22px;background:#1F2433;display:flex;justify-content:space-around;align-items:center;color:#C9CCD6;font-size:13px}
+.a .tab .on{color:#fff;background:#2263E0;border-radius:14px;padding:8px 14px;font-weight:700}
+/* B: Bold Blocks */
+.b{background:#FFFFFF;color:#111}
+.b .top{background:#FFCD1F;padding:18px;font:600 24px Fredoka}
+.b .msg{background:#111;color:#fff;padding:16px;font:600 28px Fredoka;min-height:46px}
+.b .acts{display:flex;gap:0}
+.b .acts div{flex:1;height:56px;display:flex;align-items:center;justify-content:center;color:#fff;font:600 18px Fredoka}
+.b .sugg{display:flex;gap:6px;padding:10px 12px;background:#F2F2F2}
+.b .chip{padding:10px 14px;background:#fff;border:2px solid #111;border-radius:6px;font:600 16px Fredoka}
+.b .tile{border-radius:8px;color:#fff;background:var(--d);font-family:Fredoka;font-weight:600;font-size:21px}
+.b .grid{padding-top:12px}
+.b .tab{position:absolute;left:0;right:0;bottom:0;height:64px;background:#111;display:flex;justify-content:space-around;align-items:center;color:#fff;font:600 14px Fredoka}
+/* C: Ink */
+.c{background:#101218;color:#E9EAF0}
+.c .top{padding:20px 18px;font-size:15px;color:#8C90A0;letter-spacing:2px;text-transform:uppercase}
+.c .msg{margin:0 14px;border:1px solid #2A2E3A;border-radius:14px;padding:18px;font-size:27px;font-weight:700;min-height:40px}
+.c .acts{display:flex;gap:8px;margin:10px 14px}
+.c .acts div{flex:1;height:48px;border-radius:12px;background:#1C1F29;display:flex;align-items:center;justify-content:center;color:#E9EAF0}
+.c .acts .p{background:#7FB2FF;color:#0B1020;font-weight:700}
+.c .sugg{display:flex;gap:8px;margin:6px 14px 14px;color:#9AA0B4;font-size:16px}
+.c .chip{padding:8px 12px;border-bottom:2px solid #7FB2FF}
+.c .tile{background:#181B24;border-radius:12px;color:#E9EAF0;position:relative;font-weight:400}
+.c .tile:after{content:'';position:absolute;top:10px;left:10px;width:9px;height:9px;border-radius:9px;background:var(--c)}
+.c .tab{position:absolute;left:0;right:0;bottom:0;height:62px;border-top:1px solid #222633;display:flex;justify-content:space-around;align-items:center;color:#8C90A0;font-size:13px}
+</style></head><body>
+
+<div class="col"><div class="cap">A · Soft Studio</div>
+<div class="phone a">
+ <div class="top"><div class="brand">Voice</div><div class="mode">🧒 Child · Meals</div></div>
+ <div class="msg"><div class="words">I want more</div>
+  <div class="acts"><div class="speak">🔊 Speak</div><div class="sq">⌫</div><div class="sq">✕</div><div class="sq">⋯</div></div></div>
+ <div class="sugg"><div class="chip">please</div><div class="chip">juice</div><div class="chip">water</div><div class="chip e"></div></div>
+ <div class="crumb">⌂ Home › <b>Home</b></div>
+ <div class="grid">
+  <div class="tile" style="--c:#2B6BE0"><span class="emo">🙋</span>I want</div>
+  <div class="tile" style="--c:#2B6BE0"><span class="emo">🫴</span>I need</div>
+  <div class="tile" style="--c:#2B6BE0"><span class="emo">💭</span>I feel</div>
+  <div class="tile" style="--c:#E0B400"><span class="emo">👆</span>I</div>
+  <div class="tile" style="--c:#E0B400"><span class="emo">👉</span>you</div>
+  <div class="tile" style="--c:#2E9E5B"><span class="emo">🤲</span>want</div>
+  <div class="tile" style="--c:#2E9E5B"><span class="emo">🚶</span>go</div>
+  <div class="tile" style="--c:#2E9E5B"><span class="emo">👍</span>like</div>
+  <div class="tile" style="--c:#D9443A"><span class="emo">✋</span>stop</div>
+  <div class="tile" style="--c:#3D8FD6"><span class="emo">➕</span>more</div>
+  <div class="tile" style="--c:#D85C9A"><span class="emo">✅</span>yes</div>
+  <div class="tile" style="--c:#D9443A"><span class="emo">❌</span>no</div>
+ </div>
+ <div class="tab"><span class="on">Talk</span><span>Situations</span><span>Feelings</span><span>Me</span></div>
+</div><div class="sub">Calm brand evolution: warm canvas, white tiles with a Fitzgerald colour cap, one big Speak, a fixed four-slot suggestion row. Child and Adult share the layout; Child adds symbols and rounder, larger type.</div></div>
+
+<div class="col"><div class="cap">B · Bold Blocks</div>
+<div class="phone b">
+ <div class="top">Voice</div>
+ <div class="msg">I want more</div>
+ <div class="acts"><div style="background:#1F6FEB">SPEAK</div><div style="background:#C62828">DEL</div><div style="background:#444">CLEAR</div></div>
+ <div class="sugg"><div class="chip">please</div><div class="chip">juice</div><div class="chip">water</div></div>
+ <div class="grid">
+  <div class="tile" style="--d:#1F6FEB">I want</div><div class="tile" style="--d:#1F6FEB">I need</div><div class="tile" style="--d:#1F6FEB">I feel</div>
+  <div class="tile" style="--d:#9A7400">I</div><div class="tile" style="--d:#9A7400">you</div><div class="tile" style="--d:#1E7B45">want</div>
+  <div class="tile" style="--d:#1E7B45">go</div><div class="tile" style="--d:#1E7B45">like</div><div class="tile" style="--d:#C62828">stop</div>
+  <div class="tile" style="--d:#1565C0">more</div><div class="tile" style="--d:#AD1457">yes</div><div class="tile" style="--d:#C62828">no</div>
+ </div>
+ <div class="tab"><span>TALK</span><span>PLACES</span><span>FEEL</span><span>ME</span></div>
+</div><div class="sub">Saturated solid tiles, white text, poster energy. Very legible for children, but loud and childish for adults, and the dark yellows lose the Fitzgerald colour meaning.</div></div>
+
+<div class="col"><div class="cap">C · Ink</div>
+<div class="phone c">
+ <div class="top">Voice · Adult</div>
+ <div class="msg">I want more</div>
+ <div class="acts"><div class="p">Speak</div><div>Delete</div><div>Clear</div></div>
+ <div class="sugg"><div class="chip">please</div><div class="chip">juice</div><div class="chip">water</div></div>
+ <div class="grid">
+  <div class="tile" style="--c:#7FB2FF">I want</div><div class="tile" style="--c:#7FB2FF">I need</div><div class="tile" style="--c:#7FB2FF">I feel</div>
+  <div class="tile" style="--c:#F2D04B">I</div><div class="tile" style="--c:#F2D04B">you</div><div class="tile" style="--c:#6FD39A">want</div>
+  <div class="tile" style="--c:#6FD39A">go</div><div class="tile" style="--c:#6FD39A">like</div><div class="tile" style="--c:#FF7A70">stop</div>
+  <div class="tile" style="--c:#7FB2FF">more</div><div class="tile" style="--c:#F28CC0">yes</div><div class="tile" style="--c:#FF7A70">no</div>
+ </div>
+ <div class="tab"><span>Talk</span><span>Situations</span><span>Feelings</span><span>Me</span></div>
+</div><div class="sub">Dark, minimal, "pro tool". Sleek for adults, but the colour coding shrinks to a dot, tiles read as identical, and it's cold and hard to parse for children.</div></div>
+</body></html>

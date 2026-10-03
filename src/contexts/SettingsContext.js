@@ -9,6 +9,7 @@ import { db } from '../../firebaseConfig';
 import { useAuth } from './AuthContext';
 import { DB_PATHS, dbPath } from '../shared/schema';
 import { safeParse } from '../utils/safeStorage';
+import { hasStoredLearning } from '../services/aiProfileStore';
 
 const SETTINGS_STORAGE_KEY = '@aac_settings';
 
@@ -31,6 +32,11 @@ const defaultSettings = {
   showVoiceStyles: true,     // show the voice-style bar on the board
   showScanControls: true,    // show the switch-scanning bar on the board
   compactLayout: false,      // opt-in small-screen layout (never enabled automatically)
+  // Redesign (Soft Studio). None of these change where a word sits.
+  experience: 'adult',       // 'child' | 'adult' — look, symbols and wording only
+  showSymbols: null,         // null = follow the experience; true/false = user's choice
+  localLearning: false,      // learn from this user's words, on this device only (opt-in)
+  activeSituation: null,     // context panel shown on the board (null = none)
 };
 
 export { defaultSettings };
@@ -39,7 +45,26 @@ export { defaultSettings };
 // differ between devices and platforms, and the compact layout depends on
 // this device's screen. (Keeping them local also means a reset to "default"
 // (null), which the Realtime Database stores as a missing key, is not lost.)
-export const LOCAL_ONLY_KEYS = ['speechVoice', 'compactLayout'];
+// Learning is switched on per device because what it learns never leaves
+// the device.
+export const LOCAL_ONLY_KEYS = ['speechVoice', 'compactLayout', 'localLearning'];
+
+/**
+ * Bring settings saved by an earlier version up to date. Returns the
+ * settings to use and whether they changed (so they are written once).
+ *
+ * Learning: earlier versions learned by default ("Learn from my usage", on
+ * unless switched off). Someone who has learned data and never switched it
+ * off keeps learning, so their suggestions do not suddenly get worse; anyone
+ * else, including every new install, starts with learning off.
+ * Exported for tests.
+ */
+export function migrateSettings(stored, { hadLearning = false } = {}) {
+  const base = stored && typeof stored === 'object' ? stored : {};
+  if (typeof base.localLearning === 'boolean') return { settings: base, changed: false };
+  const keep = hadLearning && base.aiPersonalisationEnabled !== false;
+  return { settings: { ...base, localLearning: keep }, changed: true };
+}
 
 /** The settings object as written to the cloud. Exported for tests. */
 export function toCloudSettings(settings) {
@@ -104,9 +129,12 @@ export function SettingsProvider({ children }) {
       try {
         const stored = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
         const parsed = await safeParse(SETTINGS_STORAGE_KEY, stored, null);
-        if (parsed && typeof parsed === 'object') {
-          latestSettings.current = { ...latestSettings.current, ...parsed };
-          setSettings(latestSettings.current);
+        const hadLearning = await hasStoredLearning();
+        const { settings: migrated, changed } = migrateSettings(parsed, { hadLearning });
+        latestSettings.current = { ...latestSettings.current, ...migrated };
+        setSettings(latestSettings.current);
+        if (changed && (parsed || hadLearning)) {
+          AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(latestSettings.current)).catch(() => {});
         }
       } catch (e) {
         console.warn('Failed to load local settings:', e);

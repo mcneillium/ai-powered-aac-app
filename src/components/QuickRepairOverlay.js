@@ -18,6 +18,7 @@ import { speak, buildSpeechOptions } from '../services/speechService';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, radii, spacing } from '../theme';
 import { t } from '../i18n/strings';
+import { tabBarSpace } from './tabBarMetrics';
 import {
   setScanItems, onScanChange, onScanSelect,
   startScan, stopScan,
@@ -82,8 +83,8 @@ export default function QuickRepairOverlay() {
   const { settings } = useSettings();
   const palette = getPalette(settings.theme);
   const insets = useSafeAreaInsets();
-  // Tab bar height = 60 + insets.bottom. FAB sits 20px above that.
-  const fabBottom = 60 + insets.bottom + 20;
+  // Sits 16px above the floating tab bar.
+  const fabBottom = tabBarSpace(insets.bottom) + 16;
   const wasScanningBefore = useRef(false);
 
   const handlePhrase = useCallback((phrase) => {

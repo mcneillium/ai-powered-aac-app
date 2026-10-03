@@ -1,5 +1,29 @@
 # Voice PR #7 — test on Samsung Galaxy S24 Ultra
 
+## Redesign test app: "Voice Redesign Test" (branch `voice-transformation`)
+- **What it is.** The redesign (Soft Studio, Child/Adult, opt-in local learning, Help me
+  explain) as a **third, separate test app**:
+  - package `com.elpabloawakens.aipoweredaacapp.prtest3`, named **"Voice Redesign Test"**;
+  - it installs next to "Voice", "Voice PR7 Test" and "Voice PR7 Test 2", and changes
+    none of them;
+  - it is signed with the same local test key as "Voice PR7 Test 2"; cloud is off
+    (built from a clone with no `.env`).
+- **File.** `Voice-Redesign-Test-<commit>.apk` (arm64, for the S24 Ultra), with its
+  SHA-256 in `Voice-Redesign-Test-<commit>.sha256.txt`. It is built from that commit by
+  `PRTEST_ID=prtest3 PRTEST_NAME="Voice Redesign Test" node scripts/native-ui/make-test-identity.js arm64-v8a`
+  after `expo prebuild --clean`.
+- **Starts fresh.** The test app starts with no data, so onboarding appears. Choose Child
+  or Adult; learning is off unless you switch it on.
+- **What to try first:**
+  1. Build "I want more please" using the suggestion row.
+  2. Switch Child ⇄ Adult in Settings and check no word moves.
+  3. Tap the **Situation** chip and choose Meals.
+  4. Open **Help me explain › Something hurts**.
+  5. Turn on **Learn from my words**, use the board for a while, then open
+     **Me › What Voice learned**.
+  6. Long-press a suggestion and choose "Don't suggest".
+- **Design notes and before/after screens:** `docs/design/redesign-2026-10/README.md`.
+
 ## Update 03/10/2026: "Voice PR7 Test 2", installs alongside, no uninstall
 - **Why a new name.** Earlier test APKs were signed with a key from a temporary cloud
   environment, and that key is gone. A build signed with the new local test key

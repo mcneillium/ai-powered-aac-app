@@ -9,6 +9,9 @@
  * Stored in AsyncStorage under '@aac_ai_profile'
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  emptyModel, learn, forget, modelFromLegacyProfile, decayed, norm,
+} from './predictionEngine';
 
 const PROFILE_KEY = '@aac_ai_profile';
 const SAVE_INTERVAL = 10; // Save every N updates
@@ -55,7 +58,23 @@ function createDefaultProfile() {
       vertex: { shown: 0, accepted: 0 },
       frequency: { shown: 0, accepted: 0 },
     },
+
+    // Personal prediction model (see predictionEngine.js): word, pair and
+    // triple counts with last-used times. Stays on this device.
+    learning: emptyModel(),
+    // Words the user asked never to be suggested.
+    blockedSuggestions: [],
   };
+}
+
+// Profiles saved by earlier versions have no personal model yet: build it
+// from their word and pair counts so nothing already learned is lost. The
+// original fields are kept as they were (Insights still reads them).
+function upgradeProfile(p) {
+  if (!p.learning || typeof p.learning !== 'object') p.learning = modelFromLegacyProfile(p);
+  ['uni', 'seq2', 'seq3'].forEach(k => { if (!p.learning[k]) p.learning[k] = {}; });
+  if (!Array.isArray(p.blockedSuggestions)) p.blockedSuggestions = [];
+  return p;
 }
 
 /**
@@ -70,6 +89,7 @@ export async function loadAIProfile() {
       if (!profile.version) {
         profile = { ...createDefaultProfile(), ...profile, version: 1 };
       }
+      upgradeProfile(profile);
     } else {
       profile = createDefaultProfile();
     }
@@ -118,8 +138,10 @@ export async function flushAIProfile() {
  */
 export async function resetAIProfile() {
   const sessions = profile?.totalSessions || 0;
+  const blocked = profile?.blockedSuggestions || [];
   profile = createDefaultProfile();
   profile.totalSessions = sessions; // preserve session count for analytics
+  profile.blockedSuggestions = blocked; // a preference, not learned data
   await saveProfile();
   return profile;
 }
@@ -129,7 +151,9 @@ export async function resetAIProfile() {
  */
 export function hasLearnedData() {
   if (!profile) return false;
-  return profile.totalWordSelections > 0 || Object.keys(profile.bigrams).length > 0;
+  return profile.totalWordSelections > 0
+    || Object.keys(profile.bigrams).length > 0
+    || Object.keys(profile.learning?.uni || {}).length > 0;
 }
 
 /**
@@ -174,6 +198,9 @@ export async function recordWordSelection(word, contextWords = [], wasSuggestion
   if (wasSuggestion) {
     profile.suggestionsAccepted++;
   }
+
+  upgradeProfile(profile);
+  learn(profile.learning, contextWords, word, now);
 
   profile.totalWordSelections++;
   await maybeSave();
@@ -497,4 +524,93 @@ export function getPrivacySafeSummary() {
     repeatedPhraseCount: Object.values(profile.phraseFrequencies).filter(c => c >= 3).length,
     updatedAt: profile.updatedAt,
   };
+}
+
+// ── Personal prediction model: queries and user control ──
+
+/** The personal model for predictionEngine.rank(). */
+export function getPersonalModel() {
+  if (!profile) return emptyModel();
+  return upgradeProfile(profile).learning;
+}
+
+export function getBlockedSuggestions() {
+  return profile ? [...(profile.blockedSuggestions || [])] : [];
+}
+
+/** Never suggest this word again (it stays on the board). */
+export async function blockSuggestion(word) {
+  if (!profile) await loadAIProfile();
+  upgradeProfile(profile);
+  const w = norm(word);
+  if (w && !profile.blockedSuggestions.includes(w)) profile.blockedSuggestions.push(w);
+  await saveProfile();
+}
+
+export async function unblockSuggestion(word) {
+  if (!profile) await loadAIProfile();
+  upgradeProfile(profile);
+  const w = norm(word);
+  profile.blockedSuggestions = profile.blockedSuggestions.filter(b => b !== w);
+  await saveProfile();
+}
+
+/**
+ * Forget everything learned about one word: its counts, the pairs and
+ * phrases it ends or appears in. The word itself stays on the board.
+ */
+export async function forgetLearnedWord(word) {
+  if (!profile) await loadAIProfile();
+  upgradeProfile(profile);
+  const w = norm(word);
+  forget(profile.learning, w);
+  delete profile.wordFrequencies[w];
+  delete profile.wordRecency[w];
+  Object.keys(profile.bigrams).forEach(k => {
+    if (k === w || k.startsWith(`${w} `) || k.endsWith(` ${w}`)) delete profile.bigrams[k];
+  });
+  Object.keys(profile.phraseFrequencies).forEach(k => {
+    if (` ${k} `.includes(` ${w} `)) delete profile.phraseFrequencies[k];
+  });
+  await saveProfile();
+}
+
+/**
+ * What has been learned, for the "What Voice has learned" screen.
+ * Counts are faded by age, the same way predictions use them.
+ */
+export function getLearnedSummary(limit = 40, now = Date.now()) {
+  const model = getPersonalModel();
+  const words = Object.entries(model.uni)
+    .map(([word, e]) => ({ word, uses: Math.round(decayed(e, now) * 10) / 10, lastUsed: e.t }))
+    .filter(x => x.uses > 0.05)
+    .sort((a, b) => b.uses - a.uses || a.word.localeCompare(b.word));
+  const pairs = Object.entries(model.seq2)
+    .map(([key, e]) => {
+      const [a, b] = key.split('|');
+      return { first: a, next: b, uses: Math.round(decayed(e, now) * 10) / 10 };
+    })
+    .filter(x => x.uses >= 1)
+    .sort((x, y) => y.uses - x.uses);
+  return {
+    wordCount: words.length,
+    pairCount: pairs.length,
+    words: words.slice(0, limit),
+    pairs: pairs.slice(0, limit),
+    blocked: getBlockedSuggestions(),
+  };
+}
+
+/** True when an earlier version saved learning (used to keep it switched on). */
+export async function hasStoredLearning() {
+  try {
+    const raw = await AsyncStorage.getItem(PROFILE_KEY);
+    if (!raw) return false;
+    const p = JSON.parse(raw);
+    return (p.totalWordSelections || 0) > 0
+      || Object.keys(p.bigrams || {}).length > 0
+      || Object.keys(p.learning?.uni || {}).length > 0;
+  } catch {
+    return false;
+  }
 }

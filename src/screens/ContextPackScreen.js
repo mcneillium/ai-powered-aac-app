@@ -1,84 +1,69 @@
 // src/screens/ContextPackScreen.js
-// Context-aware vocabulary packs for different situations.
-// Users manually select a context (home, school, meals, etc.)
-// and get a curated phrase board for that situation.
-// All phrases speak immediately on tap.
+// Situations: ready-made phrases for where you are (Home, School, Meals…).
+// The chosen situation is shared with the board's situation chip, so its
+// phrases are also one tap away there. Phrases speak immediately on tap.
 
-import React, { useState, useCallback } from 'react';
-import {
-  View, Text, TouchableOpacity, FlatList, StyleSheet, ScrollView,
-} from 'react-native';
+import React, { useCallback } from 'react';
+import { View, Text, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSettings } from '../contexts/SettingsContext';
-import { getPalette, radii, spacing } from '../theme';
+import { getPalette, getExperience, fitzgerald, fonts, radii, spacing } from '../theme';
 import { speak, buildSpeechOptions } from '../services/speechService';
 import { getAllContextPacks, getContextPack } from '../data/contextPacks';
+import { tabBarSpace } from '../components/tabBarMetrics';
 import { StatusBar } from 'expo-status-bar';
 import { t } from '../i18n/strings';
 
-const CATEGORY_COLORS = {
-  request: '#2979FF',
-  urgent: '#F44336',
-  feeling: '#9C27B0',
-  social: '#4CAF50',
-  repair: '#FF9800',
-  comment: '#607D8B',
-  regulation: '#E91E63',
+// Phrase purpose → Fitzgerald colour family, so situations read like the board.
+const CATEGORY_KEY = {
+  request: 'starter',
+  urgent: 'important',
+  feeling: 'adjective',
+  social: 'social',
+  repair: 'noun',
+  comment: 'misc',
+  regulation: 'verb',
 };
 
 export default function ContextPackScreen() {
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
   const palette = getPalette(settings.theme);
-  const [activePackId, setActivePackId] = useState(null);
+  const experience = getExperience(settings.experience);
+  const insets = useSafeAreaInsets();
+  const activePackId = settings.activeSituation || null;
 
   const packs = getAllContextPacks();
   const activePack = activePackId ? getContextPack(activePackId) : null;
-  const numColumns = settings.gridSize || 3;
+  const numColumns = Math.min(settings.gridSize || 3, 3);
+  const fz = fitzgerald[settings.theme] || fitzgerald.light;
+  const child = experience.tileFill === 'tint';
 
   const speakPhrase = useCallback((phrase) => {
     speak(phrase.label, buildSpeechOptions(settings));
   }, [settings]);
 
-  const renderPackSelector = ({ item }) => {
-    const isActive = item.id === activePackId;
+  const renderPhrase = ({ item }) => {
+    const c = fz[CATEGORY_KEY[item.category] || 'misc'];
     return (
       <TouchableOpacity
         style={[
-          styles.packCard,
-          { backgroundColor: isActive ? item.color : palette.cardBg, borderColor: item.color },
+          styles.phraseBtn,
+          {
+            backgroundColor: child && settings.theme !== 'highContrast' ? c.tint : palette.tileBg,
+            borderColor: child ? 'transparent' : palette.tileBorder,
+            borderRadius: experience.tileRadius,
+            flex: 1 / numColumns,
+          },
         ]}
-        onPress={() => setActivePackId(isActive ? null : item.id)}
-        accessibilityRole="button"
-        accessibilityLabel={`${item.label} ${t('contextPack')}`}
-        accessibilityState={{ selected: isActive }}
-      >
-        <Ionicons
-          name={item.icon}
-          size={24}
-          color={isActive ? '#FFFFFF' : item.color}
-        />
-        <Text
-          style={[styles.packLabel, { color: isActive ? '#FFFFFF' : palette.text }]}
-          numberOfLines={1}
-        >
-          {item.label}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
-
-  const renderPhrase = ({ item }) => {
-    const catColor = CATEGORY_COLORS[item.category] || palette.primary;
-    return (
-      <TouchableOpacity
-        style={[styles.phraseBtn, { backgroundColor: catColor, flex: 1 / numColumns }]}
         onPress={() => speakPhrase(item)}
         accessibilityRole="button"
         accessibilityLabel={`Say: ${item.label}`}
         accessibilityHint="Speaks this phrase immediately"
         activeOpacity={0.7}
       >
-        <Text style={styles.phraseText} numberOfLines={3} adjustsFontSizeToFit>
+        <View style={[styles.cap, { backgroundColor: c.cap, height: experience.capHeight }]} importantForAccessibility="no" />
+        <Text style={[styles.phraseText, { color: palette.text }]} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.7}>
           {item.label}
         </Text>
       </TouchableOpacity>
@@ -87,18 +72,32 @@ export default function ContextPackScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
-      {/* Pack selector */}
       <FlatList
         data={packs}
         horizontal
         keyExtractor={(item) => item.id}
-        renderItem={renderPackSelector}
+        renderItem={({ item }) => {
+          const on = item.id === activePackId;
+          return (
+            <TouchableOpacity
+              style={[styles.packChip, { backgroundColor: on ? palette.primary : palette.cardBg, borderColor: on ? palette.primary : palette.tileBorder }]}
+              onPress={() => updateSettings({ activeSituation: on ? null : item.id })}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.label} ${t('contextPack')}`}
+              accessibilityState={{ selected: on }}
+            >
+              <Ionicons name={item.icon} size={20} color={on ? palette.buttonText : palette.text} />
+              <Text style={[styles.packLabel, { color: on ? palette.buttonText : palette.text }]} numberOfLines={1}>
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        }}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.packList}
         style={styles.packListContainer}
       />
 
-      {/* Active pack phrases */}
       {activePack ? (
         <FlatList
           data={activePack.phrases}
@@ -106,14 +105,16 @@ export default function ContextPackScreen() {
           numColumns={numColumns}
           key={`ctx-${numColumns}`}
           renderItem={renderPhrase}
-          contentContainerStyle={styles.phraseGrid}
+          contentContainerStyle={[styles.phraseGrid, { paddingBottom: tabBarSpace(insets.bottom) + 12 }]}
         />
       ) : (
-        <View style={styles.emptyState}>
-          <Ionicons name="apps-outline" size={48} color={palette.textSecondary} />
-          <Text style={[styles.emptyTitle, { color: palette.text }]}>{t('chooseContext')}</Text>
+        <View style={[styles.emptyState, { paddingBottom: tabBarSpace(insets.bottom) }]}>
+          <View style={[styles.emptyIcon, { backgroundColor: palette.primaryMuted }]}>
+            <Ionicons name="compass" size={44} color={palette.primary} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: palette.text, fontFamily: experience.headlineFont }]}>{t('chooseContext')}</Text>
           <Text style={[styles.emptySubtitle, { color: palette.textSecondary }]}>
-            {t('chooseContextHint')}
+            {t('chooseContextHint')} It also shows on your board.
           </Text>
         </View>
       )}
@@ -125,42 +126,22 @@ export default function ContextPackScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  packListContainer: { flexGrow: 0, maxHeight: 90 },
-  packList: { paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
-  packCard: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.md,
-    borderWidth: 2,
-    marginRight: spacing.sm,
-    minWidth: 80,
-    gap: 4,
+  packListContainer: { flexGrow: 0 },
+  packList: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
+  packChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 48,
+    paddingHorizontal: 14, borderRadius: radii.pill, borderWidth: 1.5,
   },
-  packLabel: { fontSize: 12, fontWeight: '600' },
-  phraseGrid: { padding: spacing.xs, paddingBottom: 80 },
+  packLabel: { fontSize: 16, fontFamily: fonts.bold },
+  phraseGrid: { paddingHorizontal: spacing.sm, paddingTop: spacing.xs },
   phraseBtn: {
-    margin: 3,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    minHeight: 80,
-    alignItems: 'center',
-    justifyContent: 'center',
+    margin: 4, borderWidth: 1, height: 104, paddingHorizontal: spacing.sm, paddingTop: 10,
+    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
   },
-  phraseText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xxl,
-    gap: spacing.sm,
-  },
-  emptyTitle: { fontSize: 20, fontWeight: '600' },
-  emptySubtitle: { fontSize: 15, textAlign: 'center' },
+  cap: { position: 'absolute', top: 0, left: 0, right: 0 },
+  phraseText: { fontSize: 17, fontFamily: fonts.bold, textAlign: 'center' },
+  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xxl, gap: spacing.sm },
+  emptyIcon: { width: 96, height: 96, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
+  emptyTitle: { fontSize: 24 },
+  emptySubtitle: { fontSize: 16, fontFamily: fonts.regular, lineHeight: 22, textAlign: 'center' },
 });

@@ -13,7 +13,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
-import { getPalette, spacing, radii } from '../theme';
+import { getPalette, getExperience, fonts, spacing, radii } from '../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { tabBarSpace } from '../components/tabBarMetrics';
 import { speak, buildSpeechOptions } from '../services/speechService';
 import { addSentenceToHistory } from '../services/sentenceHistoryStore';
 import { recordWordSelection } from '../services/aiProfileStore';
@@ -91,10 +93,10 @@ const REGULATION = [
 
 const CRISIS = [
   { id: 'help_now', label: 'HELP', phrase: 'I need help right now', icon: 'alert-circle', color: '#D32F2F' },
-  { id: 'pain_now', label: 'PAIN', phrase: 'I am in pain', icon: 'medkit-outline', color: '#E53935' },
+  { id: 'pain_now', label: 'PAIN', phrase: 'I am in pain', icon: 'medkit-outline', color: '#C62828' },
   { id: 'stop_now', label: 'STOP', phrase: 'Stop. Please stop.', icon: 'close-circle', color: '#C62828' },
   { id: 'cant_breathe', label: "CAN'T BREATHE", phrase: 'I cannot breathe', icon: 'alert-circle-outline', color: '#D32F2F' },
-  { id: 'sick_now', label: 'SICK', phrase: 'I am going to be sick', icon: 'warning-outline', color: '#E65100' },
+  { id: 'sick_now', label: 'SICK', phrase: 'I am going to be sick', icon: 'warning-outline', color: '#BF360C' },
 ];
 
 function buildSentence(emotion, intensity, cause, need) {
@@ -115,6 +117,8 @@ function buildSentence(emotion, intensity, cause, need) {
 export default function EmotionScreen() {
   const { settings } = useSettings();
   const palette = getPalette(settings.theme);
+  const experience = getExperience(settings.experience);
+  const insets = useSafeAreaInsets();
   const [emotion, setEmotion] = useState(null);
   const [intensity, setIntensity] = useState(null);
   const [cause, setCause] = useState(null);
@@ -129,7 +133,7 @@ export default function EmotionScreen() {
     // Save to sentence history so it appears in AAC Board history panel
     addSentenceToHistory(sentence).catch(() => {});
     // Track emotion word for AI profile learning (respects the AI opt-out)
-    if (emotion && settings.aiPersonalisationEnabled !== false) {
+    if (emotion && settings.localLearning === true) {
       recordWordSelection(emotion.label.toLowerCase(), ['i', 'feel'], false).catch(() => {});
     }
   }, [sentence, settings, emotion]);
@@ -151,9 +155,9 @@ export default function EmotionScreen() {
   return (
     <View style={[styles.container, { backgroundColor: palette.background }]}>
       {/* Sentence preview — always visible at top */}
-      <View style={[styles.preview, { backgroundColor: palette.surface, borderColor: palette.border }]}>
+      <View style={[styles.preview, { backgroundColor: palette.cardBg, borderColor: palette.tileBorder, borderRadius: experience.tileRadius + 4 }]}>
         <Text
-          style={[styles.previewText, { color: sentence ? palette.text : palette.textSecondary }]}
+          style={[styles.previewText, { color: sentence ? palette.text : palette.textSecondary, fontFamily: sentence ? fonts.bold : fonts.regular }]}
           numberOfLines={3}
         >
           {sentence || 'Tap below to say how you feel'}
@@ -161,7 +165,7 @@ export default function EmotionScreen() {
         <View style={styles.previewActions}>
           <TouchableOpacity
             onPress={speakNow}
-            style={[styles.speakBtn, { backgroundColor: palette.primary }]}
+            style={[styles.speakBtn, { backgroundColor: palette.primary, borderRadius: experience.chipRadius }, !sentence && { opacity: 0.4 }]}
             disabled={!sentence}
             accessibilityRole="button"
             accessibilityLabel={sentence ? `Speak: ${sentence}` : 'Build a sentence first'}
@@ -172,7 +176,7 @@ export default function EmotionScreen() {
             <>
               <TouchableOpacity
                 onPress={() => setShowDisplay(true)}
-                style={[styles.resetBtn, { backgroundColor: palette.chipBg }]}
+                style={[styles.resetBtn, { backgroundColor: palette.surface, borderRadius: experience.chipRadius }]}
                 accessibilityRole="button"
                 accessibilityLabel="Show on screen for conversation partner"
               >
@@ -180,7 +184,7 @@ export default function EmotionScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={reset}
-                style={[styles.resetBtn, { backgroundColor: palette.chipBg }]}
+                style={[styles.resetBtn, { backgroundColor: palette.surface, borderRadius: experience.chipRadius }]}
                 accessibilityRole="button"
                 accessibilityLabel="Start over"
               >
@@ -225,16 +229,17 @@ export default function EmotionScreen() {
                 key={e.id}
                 style={[
                   styles.emotionChip,
-                  { backgroundColor: sel ? e.color : palette.cardBg, borderColor: e.color,
-                    width: `${Math.floor(100 / numCols) - 2}%` },
+                  { backgroundColor: sel ? palette.primaryMuted : palette.tileBg, borderColor: sel ? palette.primary : palette.tileBorder,
+                    borderRadius: experience.tileRadius, width: `${Math.floor(100 / numCols) - 2}%` },
                 ]}
                 onPress={() => { setEmotion(sel ? null : e); if (sel) { setIntensity(null); setCause(null); setNeed(null); } }}
                 accessibilityRole="button"
                 accessibilityLabel={`I feel ${e.label}`}
                 accessibilityState={{ selected: sel }}
               >
-                <Text style={styles.emotionEmoji}>{e.emoji}</Text>
-                <Text style={[styles.emotionLabel, { color: sel ? '#FFF' : palette.text }]}>{e.label}</Text>
+                <View style={[styles.emotionCap, { backgroundColor: e.color }]} importantForAccessibility="no" />
+                <Text style={styles.emotionEmoji} importantForAccessibility="no">{e.emoji}</Text>
+                <Text style={[styles.emotionLabel, { color: sel ? palette.onPrimaryMuted : palette.text }]} numberOfLines={1} adjustsFontSizeToFit>{e.label}</Text>
               </TouchableOpacity>
             );
           })}
@@ -322,18 +327,18 @@ export default function EmotionScreen() {
           {REGULATION.map(r => (
             <TouchableOpacity
               key={r.id}
-              style={[styles.regChip, { backgroundColor: r.color }]}
+              style={[styles.regChip, { backgroundColor: palette.cardBg, borderColor: palette.tileBorder }]}
               onPress={() => speakDirect(r.phrase)}
               accessibilityRole="button"
               accessibilityLabel={`I want to ${r.label.toLowerCase()}`}
             >
-              <Ionicons name={r.icon} size={22} color="#FFF" />
-              <Text style={styles.regLabel}>{r.label}</Text>
+              <Ionicons name={r.icon} size={22} color={palette.primary} />
+              <Text style={[styles.regLabel, { color: palette.text }]}>{r.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: tabBarSpace(insets.bottom) + 16 }} />
       </ScrollView>
 
       <StatusBar style={settings.theme === 'dark' || settings.theme === 'highContrast' ? 'light' : 'dark'} />
@@ -346,30 +351,33 @@ const styles = StyleSheet.create({
   preview: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 2,
-    minHeight: 56,
+    paddingVertical: spacing.md,
+    borderWidth: 1,
+    minHeight: 76,
   },
-  previewText: { flex: 1, fontSize: 18, fontWeight: '500' },
+  previewText: { flex: 1, fontSize: 19, lineHeight: 25 },
   previewActions: { flexDirection: 'row', gap: spacing.sm, marginLeft: spacing.sm },
-  speakBtn: { padding: spacing.sm, borderRadius: radii.sm, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  resetBtn: { padding: spacing.sm, borderRadius: radii.sm, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  speakBtn: { padding: spacing.sm, minWidth: 56, minHeight: 52, alignItems: 'center', justifyContent: 'center' },
+  resetBtn: { padding: spacing.sm, minWidth: 48, minHeight: 52, alignItems: 'center', justifyContent: 'center' },
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.md },
-  stepLabel: { fontSize: 16, fontWeight: '700', marginTop: spacing.lg, marginBottom: spacing.sm },
+  stepLabel: { fontSize: 18, fontFamily: fonts.bold, marginTop: spacing.lg, marginBottom: spacing.sm },
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   emotionChip: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    borderWidth: 2,
+    borderWidth: 1.5,
     marginBottom: spacing.sm,
-    minHeight: 70,
+    minHeight: 84,
+    overflow: 'hidden',
   },
+  emotionCap: { position: 'absolute', top: 0, left: 0, right: 0, height: 5 },
   emotionEmoji: { fontSize: 28 },
-  emotionLabel: { fontSize: 13, fontWeight: '600', marginTop: 2 },
+  emotionLabel: { fontSize: 15, fontFamily: fonts.bold, marginTop: 2, paddingHorizontal: 4 },
   intensityRow: { flexDirection: 'row', gap: spacing.sm },
   intensityChip: {
     flex: 1,
@@ -378,14 +386,14 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
   },
-  intensityLabel: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+  intensityLabel: { fontSize: 13, fontFamily: fonts.bold, marginTop: 2 },
   causeChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radii.pill,
     borderWidth: 1,
   },
-  causeText: { fontSize: 14, fontWeight: '500' },
+  causeText: { fontSize: 15, fontFamily: fonts.bold },
   needChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -397,7 +405,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     minHeight: 52,
   },
-  needLabel: { fontSize: 13, fontWeight: '600' },
+  needLabel: { fontSize: 14, fontFamily: fonts.bold },
   regChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -405,10 +413,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderRadius: radii.pill,
+    borderWidth: 1,
+    minHeight: 48,
     gap: spacing.xs,
     marginBottom: spacing.sm,
   },
-  regLabel: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  regLabel: { fontSize: 15, fontFamily: fonts.bold },
   crisisRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -424,5 +434,5 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     minHeight: 48,
   },
-  crisisLabel: { color: '#FFF', fontSize: 14, fontWeight: '800', letterSpacing: 0.5 },
+  crisisLabel: { color: '#FFF', fontSize: 15, fontFamily: fonts.bold, letterSpacing: 0.5 },
 });
