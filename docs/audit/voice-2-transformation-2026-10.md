@@ -133,7 +133,7 @@ PR #7 was merged into `master` (`0b18c0d`) at the owner's request. PR #8 was ret
 - Same package and test key as `a362ead`, so it installs over "Voice 2 Test" and keeps its test data.
 - Same permissions. No `expo-gl` or TF assets.
 
-**CI note.** No GitHub check runs have appeared on PR #8 at any head, including after it was retargeted to `master`. CI ran on PR #7. The owner should check why the workflow is not triggering before relying on CI for this PR.
+**CI.** "Lint, Test & Build" passed on PR #8 at `3bd4b16` (run 37107844998). Earlier heads showed no check runs while the PR was being retargeted from the #7 branch to `master`.
 
 ## 8. Known issues and next tasks (priority order)
 1. Run checklist §G on the S24 Ultra and the two emulators (Android 15 / 11) with `scripts/native-ui`; fix what fails.
