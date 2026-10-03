@@ -11,8 +11,8 @@ const MAX_ENTRIES = 100;
 let history = [];
 let loaded = false;
 
-export async function loadSentenceHistory() {
-  if (loaded) return history;
+export async function loadSentenceHistory({ reload = false } = {}) {
+  if (loaded && !reload) return history;
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     history = await safeParse(STORAGE_KEY, raw, []);

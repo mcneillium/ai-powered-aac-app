@@ -12,8 +12,8 @@ export const MAX_FAVOURITES = 200;
 let favourites = [];
 let loaded = false;
 
-export async function loadFavourites() {
-  if (loaded) return favourites;
+export async function loadFavourites({ reload = false } = {}) {
+  if (loaded && !reload) return favourites;
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     favourites = await safeParse(STORAGE_KEY, raw, []);

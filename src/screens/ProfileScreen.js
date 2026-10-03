@@ -5,12 +5,9 @@
 import React from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Alert,
+  ActivityIndicator,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { signOut, deleteUser } from 'firebase/auth';
-import { ref, remove } from 'firebase/database';
-import { auth as cloudAuth, db as cloudDb } from '../../firebaseConfig';
+import { logOut, confirmDeleteAccount } from '../services/accountActions';
 import CloudUnavailableNotice from '../components/CloudUnavailableNotice';
 import { useNavigation } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
@@ -28,85 +25,8 @@ export default function ProfileScreen() {
   // in the UI they are guests.
   const account = user && !user.isAnonymous ? user : null;
 
-  const handleLogout = async () => {
-    try {
-      if (cloudAuth) await signOut(cloudAuth);
-    } catch (e) {
-      Alert.alert('Error', 'Could not log out. Please try again.');
-    }
-  };
-
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'This will permanently delete your account and all synced data. Communication data on this device will not be affected.\n\nThis cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Account',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const currentUser = cloudAuth?.currentUser;
-              if (!currentUser) return;
-              const uid = currentUser.uid;
-
-              // Delete all user data from Firebase
-              try {
-                const db = cloudDb;
-                await Promise.all([
-                  remove(ref(db, `users/${uid}`)),
-                  remove(ref(db, `userSettings/${uid}`)),
-                  remove(ref(db, `userLogs/${uid}`)),
-                  remove(ref(db, `userSync/${uid}`)),
-                  remove(ref(db, `customVocab/${uid}`)),
-                  remove(ref(db, `vocabRequests/${uid}`)),
-                ]);
-              } catch (dbErr) {
-                console.warn('Could not remove some user data:', dbErr);
-              }
-
-              // Clear all user-related local data
-              try {
-                await AsyncStorage.multiRemove([
-                  '@aac_settings',
-                  '@aac_ai_profile',
-                  '@aac_sentence_history',
-                  '@aac_favourites',
-                  '@aac_custom_vocab',
-                  '@aac_custom_vocab_deleted',
-                  '@aac_vocab_requests',
-                  '@aac_feedback_queue',
-                  'userInteractionLog',
-                  'wordPredictionModel',
-                  'wordFrequencyModel',
-                  'currentSessionId',
-                  'lastActivity',
-                  'logLevel',
-                  'savedEmotion',
-                ]);
-              } catch (localErr) {
-                console.warn('Could not clear some local data:', localErr);
-              }
-
-              // Delete auth account
-              await deleteUser(currentUser);
-              Alert.alert('Account Deleted', 'Your account and all associated data have been permanently deleted.');
-            } catch (error) {
-              if (error.code === 'auth/requires-recent-login') {
-                Alert.alert(
-                  'Re-authentication Required',
-                  'For security, please log out and log back in, then try deleting again.'
-                );
-              } else {
-                Alert.alert('Error', 'Could not delete account. Please try again.');
-              }
-            }
-          },
-        },
-      ]
-    );
-  };
+  const handleLogout = logOut;
+  const handleDeleteAccount = confirmDeleteAccount;
 
   if (settingsLoading) {
     return (

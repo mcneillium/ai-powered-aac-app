@@ -42,6 +42,8 @@ import VocabManagerScreen from './src/screens/VocabManagerScreen';
 import LicensesScreen from './src/screens/LicensesScreen';
 import StudioBoardScreen from './src/screens/StudioBoardScreen';
 import StudioScreen from './src/screens/StudioScreen';
+import PhrasesScreen from './src/screens/PhrasesScreen';
+import MeScreen from './src/screens/MeScreen';
 import WelcomeSheet from './src/components/studio/WelcomeSheet';
 import { getScheme } from './src/design/tokens';
 
@@ -125,9 +127,9 @@ function StudioApp() {
       })}
     >
       <Tab.Screen name="Talk" component={StudioBoardScreen} options={{ headerShown: false }} />
-      <Tab.Screen name="Phrases" component={ContextPackScreen} options={{ title: 'Phrases' }} />
+      <Tab.Screen name="Phrases" component={PhrasesScreen} options={{ title: 'Phrases' }} />
       <Tab.Screen name="Personalise" component={StudioScreen} options={{ title: 'Personalise' }} />
-      <Tab.Screen name="Me" component={ProfileScreen} options={{ title: 'Me' }} />
+      <Tab.Screen name="Me" component={MeScreen} options={{ title: 'Me' }} />
     </Tab.Navigator>
   );
 }

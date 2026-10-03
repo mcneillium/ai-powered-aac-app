@@ -48,8 +48,8 @@ function getSyncUid() {
   return u && !u.isAnonymous ? u.uid : null;
 }
 
-export async function loadCustomVocab() {
-  if (loaded) return customItems;
+export async function loadCustomVocab({ reload = false } = {}) {
+  if (loaded && !reload) return customItems;
 
   // 1. Local first
   try {
