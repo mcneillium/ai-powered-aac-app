@@ -1,8 +1,5 @@
 // Personal learning: migration from earlier versions, user control
 // (forget / don't suggest / clear) and the settings migration.
-jest.mock('../../firebaseConfig', () => ({ db: null, auth: null, isFirebaseAvailable: () => false }));
-jest.mock('firebase/database', () => ({ ref: jest.fn(), onValue: jest.fn(), update: jest.fn() }));
-jest.mock('firebase/auth', () => ({ onAuthStateChanged: jest.fn(), signInAnonymously: jest.fn() }));
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { migrateSettings, toCloudSettings } from '../contexts/SettingsContext';
 import {
@@ -10,6 +7,11 @@ import {
   blockSuggestion, unblockSuggestion, getBlockedSuggestions, resetAIProfile,
   getLearnedSummary, hasStoredLearning, flushAIProfile,
 } from '../services/aiProfileStore';
+
+// Hoisted above the imports by babel-jest.
+jest.mock('../../firebaseConfig', () => ({ db: null, auth: null, isFirebaseAvailable: () => false }));
+jest.mock('firebase/database', () => ({ ref: jest.fn(), onValue: jest.fn(), update: jest.fn() }));
+jest.mock('firebase/auth', () => ({ onAuthStateChanged: jest.fn(), signInAnonymously: jest.fn() }));
 
 beforeEach(async () => {
   await AsyncStorage.clear();
