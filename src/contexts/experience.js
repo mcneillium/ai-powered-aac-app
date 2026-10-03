@@ -49,7 +49,9 @@ export function initialModeProfile(mode, flat) {
  */
 export function effectiveSettings(stored) {
   const mode = stored && stored.uiMode;
-  if (!MODES.includes(mode)) return stored;
+  // The Classic board always reads the stored settings, so a mode chosen on
+  // the new board (or on another device) can never move Classic buttons.
+  if (!MODES.includes(mode) || stored.boardLayout === 'classic') return stored;
   const profile = (stored.modeProfiles && stored.modeProfiles[mode]) || null;
   if (!profile) return stored;
   return { ...stored, ...profile };
@@ -74,7 +76,8 @@ export function routeSettingsUpdate(stored, updates) {
   }
 
   const mode = next.uiMode;
-  const hasProfile = MODES.includes(mode) && next.modeProfiles && next.modeProfiles[mode];
+  const hasProfile = MODES.includes(mode) && next.boardLayout !== 'classic'
+    && next.modeProfiles && next.modeProfiles[mode];
   for (const [key, value] of Object.entries(updatesCopy)) {
     if (hasProfile && PER_MODE_KEYS.includes(key)) {
       next.modeProfiles = {

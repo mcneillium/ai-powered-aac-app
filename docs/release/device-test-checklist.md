@@ -123,3 +123,29 @@ Emulator runs, 02/10/2026. Full method and values:
 | F1, F1b upgrade in place | PASS for the test app (baseline → fixed, same test key) | Store app → release-key build |
 | F2 | Not tested | Yes |
 | G1 to G5 camera, gallery, permissions | PASS on Android 15 and Android 11 (G5 checked from the APK, not in Settings) | Real camera on the S24 |
+
+## G. Voice 2 (new board, modes, learning) — build from `voice2-transformation`
+| # | Steps | Expected |
+|---|---|---|
+| G1 | Fresh install, launch | Board is usable behind the Welcome sheet; "Start talking" or ✕ closes it at once; no account or consent needed |
+| G2 | Upgrade from 1.2.0 / PR #7 build with saved favourites, history, custom words, settings | Classic board, everything intact; Settings › Board design shows "Classic"; nothing moved |
+| G3 | Settings › Board design › New Voice, then back to Classic | Same message, favourites, history and custom words in both |
+| G4 | New board: tap "Voice · Adult" › choose Child › Switch | Warm tiles, 3 across, picture symbols first (after download); every word still there |
+| G5 | In Child set text Large; switch to Adult; switch back | Child keeps Large; Adult keeps its own size; voice/speed unchanged |
+| G6 | Personalise › Picture symbols › Download (online), then airplane mode, relaunch | Symbols still shown offline; Remove deletes them; words still work without symbols |
+| G7 | Build a long message, tap words rapidly, let suggestions appear and disappear | First row of the grid never moves; nothing above the grid changes height |
+| G8 | Speak a long message, then tap Stop (same place as Speak) | Speech stops immediately, does not restart; Speak returns |
+| G9 | Explain › "Say it another way" › pick option › Replace; then Undo | Preview shown before replace; Undo restores the original |
+| G10 | Phrases › Work › tap a phrase | Spoken and shown in the message; Phrases remembers "Work"; board layout unchanged |
+| G11 | Show › rotate button › Back to board | Large text, flips for a partner; same message on return; works with TTS disabled |
+| G12 | Personalise › Learning OFF (default): speak "I want to see Grandma Zebedee" 5× | "Zebedee" is not suggested after "Grandma" |
+| G13 | Turn Learning ON, repeat G12 | "Zebedee" suggested after "Grandma"; stats count messages; Delete what Voice has learned removes it |
+| G14 | Long-press a suggestion › Don't suggest | It disappears after that word; still suggested elsewhere |
+| G15 | More › Start modelling, build and speak a message | "MODELLING" tag shown; message not in Recent; nothing learned |
+| G16 | Personalise › My words › type "Grandma", Take photo (deny camera permission) | Clear note; tile can still be saved without photo |
+| G17 | Same with camera allowed, and with Choose photo | Preview shows the photo before saving; tile appears at the end of Home with the photo; photo not synced |
+| G18 | Personalise › Lock this screen, leave and return | Settings disabled until press-and-hold; board, speech, phrases, Quick and "no" unaffected |
+| G19 | TalkBack/VoiceOver on the new board | Order: mode, Find, More, Settings → message → Speak → Delete → Clear → Undo → Explain, Phrases, Saved, Show → suggestions → Home, Back → words. Sheets announce title and Close |
+| G20 | System reduce motion / remove animations ON | No tile scale animation; press still shows a tint |
+| G21 | Controls at bottom (Personalise) | Message and controls below the grid; thumb-reachable; grid still fixed |
+| G22 | Tablet | Two panes: message + tools + recent left, grid right |

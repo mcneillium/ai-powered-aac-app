@@ -14,7 +14,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, AppState, View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { ActivityIndicator, AppState, View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -111,7 +111,12 @@ function StudioApp() {
         headerRight: () => <SettingsHeaderButton tintColor={c.ink} navigation={navigation} />,
         tabBarActiveTintColor: c.signal,
         tabBarInactiveTintColor: c.inkSoft,
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
+        // Shrinks to fit instead of truncating on narrow phones.
+        tabBarLabel: ({ color }) => (
+          <Text style={{ color, fontSize: 12, fontWeight: '600' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+            {route.name}
+          </Text>
+        ),
         tabBarStyle: { backgroundColor: c.card, borderTopColor: c.line },
         tabBarIcon: ({ color, size }) => (
           <Ionicons name={STUDIO_TAB_ICONS[route.name] || 'ellipse-outline'} size={size} color={color} />
@@ -133,7 +138,8 @@ function MainApp() {
   if (loading) return <View style={styles.center} />;
   // The new board is the default for new installs; existing users keep the
   // familiar board until they choose the new one (Settings or Personalise).
-  if (settings.boardLayout !== 'classic') return <StudioApp />;
+  // Unknown (settings could not be read) falls back to the familiar board.
+  if (settings.boardLayout === 'studio') return <StudioApp />;
   return <ClassicApp />;
 }
 

@@ -80,14 +80,15 @@ export default function StudioScreen() {
   const pick = async (fromCamera) => {
     setPhotoNote(null);
     try {
-      const perm = fromCamera
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        setPhotoNote(fromCamera
-          ? 'Camera permission was not given. You can still make the tile without a photo, or allow the camera in system settings.'
-          : 'Photo access was not given. You can still make the tile without a photo.');
-        return;
+      // Only the camera needs a permission. The system photo picker does not
+      // (and on Android 12 and lower the storage permission is removed from
+      // this app, so asking for it would always be refused).
+      if (fromCamera) {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) {
+          setPhotoNote('Camera permission was not given. You can still make the tile without a photo, or allow the camera in system settings.');
+          return;
+        }
       }
       const opts = { mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.6 };
       const res = fromCamera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);

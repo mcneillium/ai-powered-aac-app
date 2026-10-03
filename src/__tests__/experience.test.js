@@ -65,3 +65,16 @@ describe('modes', () => {
     });
   });
 });
+
+describe('Classic board is never changed by a mode', () => {
+  test('profiles are ignored while the Classic board is in use', () => {
+    const s = { boardLayout: 'classic', gridSize: 3, uiMode: 'adult', modeProfiles: { adult: { gridSize: 5, showVoiceStyles: false } } };
+    expect(effectiveSettings(s)).toBe(s);
+  });
+  test('changes made on the Classic board go to its own settings', () => {
+    const s = { boardLayout: 'classic', textScale: 1, uiMode: 'adult', modeProfiles: { adult: { textScale: 1 } } };
+    const next = routeSettingsUpdate(s, { textScale: 1.5 });
+    expect(next.textScale).toBe(1.5);
+    expect(next.modeProfiles.adult.textScale).toBe(1);
+  });
+});

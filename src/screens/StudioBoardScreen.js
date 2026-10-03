@@ -11,7 +11,7 @@
 //    reorder the grid.
 // Optional: controls at the bottom for one-handed use; two-pane on tablets.
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, FlatList, ScrollView, StyleSheet, useWindowDimensions, Pressable,
 } from 'react-native';
@@ -19,9 +19,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBoardController } from './useBoardController';
 import { usePaper } from '../design/usePaper';
-import { Tile, ActionButton, SuggestionChip, ListRow, tileCategory } from '../design/components';
+import { Tile, ActionButton, SuggestionChip, ListRow, Sheet, tileCategory } from '../design/components';
 import { space, type, touch } from '../design/tokens';
-import { subscribeSpeechStatus, getSpeechStatus, stop } from '../services/speechService';
+import { subscribeSpeechStatus, stop } from '../services/speechService';
 import { symbolSourceFor, subscribeSymbols, loadSymbolState } from '../services/symbolStore';
 import { getContextPack } from '../data/contextPacks';
 import { dismissSuggestion } from '../services/suggestionEngine';
@@ -37,7 +37,16 @@ import { advanceScan, selectCurrent, getScanState } from '../services/switchScan
 
 export default function StudioBoardScreen() {
   const [modelling, setModelling] = useState(false);
-  const b = useBoardController({ modelling });
+  const [sheet, setSheet] = useState(null); // 'explain' | 'phrases' | 'saved' | 'show' | 'mode' | 'more'
+  // Tool row is part of the in-app scanning cycle (after Undo).
+  const openRef = useRef(null);
+  const extraActions = useMemo(() => [
+    { id: 'tool-explain', label: 'Help me explain', onSelect: () => openRef.current?.('explain') },
+    { id: 'tool-phrases', label: 'Phrases', onSelect: () => openRef.current?.('phrases') },
+    { id: 'tool-saved', label: 'Saved', onSelect: () => openRef.current?.('saved') },
+    { id: 'tool-show', label: 'Show', onSelect: () => openRef.current?.('show') },
+  ], []);
+  const b = useBoardController({ modelling, extraActions });
   const {
     settings, navigation, sentenceWords, currentPage, currentPageId, pageHistory,
     suggestions, history, favourites, undoWords, showFinder, setShowFinder,
@@ -53,10 +62,20 @@ export default function StudioBoardScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const wide = width >= 720;
+  // Narrow phones: smaller secondary controls so "Speak" is never truncated.
+  const narrow = width < 360;
+  const ctl = narrow ? touch.min : touch.action;
 
-  // Speaking state drives Speak ↔ Stop in the same position.
-  const [speaking, setSpeaking] = useState(getSpeechStatus().speaking);
-  useEffect(() => subscribeSpeechStatus((s) => setSpeaking(!!s.speaking)), []);
+  // Speak becomes Stop only while the whole message is being spoken (not
+  // while a single tapped word is said), so a quick tap on Speak after a
+  // word always speaks the message.
+  const [speaking, setSpeaking] = useState(false);
+  useEffect(() => subscribeSpeechStatus((st) => { if (!st.speaking) setSpeaking(false); }), []);
+  const speakOrStop = useCallback(() => {
+    if (speaking) { stop(); setSpeaking(false); return; }
+    speakSentence();
+    setSpeaking(true);
+  }, [speaking, speakSentence]);
 
   // Re-render tiles when symbols finish downloading.
   const [symbolTick, setSymbolTick] = useState(0);
@@ -65,8 +84,18 @@ export default function StudioBoardScreen() {
     return subscribeSymbols(() => setSymbolTick((n) => n + 1));
   }, []);
 
-  const [sheet, setSheet] = useState(null); // 'explain' | 'phrases' | 'saved' | 'show' | 'mode' | 'more'
-  const close = useCallback(() => setSheet(null), []);
+  // In-app scanning covers the board; it pauses while a sheet is open and
+  // resumes when the sheet closes (system Switch Access works throughout).
+  const resumeScan = useRef(false);
+  const open = useCallback((name) => {
+    if (scanActive) { resumeScan.current = true; toggleScan(); }
+    setSheet(name);
+  }, [scanActive, toggleScan]);
+  openRef.current = open;
+  const close = useCallback(() => {
+    setSheet(null);
+    if (resumeScan.current) { resumeScan.current = false; setTimeout(() => toggleScan(), 0); }
+  }, [toggleScan]);
 
   const hasWords = sentenceWords.length > 0;
   const message = sentenceWords.join(' ');
@@ -108,7 +137,7 @@ export default function StudioBoardScreen() {
   const topBar = (
     <View style={[styles.topBar, { paddingTop: insets.top + space.xs }]}>
       <Pressable
-        onPress={() => setSheet('mode')}
+        onPress={() => open('mode')}
         style={[styles.modePill, { backgroundColor: c.sunk, borderRadius: 999 }]}
         accessibilityRole="button"
         accessibilityLabel={`${mode === 'child' ? 'Child' : 'Adult'} mode${context ? `, ${context.label} phrases` : ''}. Change mode`}
@@ -126,7 +155,7 @@ export default function StudioBoardScreen() {
         </View>
       )}
       <ActionButton icon="search" a11yLabel={t('findWordLabel')} onPress={() => setShowFinder(true)} variant="ghost" size={touch.min} />
-      <ActionButton icon="ellipsis-horizontal" a11yLabel="More options" onPress={() => setSheet('more')} variant="ghost" size={touch.min} />
+      <ActionButton icon="ellipsis-horizontal" a11yLabel="More options" onPress={() => open('more')} variant="ghost" size={touch.min} />
       <ActionButton icon="settings-outline" a11yLabel="Open settings" onPress={() => navigation.navigate('Settings')} variant="ghost" size={touch.min} />
     </View>
   );
@@ -141,7 +170,9 @@ export default function StudioBoardScreen() {
         accessible
         accessibilityRole="text"
         accessibilityLabel={hasWords ? `Message: ${message}` : 'Message is empty. Tap words to build a message.'}
-        accessibilityLiveRegion="polite"
+        // Announce changes only when words are not already spoken on tap,
+        // so TalkBack and the voice do not talk over each other.
+        accessibilityLiveRegion={settings.speakWordsOnTap === false ? 'polite' : 'none'}
       >
         {hasWords ? (
           <Text style={[type.message, { color: c.ink, fontSize: Math.round(type.message.fontSize * scale), lineHeight }]}>
@@ -155,21 +186,19 @@ export default function StudioBoardScreen() {
         )}
       </ScrollView>
       <View style={styles.controls}>
-        {speaking ? (
-          <ActionButton
-            icon="stop" label="Stop" variant="signal" flex={1} onPress={stop}
-            a11yLabel="Stop speaking" focused={isScanFocused('action', 'speak')}
-          />
-        ) : (
-          <ActionButton
-            icon="volume-high" label="Speak" variant="signal" flex={1} onPress={speakSentence}
-            disabled={!hasWords} focused={isScanFocused('action', 'speak')}
-            a11yLabel={hasWords ? `Speak message: ${message}` : 'Speak. Build a message first.'}
-          />
-        )}
-        <ActionButton icon="backspace-outline" a11yLabel={t('deleteLastWord')} onPress={removeLastWord} disabled={!hasWords} focused={isScanFocused('action', 'backspace')} />
-        <ActionButton icon="close" a11yLabel={t('clearSentence')} onPress={clearSentence} disabled={!hasWords} variant="danger" focused={isScanFocused('action', 'clear')} />
-        <ActionButton icon="arrow-undo" a11yLabel={undoWords ? t('undoLabel') : t('nothingToUndo')} onPress={undo} disabled={!undoWords} focused={isScanFocused('action', 'undo')} />
+        {/* One control: its label changes, its position and focus do not. */}
+        <ActionButton
+          icon={narrow ? null : speaking ? 'stop' : 'volume-high'}
+          label={speaking ? 'Stop' : 'Speak'}
+          variant="signal" flex={1} size={ctl}
+          onPress={speakOrStop}
+          disabled={!hasWords && !speaking}
+          focused={isScanFocused('action', 'speak')}
+          a11yLabel={speaking ? 'Stop speaking' : hasWords ? `Speak message: ${message}` : 'Speak. Build a message first.'}
+        />
+        <ActionButton icon="backspace-outline" a11yLabel={t('deleteLastWord')} onPress={removeLastWord} disabled={!hasWords} focused={isScanFocused('action', 'backspace')} size={ctl} />
+        <ActionButton icon="close" a11yLabel={t('clearSentence')} onPress={clearSentence} disabled={!hasWords} variant="danger" focused={isScanFocused('action', 'clear')} size={ctl} />
+        <ActionButton icon="arrow-undo" a11yLabel={undoWords ? t('undoLabel') : t('nothingToUndo')} onPress={undo} disabled={!undoWords} focused={isScanFocused('action', 'undo')} size={ctl} />
       </View>
     </View>
   );
@@ -180,7 +209,12 @@ export default function StudioBoardScreen() {
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={a11y || label}
-      style={({ pressed }) => [styles.tool, { backgroundColor: pressed ? c.signalSoft : c.sunk, borderRadius: r.control }, p.theme === 'highContrast' && { borderWidth: 2, borderColor: c.line }]}
+      accessibilityState={{ selected: isScanFocused('action', `tool-${key}`) }}
+      style={({ pressed }) => [
+        styles.tool, { backgroundColor: pressed ? c.signalSoft : c.sunk, borderRadius: r.control },
+        p.theme === 'highContrast' && { borderWidth: 2, borderColor: c.line },
+        isScanFocused('action', `tool-${key}`) && { borderWidth: 4, borderColor: c.focus },
+      ]}
     >
       <Ionicons name={icon} size={19} color={c.ink} />
       <Text style={[type.label, { color: c.ink, fontSize: 13, lineHeight: 16 }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{label}</Text>
@@ -188,10 +222,10 @@ export default function StudioBoardScreen() {
   );
   const tools = (
     <View style={styles.tools}>
-      {tool('chatbubble-ellipses-outline', 'Explain', 'explain', () => setSheet('explain'), 'Help me explain')}
-      {tool('albums-outline', context ? context.label : 'Phrases', 'phrases', () => setSheet('phrases'), `Phrases${context ? ` for ${context.label}` : ''}`)}
-      {tool('star-outline', 'Saved', 'saved', () => setSheet('saved'), 'Saved and recent messages')}
-      {tool('expand-outline', 'Show', 'show', () => setSheet('show'), t('showOnScreen'))}
+      {tool('chatbubble-ellipses-outline', 'Explain', 'explain', () => open('explain'), 'Help me explain')}
+      {tool('albums-outline', context ? context.label : 'Phrases', 'phrases', () => open('phrases'), `Phrases${context ? ` for ${context.label}` : ''}`)}
+      {tool('star-outline', 'Saved', 'saved', () => open('saved'), 'Saved and recent messages')}
+      {tool('expand-outline', 'Show', 'show', () => open('show'), t('showOnScreen'))}
     </View>
   );
 
@@ -215,7 +249,7 @@ export default function StudioBoardScreen() {
                 focused={isScanFocused('suggestion', `sug-${index}`)}
                 maxFontSizeMultiplier={chipFit.wordMaxMultiplier}
                 onPress={() => handleSuggestionPress(word)}
-                onLongPress={() => setChipMenu(word)}
+                onLongPress={() => setChipMenu({ word, before: [...sentenceWords] })}
               />
             );
           }}
@@ -320,21 +354,22 @@ export default function StudioBoardScreen() {
         </View>
       )}
 
-      {/* Suggestion options (long press): correct a bad suggestion. */}
-      {chipMenu && (
-        <View style={[styles.chipMenu, { backgroundColor: c.card, borderColor: c.line, borderRadius: r.control }]} accessibilityViewIsModal>
-          <Text style={[type.body, { color: c.ink, marginBottom: space.sm }]}>
-            Stop suggesting “{chipMenu}” after “{sentenceWords[sentenceWords.length - 1] || 'the start'}”?
-          </Text>
-          <View style={{ flexDirection: 'row', gap: space.sm }}>
-            <ActionButton label="Keep" onPress={() => setChipMenu(null)} flex={1} size={touch.min} />
-            <ActionButton
-              label="Don't suggest" variant="signal" flex={1} size={touch.min}
-              onPress={() => { dismissSuggestion(chipMenu, sentenceWords, settings.activeContext); setChipMenu(null); b.refreshSuggestions?.(); }}
-            />
-          </View>
+      {/* Suggestion options (long press): correct a bad suggestion. The
+          words before it are captured when the menu opens. */}
+      <Sheet
+        visible={!!chipMenu}
+        onClose={() => setChipMenu(null)}
+        title="Suggestion"
+        subtitle={chipMenu ? `Stop suggesting “${chipMenu.word}” after “${chipMenu.before[chipMenu.before.length - 1] || 'the start'}”? You can still find it on the board.` : ''}
+      >
+        <View style={{ flexDirection: 'row', gap: space.sm }}>
+          <ActionButton label="Keep it" onPress={() => setChipMenu(null)} flex={1} size={touch.action} />
+          <ActionButton
+            label="Don't suggest" variant="signal" flex={1} size={touch.action}
+            onPress={() => { dismissSuggestion(chipMenu.word, chipMenu.before); setChipMenu(null); }}
+          />
         </View>
-      )}
+      </Sheet>
 
       <WordFinder visible={showFinder} onClose={() => setShowFinder(false)} onAddWord={handleFinderAdd} onShowPage={handleFinderShowPage} onNoResults={handleFinderNoResults} />
       <ExplainSheet
@@ -374,7 +409,7 @@ const styles = StyleSheet.create({
   brandDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
   modelTag: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, marginRight: 4 },
   stage: { paddingHorizontal: space.md, paddingTop: space.sm, paddingBottom: space.md },
-  controls: { flexDirection: 'row', gap: space.sm, marginTop: space.sm },
+  controls: { flexDirection: 'row', gap: space.sm, marginTop: space.sm, alignItems: 'stretch' },
   tools: { flexDirection: 'row', gap: space.sm, marginTop: space.sm },
   tool: { flex: 1, minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
   suggestRow: { flexDirection: 'row', alignItems: 'center', marginTop: space.xs },
@@ -382,5 +417,4 @@ const styles = StyleSheet.create({
   wide: { flex: 1, flexDirection: 'row' },
   notice: { position: 'absolute', left: space.md, right: space.md, padding: space.md, flexDirection: 'row', alignItems: 'center', zIndex: 20, opacity: 0.96 },
   scanStrip: { position: 'absolute', left: space.sm, right: space.sm, bottom: space.sm, flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: space.sm, borderWidth: 2, zIndex: 15 },
-  chipMenu: { position: 'absolute', left: space.md, right: space.md, top: '30%', padding: space.lg, borderWidth: 1, zIndex: 30, elevation: 8, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12 },
 });

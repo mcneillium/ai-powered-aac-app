@@ -153,7 +153,7 @@ export function ActionButton({
         ]}
       >
         {icon && <Ionicons name={icon} size={label ? 22 : 24} color={fg} />}
-        {label ? <Text style={[type.label, { color: fg, fontSize: 16, marginLeft: icon ? 8 : 0 }]} numberOfLines={1}>{label}</Text> : null}
+        {label ? <Text style={[type.label, { color: fg, fontSize: 16, marginLeft: icon ? 8 : 0, flexShrink: 1 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.5}>{label}</Text> : null}
       </Animated.View>
     </Pressable>
   );
@@ -180,7 +180,7 @@ export function SuggestionChip({ word, reason, onPress, onLongPress, focused, ma
       ]}
     >
       <Text
-        style={[type.label, { color: c.ink, fontSize: Math.round(16 * scale) }]}
+        style={[type.label, { color: c.ink, fontSize: Math.round(16 * scale), lineHeight: Math.round(20 * scale) }]}
         numberOfLines={1}
         maxFontSizeMultiplier={maxFontSizeMultiplier}
       >

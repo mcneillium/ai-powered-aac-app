@@ -21,27 +21,35 @@ export async function loadTilePhotos() {
   return photos;
 }
 
+// Stored as a file name and resolved against the current documents folder:
+// on iOS the app's container path can change after an update or restore.
+function resolve(stored) {
+  if (!stored) return null;
+  if (Platform.OS === 'web' || !DIR || /^[a-z]+:/i.test(stored)) return stored;
+  return `${DIR}${stored}`;
+}
+
 export function getTilePhoto(itemId) {
-  return photos[itemId] || null;
+  return resolve(photos[itemId]);
 }
 
 /** Copy a picked/captured image into app storage and attach it to a tile. */
 export async function saveTilePhoto(itemId, sourceUri) {
-  let uri = sourceUri;
+  let stored = sourceUri;
   if (Platform.OS !== 'web' && DIR) {
     await FileSystem.makeDirectoryAsync(DIR, { intermediates: true }).catch(() => {});
-    uri = `${DIR}${itemId}-${Date.now()}.jpg`;
-    await FileSystem.copyAsync({ from: sourceUri, to: uri });
+    stored = `${itemId}-${Date.now()}.jpg`;
+    await FileSystem.copyAsync({ from: sourceUri, to: `${DIR}${stored}` });
   }
-  const old = photos[itemId];
-  photos = { ...photos, [itemId]: uri };
+  const old = resolve(photos[itemId]);
+  photos = { ...photos, [itemId]: stored };
   await AsyncStorage.setItem(KEY, JSON.stringify(photos));
-  if (old && old !== uri && Platform.OS !== 'web') FileSystem.deleteAsync(old, { idempotent: true }).catch(() => {});
-  return uri;
+  if (old && Platform.OS !== 'web') FileSystem.deleteAsync(old, { idempotent: true }).catch(() => {});
+  return resolve(stored);
 }
 
 export async function removeTilePhoto(itemId) {
-  const old = photos[itemId];
+  const old = resolve(photos[itemId]);
   if (!old) return;
   const next = { ...photos };
   delete next[itemId];

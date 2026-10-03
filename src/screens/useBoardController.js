@@ -50,8 +50,10 @@ import {
  * @param {object} [options]
  * @param {boolean} [options.modelling] A supporter is demonstrating words
  *   (Child modelling). Nothing is learned and nothing is added to history.
+ * @param {{id: string, label: string, onSelect: function}[]} [options.extraActions]
+ *   Extra controls a layout adds to the switch-scanning cycle (after Undo).
  */
-export function useBoardController({ modelling = false } = {}) {
+export function useBoardController({ modelling = false, extraActions = [] } = {}) {
   const { settings } = useSettings();
   const palette = getPalette(settings.theme);
   const navigation = useNavigation();
@@ -169,6 +171,9 @@ export function useBoardController({ modelling = false } = {}) {
   // Scan order: vocab grid first (main communication), then suggestions, then actions last.
   // This puts the most-used items at the start of the scan cycle.
   const scanItemList = useRef([]);
+  const extraActionsRef = useRef(extraActions);
+  extraActionsRef.current = extraActions;
+  const extraActionKey = extraActions.map(a => a.id).join(',');
 
   // Use refs for action callbacks to avoid stale closures in scan select handler.
   // The callbacks are declared with `const` further down, so the refs start
@@ -193,12 +198,14 @@ export function useBoardController({ modelling = false } = {}) {
       { type: 'action', id: 'backspace', label: 'Delete' },
       { type: 'action', id: 'clear', label: 'Clear' },
       { type: 'action', id: 'undo', label: 'Undo' },
+      ...extraActionsRef.current.map(a => ({ type: 'action', id: a.id, label: a.label })),
     ];
     scanItemList.current = [...vocabItems, ...suggItems, ...actionItems];
     if (scanActive) {
       setScanItems(scanItemList.current);
     }
-  }, [currentPage, suggestions, scanActive]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, suggestions, scanActive, extraActionKey]);
 
   // Register scan callbacks once — use refs to avoid stale closures
   useEffect(() => {
@@ -212,6 +219,7 @@ export function useBoardController({ modelling = false } = {}) {
         else if (item.id === 'backspace') backspaceRef.current?.();
         else if (item.id === 'clear') clearRef.current?.();
         else if (item.id === 'undo') undoRef.current?.();
+        else extraActionsRef.current.find(a => a.id === item.id)?.onSelect();
       } else if (item.type === 'vocab') {
         buttonPressRef.current?.(item.button);
       } else if (item.type === 'suggestion') {
@@ -296,7 +304,8 @@ export function useBoardController({ modelling = false } = {}) {
     });
     setSuggestions(local);
 
-    if (cloudEnabled && settings.personalLearning === true && !modelling && sentenceWords.length >= 2) {
+    // The user's own Online suggestions switch is the consent for this.
+    if (cloudEnabled && !modelling && sentenceWords.length >= 2) {
       (async () => {
         try {
           const recentTexts = getSentenceHistory().slice(0, 3).map(h => h.text);
@@ -431,11 +440,13 @@ export function useBoardController({ modelling = false } = {}) {
     replaceSentence(text.split(' '));
     say(text);
     setLastSpoken(text);
-    incrementSpeakCount(text)
-      .then(() => setHistory([...getSentenceHistory()]))
-      .catch(() => {});
+    if (!modelling) {
+      incrementSpeakCount(text)
+        .then(() => setHistory([...getSentenceHistory()]))
+        .catch(() => {});
+    }
     setShowHistory(false);
-  }, [replaceSentence, say]);
+  }, [replaceSentence, say, modelling]);
 
   const handleToggleFavourite = useCallback(async () => {
     const text = sentenceWords.join(' ').trim();
@@ -469,11 +480,13 @@ export function useBoardController({ modelling = false } = {}) {
     replaceSentence(phrase.split(' '));
     say(phrase);
     setLastSpoken(phrase);
-    addSentenceToHistory(phrase)
-      .then(() => setHistory([...getSentenceHistory()]))
-      .catch(() => {});
+    if (!modelling) {
+      addSentenceToHistory(phrase)
+        .then(() => setHistory([...getSentenceHistory()]))
+        .catch(() => {});
+    }
     setShowFavourites(false);
-  }, [replaceSentence, say]);
+  }, [replaceSentence, say, modelling]);
 
   // Find-a-word: add the word exactly as a board tap would.
   const handleFinderAdd = useCallback((button) => {

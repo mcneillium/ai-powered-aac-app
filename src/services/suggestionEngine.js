@@ -28,7 +28,8 @@ export function subscribePrediction(fn) {
 export function initPrediction() {
   if (!initPromise) {
     initPromise = createPersistentPredictor({ learningEnabled: learning })
-      .then((p) => { predictor = p; notify(); })
+      // Apply the current setting: it may have changed while loading.
+      .then((p) => { p.setLearningEnabled(learning); predictor = p; notify(); })
       .catch(() => { /* base predictor keeps working */ });
   }
   return initPromise;

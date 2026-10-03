@@ -51,7 +51,7 @@ export { defaultSettings };
 // differ between devices and platforms, and the compact layout depends on
 // this device's screen. (Keeping them local also means a reset to "default"
 // (null), which the Realtime Database stores as a missing key, is not lost.)
-export const LOCAL_ONLY_KEYS = ['speechVoice', 'compactLayout'];
+export const LOCAL_ONLY_KEYS = ['speechVoice', 'compactLayout', 'boardLayoutSource'];
 
 /** The settings object as written to the cloud. Exported for tests. */
 export function toCloudSettings(settings) {
@@ -67,9 +67,20 @@ export function toCloudSettings(settings) {
  * the first cloud snapshot arrives cannot replace the account's synced
  * settings with this device's defaults. Exported for tests.
  */
-export function cloudPatchFor(updates) {
+export function cloudPatchFor(updates, previous) {
   const patch = toCloudSettings(updates || {});
   Object.keys(patch).forEach(k => { if (patch[k] === undefined) delete patch[k]; });
+  // Per-mode settings are written key by key (multi-path update), so two
+  // devices changing different modes never overwrite each other.
+  if (patch.modeProfiles && typeof patch.modeProfiles === 'object') {
+    const prev = (previous && previous.modeProfiles) || {};
+    for (const [mode, profile] of Object.entries(patch.modeProfiles)) {
+      for (const [k, v] of Object.entries(profile || {})) {
+        if (!prev[mode] || prev[mode][k] !== v) patch[`modeProfiles/${mode}/${k}`] = v;
+      }
+    }
+    delete patch.modeProfiles;
+  }
   return patch;
 }
 
@@ -83,7 +94,24 @@ export function mergeRemoteSettings(local, remote) {
   const merged = { ...local };
   for (const [key, value] of Object.entries(remote)) {
     if (LOCAL_ONLY_KEYS.includes(key)) continue;
-    if (value !== null && value !== undefined) merged[key] = value;
+    if (value === null || value === undefined) continue;
+    if (key === 'modeProfiles' && typeof value === 'object') {
+      // Merge each mode's settings rather than replacing the whole set.
+      const profiles = { ...(local.modeProfiles || {}) };
+      for (const [mode, profile] of Object.entries(value)) {
+        if (profile && typeof profile === 'object') profiles[mode] = { ...(profiles[mode] || {}), ...profile };
+      }
+      merged.modeProfiles = profiles;
+    } else {
+      merged[key] = value;
+    }
+  }
+  // An account with synced settings but no board choice belongs to someone
+  // who used Voice before Voice 2: keep the familiar board on this device
+  // unless they already chose here.
+  if (!remote.boardLayout && local.boardLayoutSource === 'new-install' && Object.keys(remote).length > 0) {
+    merged.boardLayout = 'classic';
+    merged.boardLayoutSource = 'existing-account';
   }
   return merged;
 }
@@ -124,7 +152,11 @@ export function SettingsProvider({ children }) {
         const launched = await AsyncStorage.getItem('hasLaunched').catch(() => null);
         const migration = migrateExperience(hasStored ? parsed : null, hasStored || launched === 'true');
         if (migration) {
-          latestSettings.current = { ...latestSettings.current, ...migration };
+          latestSettings.current = {
+            ...latestSettings.current,
+            ...migration,
+            boardLayoutSource: migration.boardLayout === 'studio' ? 'new-install' : 'existing-install',
+          };
           AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(latestSettings.current)).catch(() => {});
         }
         setSettings(latestSettings.current);
@@ -175,10 +207,13 @@ export function SettingsProvider({ children }) {
   const updateSettings = useCallback(async (updates) => {
     await localLoaded.current.promise;
     // Per-mode presentation keys are stored in the active mode's profile.
-    const newSettings = routeSettingsUpdate(latestSettings.current, updates);
+    const previous = latestSettings.current;
+    const newSettings = routeSettingsUpdate(previous, updates);
+    // An explicit board choice is final: cloud migration never overrides it.
+    if (updates.boardLayout) newSettings.boardLayoutSource = 'chosen';
     const changed = {};
     Object.keys(newSettings).forEach((k) => {
-      if (newSettings[k] !== latestSettings.current[k]) changed[k] = newSettings[k];
+      if (newSettings[k] !== previous[k]) changed[k] = newSettings[k];
     });
     latestSettings.current = newSettings;
     setSettings(newSettings);
@@ -194,7 +229,12 @@ export function SettingsProvider({ children }) {
     try {
       const uid = user && !user.isAnonymous ? user.uid : null;
       if (uid && db) {
-        const patch = cloudPatchFor(changed);
+        const patch = cloudPatchFor(changed, previous);
+        // A new install records its board on the account with its first
+        // write, so later snapshots don't mistake it for a pre-Voice 2 account.
+        if (Object.keys(patch).length > 0 && newSettings.boardLayoutSource === 'new-install' && newSettings.boardLayout) {
+          patch.boardLayout = newSettings.boardLayout;
+        }
         if (Object.keys(patch).length > 0) {
           await update(ref(db, dbPath(DB_PATHS.USER_SETTINGS, uid)), patch);
         }
