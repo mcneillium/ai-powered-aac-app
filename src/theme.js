@@ -1,5 +1,7 @@
 // src/theme.js
 // Single source of truth for theming across the AAC app.
+// Filled colours (primary, danger, info, success, warning, accent) must reach
+// WCAG AA (4.5:1) against buttonText — enforced by theme.test.js.
 // Every screen MUST import from here — no inline palette objects.
 
 // ── Branding constants ──
@@ -52,24 +54,25 @@ export const palettes = {
     background: '#FAFAFA',
     surface: '#F2F4F7',
     text: '#2E2E3A',
-    textSecondary: '#6E6E82',
+    textSecondary: '#5C5C70',
     border: '#DDD9D4',
     tabBarBg: '#FFFFFF',
-    tabBarActive: '#2979FF',
-    tabBarInactive: '#A0A0A0',
+    tabBarActive: '#1A66E0',
+    tabBarInactive: '#6E6E82',
     cardBg: '#FFFFFF',
-    primary: '#2979FF',
+    primary: '#1A66E0',
     primaryMuted: '#DCEAFF',
-    danger: '#D97575',
-    info: '#448AFF',
-    success: '#6BBF90',
-    warning: '#E8A070',
+    danger: '#C62828',
+    info: '#1565C0',
+    success: '#2B7A3D',
+    warning: '#A85200',
     inputBg: '#FFFFFF',
     inputBorder: '#DDD9D4',
     chipBg: '#EBF0F7',
     overlay: 'rgba(0,0,0,0.4)',
-    accent: '#7C8FCC',
+    accent: '#4F5BB0',
     buttonText: '#FFFFFF',
+    focusRing: '#D84315',
   },
   dark: {
     background: '#141420',
@@ -92,7 +95,8 @@ export const palettes = {
     chipBg: '#2A2E4E',
     overlay: 'rgba(0,0,0,0.65)',
     accent: '#8E9ED4',
-    buttonText: '#FFFFFF',
+    buttonText: '#0E1020', // dark text: white failed contrast on every dark-theme accent
+    focusRing: '#FF9100',
   },
   highContrast: {
     background: '#000000',
@@ -116,6 +120,7 @@ export const palettes = {
     overlay: 'rgba(0,0,0,0.8)',
     accent: '#FFD600',
     buttonText: '#000000',
+    focusRing: '#00E5FF', // distinct from the yellow borders used everywhere
   },
 };
 

@@ -7,8 +7,10 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
-import { getDatabase, ref, set } from 'firebase/database';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { ref, set } from 'firebase/database';
+import { auth as cloudAuth, db as cloudDb, isFirebaseAvailable } from '../../firebaseConfig';
+import CloudUnavailableNotice from '../components/CloudUnavailableNotice';
 import { useNavigation } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, radii, spacing } from '../theme';
@@ -52,15 +54,20 @@ export default function SignupScreen() {
       return;
     }
 
+    if (!isFirebaseAvailable()) {
+      Alert.alert('Accounts unavailable', 'Accounts are not available in this version of the app. You can keep communicating without an account.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const auth = getAuth();
+      const auth = cloudAuth;
       const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       const user = userCredential.user;
 
       // Write user profile to database
       try {
-        const db = getDatabase();
+        const db = cloudDb;
         await set(ref(db, `users/${user.uid}`), {
           name: trimmedName || trimmedEmail.split('@')[0],
           email: trimmedEmail,
@@ -93,6 +100,7 @@ export default function SignupScreen() {
         <Text style={[styles.subtitle, { color: palette.textSecondary }]}>
           Sign up to sync your settings across devices
         </Text>
+        <CloudUnavailableNotice />
 
         <TextInput
           style={[styles.input, { borderColor: palette.inputBorder, color: palette.text, backgroundColor: palette.inputBg }]}

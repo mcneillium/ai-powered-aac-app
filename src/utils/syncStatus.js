@@ -4,20 +4,19 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ref, set } from 'firebase/database';
-import { db } from '../../firebaseConfig';
-import { getAuth } from 'firebase/auth';
+import { db, auth } from '../../firebaseConfig';
 import { DB_PATHS, dbPath } from '../shared/schema';
 
 /**
  * Updates the lastActivity timestamp locally and in Firebase.
  */
 export const updateLastActivity = async () => {
-  const user = getAuth().currentUser;
+  const user = auth?.currentUser;
   const timestamp = new Date().toISOString();
 
   try {
     await AsyncStorage.setItem('lastActivity', timestamp);
-    if (user) {
+    if (user && db) {
       await set(ref(db, dbPath(DB_PATHS.USER_SYNC, user.uid)), {
         lastActivity: timestamp,
       });

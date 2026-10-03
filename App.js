@@ -40,11 +40,13 @@ import OnboardingScreen from './src/screens/OnboardingScreen';
 import CameraScreen from './src/screens/CameraScreen';
 import InsightsScreen from './src/screens/InsightsScreen';
 import VocabManagerScreen from './src/screens/VocabManagerScreen';
+import LicensesScreen from './src/screens/LicensesScreen';
 
 // Non-blocking model load
 import { loadImprovedModel } from './src/services/improvedModelLoader';
 import { loadAIProfile, recordSessionStart, flushAIProfile } from './src/services/aiProfileStore';
 import { loadCustomVocab } from './src/services/customVocabStore';
+import { loadPronunciations } from './src/services/pronunciationStore';
 
 const Tab = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -58,6 +60,7 @@ loadAIProfile()
   .then(() => recordSessionStart())
   .catch(err => console.warn('AI profile load failed (non-blocking):', err));
 loadCustomVocab().catch(err => console.warn('Custom vocab load failed (non-blocking):', err));
+loadPronunciations().catch(err => console.warn('Pronunciation load failed (non-blocking):', err));
 
 const TAB_ICONS = {
   'AAC Board': 'grid-outline',
@@ -121,7 +124,9 @@ function MainApp() {
         <Tab.Screen
           name="AAC Board"
           component={AACBoardScreen}
-          options={{ title: 'Communicate' }}
+          // Compact layout (opt-in) hides this header to give the word grid
+          // more room; Settings is then reachable from the board's page row.
+          options={{ title: 'Communicate', headerShown: settings.compactLayout !== true }}
         />
         <Tab.Screen
           name="Contexts"
@@ -225,6 +230,11 @@ function RootNavigator() {
         options={{ title: 'Manage Vocabulary' }}
       />
       <RootStack.Screen
+        name="Licenses"
+        component={LicensesScreen}
+        options={{ title: 'Credits & Licences' }}
+      />
+      <RootStack.Screen
         name="Login"
         component={AuthStackScreen}
         options={{ headerShown: false, presentation: 'modal' }}
@@ -240,10 +250,11 @@ export default function App() {
         <SettingsProvider>
           <NetworkProvider>
             <SafeAreaProvider>
-              <OfflineBanner />
-              <NavigationContainer>
-                <RootNavigator />
-              </NavigationContainer>
+              <OfflineBanner>
+                <NavigationContainer>
+                  <RootNavigator />
+                </NavigationContainer>
+              </OfflineBanner>
             </SafeAreaProvider>
           </NetworkProvider>
         </SettingsProvider>
@@ -261,6 +272,9 @@ const styles = StyleSheet.create({
   },
   headerBtn: {
     marginRight: Platform.OS === 'ios' ? 16 : 12,
-    padding: 4,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -14,8 +14,9 @@
 // - deletedIds syncs to Firebase so other devices respect deletions
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getAuth } from 'firebase/auth';
-import { getDatabase, ref, set as fbSet, get as fbGet } from 'firebase/database';
+import { ref, set as fbSet, get as fbGet } from 'firebase/database';
+import { auth as cloudAuth, db as cloudDb } from '../../firebaseConfig';
+import { safeParse } from '../utils/safeStorage';
 
 const CUSTOM_VOCAB_KEY = '@aac_custom_vocab';
 const DELETED_IDS_KEY = '@aac_custom_vocab_deleted';
@@ -41,7 +42,8 @@ let loaded = false;
 // Cloud sync is only for real accounts — anonymous (guest) sessions stay
 // local so guest data is never written under throwaway uids.
 function getSyncUid() {
-  const u = getAuth().currentUser;
+  // Null when Firebase is not configured — vocabulary then stays local-only.
+  const u = cloudAuth?.currentUser;
   return u && !u.isAnonymous ? u.uid : null;
 }
 
@@ -51,13 +53,14 @@ export async function loadCustomVocab() {
   // 1. Local first
   try {
     const raw = await AsyncStorage.getItem(CUSTOM_VOCAB_KEY);
-    customItems = raw ? JSON.parse(raw) : [];
+    customItems = await safeParse(CUSTOM_VOCAB_KEY, raw, []);
+    if (!Array.isArray(customItems)) customItems = [];
   } catch {
     customItems = [];
   }
   try {
     const raw = await AsyncStorage.getItem(DELETED_IDS_KEY);
-    deletedIds = raw ? JSON.parse(raw) : {};
+    deletedIds = (await safeParse(DELETED_IDS_KEY, raw, {})) || {};
   } catch {
     deletedIds = {};
   }
@@ -88,7 +91,7 @@ async function mergeRemote() {
   try {
     const uid = getSyncUid();
     if (!uid) return;
-    const db = getDatabase();
+    const db = cloudDb;
     const snap = await fbGet(ref(db, `customVocab/${uid}`));
     if (!snap.exists()) return;
     const remote = snap.val();
@@ -228,7 +231,7 @@ export async function getVocabRequests() {
   try {
     const uid = getSyncUid();
     if (uid) {
-      const db = getDatabase();
+      const db = cloudDb;
       const snap = await fbGet(ref(db, `vocabRequests/${uid}`));
       if (snap.exists()) {
         const remote = snap.val() || {};
@@ -256,7 +259,7 @@ export async function dismissVocabRequest(term) {
   try {
     const uid = getSyncUid();
     if (uid) {
-      const db = getDatabase();
+      const db = cloudDb;
       const snap = await fbGet(ref(db, `vocabRequests/${uid}`));
       if (snap.exists()) {
         const remote = snap.val() || {};
@@ -282,7 +285,7 @@ function syncToFirebase() {
   try {
     const uid = getSyncUid();
     if (!uid) return;
-    const db = getDatabase();
+    const db = cloudDb;
     fbSet(ref(db, `customVocab/${uid}`), {
       items: customItems,
       deletedIds: deletedIds,

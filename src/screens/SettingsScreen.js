@@ -12,15 +12,21 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  TextInput,
+  useWindowDimensions,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, brand } from '../theme';
-import { speak, getAvailableVoices } from '../services/speechService';
+import { speak, getAvailableVoices, buildSpeechOptions } from '../services/speechService';
 import { resetAIProfile, hasLearnedData } from '../services/aiProfileStore';
+import {
+  loadPronunciations, getPronunciations, setPronunciation, removePronunciation,
+} from '../services/pronunciationStore';
 import packageJson from '../../package.json';
+import CloudUnavailableNotice from '../components/CloudUnavailableNotice';
 
 export default function SettingsScreen() {
   const { settings, loading: settingsLoading, updateSettings } = useSettings();
@@ -30,6 +36,50 @@ export default function SettingsScreen() {
   const [voices, setVoices] = useState([]);
   const [loadingVoices, setLoadingVoices] = useState(true);
   const [learnedData, setLearnedData] = useState(false);
+  const { height: windowHeight } = useWindowDimensions();
+  const isSmallScreen = windowHeight < 700;
+  const [pronunciations, setPronunciations] = useState([]);
+  const [newWritten, setNewWritten] = useState('');
+  const [newSpoken, setNewSpoken] = useState('');
+
+  useEffect(() => {
+    loadPronunciations().then(list => setPronunciations([...list])).catch(() => {});
+  }, []);
+
+  const addPronunciation = async () => {
+    const saved = await setPronunciation(newWritten, newSpoken);
+    if (!saved) {
+      Alert.alert('Pronunciation', 'Enter both the word and how it should sound.');
+      return;
+    }
+    setPronunciations([...getPronunciations()]);
+    setNewWritten('');
+    setNewSpoken('');
+    speak(saved.written, buildSpeechOptions(settings));
+  };
+
+  // A labelled on/off row. The whole row is one accessible switch so screen
+  // reader and switch users get the label, state and action together.
+  const switchRow = (label, helper, value, onChange) => (
+    <View
+      style={styles.switchContainer}
+      accessible
+      accessibilityRole="switch"
+      accessibilityLabel={label}
+      accessibilityHint={helper}
+      accessibilityState={{ checked: value }}
+      accessibilityActions={[{ name: 'activate' }]}
+      onAccessibilityAction={() => onChange(!value)}
+    >
+      <View style={{ flex: 1, paddingRight: 12 }}>
+        <Text style={[styles.label, { color: palette.text, marginTop: 0 }]}>{label}</Text>
+        {helper ? (
+          <Text style={[styles.helperText, { color: palette.textSecondary }]}>{helper}</Text>
+        ) : null}
+      </View>
+      <Switch value={value} onValueChange={onChange} />
+    </View>
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -52,11 +102,7 @@ export default function SettingsScreen() {
   }, []);
 
   const testSpeech = () => {
-    speak('This is how I will sound when communicating.', {
-      rate: settings.speechRate,
-      pitch: settings.speechPitch,
-      voice: settings.speechVoice,
-    });
+    speak('This is how I will sound when communicating.', buildSpeechOptions(settings));
   };
 
   if (settingsLoading) {
@@ -216,6 +262,12 @@ export default function SettingsScreen() {
         </>
       )}
 
+      {!loadingVoices && voices.length === 0 && (
+        <Text style={[styles.helperText, { color: palette.textSecondary, marginTop: 8 }]} accessibilityLiveRegion="polite">
+          No English text-to-speech voices were found on this device. Speech may not work until a voice is installed (Android: Settings › Accessibility › Text-to-speech; iOS: Settings › Accessibility › Spoken Content › Voices). Messages can always be shown on screen instead.
+        </Text>
+      )}
+
       {/* Test Speech Button */}
       <TouchableOpacity
         style={[styles.testButton, { backgroundColor: palette.primary }]}
@@ -226,6 +278,167 @@ export default function SettingsScreen() {
         <Text style={[styles.testButtonText, { color: palette.buttonText }]}>Test Speech</Text>
       </TouchableOpacity>
 
+      {/* Pronunciation dictionary */}
+      <Text style={[styles.sectionTitle, { color: palette.text, borderBottomColor: palette.border }]} accessibilityRole="header">
+        Pronunciation
+      </Text>
+      <Text style={[styles.helperText, { color: palette.textSecondary }]}>
+        Fix how the voice says names or words. Only the spoken sound changes — the words on screen stay the same. Saved on this device.
+      </Text>
+      <View style={styles.pronRow}>
+        <TextInput
+          value={newWritten}
+          onChangeText={setNewWritten}
+          placeholder="Word (e.g. Siobhan)"
+          placeholderTextColor={palette.textSecondary}
+          autoCorrect={false}
+          style={[styles.pronInput, { color: palette.text, backgroundColor: palette.inputBg, borderColor: palette.inputBorder }]}
+          accessibilityLabel="Word as written"
+        />
+        <TextInput
+          value={newSpoken}
+          onChangeText={setNewSpoken}
+          placeholder="Say it as (e.g. Shivawn)"
+          placeholderTextColor={palette.textSecondary}
+          autoCorrect={false}
+          style={[styles.pronInput, { color: palette.text, backgroundColor: palette.inputBg, borderColor: palette.inputBorder }]}
+          accessibilityLabel="How it should sound"
+        />
+      </View>
+      <TouchableOpacity
+        style={[styles.testButton, { backgroundColor: palette.primary, marginTop: 8 }]}
+        onPress={addPronunciation}
+        accessibilityRole="button"
+        accessibilityLabel="Save pronunciation and hear it"
+      >
+        <Text style={[styles.testButtonText, { color: palette.buttonText }]}>Save and Listen</Text>
+      </TouchableOpacity>
+      {pronunciations.map(entry => (
+        <View key={entry.id} style={[styles.pronItem, { borderBottomColor: palette.border }]}>
+          <TouchableOpacity
+            style={styles.pronItemMain}
+            onPress={() => speak(entry.written, buildSpeechOptions(settings))}
+            accessibilityRole="button"
+            accessibilityLabel={`${entry.written}, said as ${entry.spoken}. Tap to listen.`}
+          >
+            <Text style={[styles.pronItemText, { color: palette.text }]}>
+              {entry.written} → {entry.spoken}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.pronRemove}
+            onPress={async () => {
+              await removePronunciation(entry.id);
+              setPronunciations([...getPronunciations()]);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove pronunciation for ${entry.written}`}
+          >
+            <Text style={{ color: palette.danger, fontWeight: '600' }}>Remove</Text>
+          </TouchableOpacity>
+        </View>
+      ))}
+
+      {/* Board & communication preferences — all optional; defaults keep the
+          original layout so learned button positions are preserved. */}
+      <Text style={[styles.sectionTitle, { color: palette.text, borderBottomColor: palette.border }]} accessibilityRole="header">
+        Board & Communication
+      </Text>
+      {switchRow(
+        'Compact layout',
+        'For small screens. Puts the most-used actions in one row (favourites, history and voice style move into a More menu) and hides the page header, so more words fit. Changes where some buttons are, so it is off unless you turn it on.',
+        settings.compactLayout === true,
+        (val) => updateSettings({ compactLayout: val })
+      )}
+      {isSmallScreen && settings.compactLayout !== true && (
+        <Text style={[styles.helperText, { color: palette.textSecondary, marginTop: -8, marginBottom: 8 }]}>
+          This screen is small. Compact layout shows about twice as many rows of words.
+        </Text>
+      )}
+      <Text style={[styles.label, { color: palette.text }]}>Button Text Size</Text>
+      <View style={styles.gridSizeRow}>
+        {[[1, 'Standard'], [1.25, 'Large'], [1.5, 'Extra large']].map(([scale, name]) => {
+          const selected = (settings.textScale || 1) === scale;
+          return (
+            <TouchableOpacity
+              key={scale}
+              style={[styles.gridSizeBtn, { backgroundColor: selected ? palette.primary : palette.surface, borderColor: palette.border }]}
+              onPress={() => updateSettings({ textScale: scale })}
+              accessibilityRole="button"
+              accessibilityLabel={`${name} button text`}
+              accessibilityState={{ selected }}
+            >
+              <Text style={{ color: selected ? palette.buttonText : palette.text, fontSize: 14 * scale, fontWeight: '600' }}>
+                {name}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      {switchRow(
+        'Speak each word when tapped',
+        'Turn off to build the whole sentence quietly and speak it with the Speak button.',
+        settings.speakWordsOnTap !== false,
+        (val) => updateSettings({ speakWordsOnTap: val })
+      )}
+      {switchRow(
+        'Word suggestions',
+        'Shows a row of suggested next words. Suggestions are only added when you tap them.',
+        settings.predictionEnabled !== false,
+        (val) => updateSettings({ predictionEnabled: val })
+      )}
+      {switchRow(
+        'Show voice styles bar',
+        'Calm, excited and other voice styles on the board.',
+        settings.showVoiceStyles !== false,
+        (val) => updateSettings({ showVoiceStyles: val })
+      )}
+      <Text style={[styles.label, { color: palette.text }]}>Switch scanning</Text>
+      <View style={styles.gridSizeRow}>
+        {[['auto', 'Auto scan'], ['step', 'Step scan']].map(([mode, name]) => {
+          const selected = (settings.scanMode || 'auto') === mode;
+          return (
+            <TouchableOpacity
+              key={mode}
+              style={[styles.gridSizeBtn, { backgroundColor: selected ? palette.primary : palette.surface, borderColor: palette.border }]}
+              onPress={() => updateSettings({ scanMode: mode })}
+              accessibilityRole="button"
+              accessibilityLabel={name}
+              accessibilityState={{ selected }}
+            >
+              <Text style={{ color: selected ? palette.buttonText : palette.text, fontSize: 15, fontWeight: '600' }}>{name}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <View style={styles.gridSizeRow}>
+        <TouchableOpacity
+          style={[styles.gridSizeBtn, { backgroundColor: palette.surface, borderColor: palette.border }]}
+          onPress={() => updateSettings({ scanSpeed: Math.min(5000, (settings.scanSpeed || 1500) + 500) })}
+          accessibilityRole="button"
+          accessibilityLabel={`Scan slower. Currently ${((settings.scanSpeed || 1500) / 1000).toFixed(1)} seconds per item`}
+        >
+          <Text style={{ color: palette.text, fontSize: 15, fontWeight: '600' }}>Slower</Text>
+        </TouchableOpacity>
+        <Text style={[styles.label, { color: palette.text, marginTop: 0, alignSelf: 'center' }]}>
+          {((settings.scanSpeed || 1500) / 1000).toFixed(1)}s
+        </Text>
+        <TouchableOpacity
+          style={[styles.gridSizeBtn, { backgroundColor: palette.surface, borderColor: palette.border }]}
+          onPress={() => updateSettings({ scanSpeed: Math.max(500, (settings.scanSpeed || 1500) - 500) })}
+          accessibilityRole="button"
+          accessibilityLabel={`Scan faster. Currently ${((settings.scanSpeed || 1500) / 1000).toFixed(1)} seconds per item`}
+        >
+          <Text style={{ color: palette.text, fontSize: 15, fontWeight: '600' }}>Faster</Text>
+        </TouchableOpacity>
+      </View>
+      {switchRow(
+        'Show switch scanning bar',
+        'Scanning controls on the board for switch users.',
+        settings.showScanControls !== false,
+        (val) => updateSettings({ showScanControls: val })
+      )}
+
       {/* High Contrast Toggle */}
       <View style={styles.switchContainer}>
         <Text style={[styles.label, { color: palette.text }]}>High Contrast Mode</Text>
@@ -234,7 +447,9 @@ export default function SettingsScreen() {
           onValueChange={(val) => {
             updateSettings({
               contrast: val,
-              theme: val ? 'highContrast' : 'light',
+              // Turning high contrast off returns to light only if high
+              // contrast was active; otherwise keep the chosen theme.
+              theme: val ? 'highContrast' : (settings.theme === 'highContrast' ? 'light' : settings.theme),
             });
           }}
           accessibilityLabel="Toggle high contrast mode"
@@ -259,6 +474,7 @@ export default function SettingsScreen() {
         />
       </View>
 
+      <CloudUnavailableNotice feature="Online suggestions and cloud sync" />
       <View style={styles.switchContainer}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.label, { color: palette.text, marginTop: 0 }]}>Online suggestions</Text>
@@ -327,6 +543,17 @@ export default function SettingsScreen() {
         style={styles.linkRow}
       >
         <Text style={[styles.linkText, { color: palette.primary }]}>Privacy Policy</Text>
+      </TouchableOpacity>
+      <Text style={[styles.helperText, { color: palette.textSecondary, marginTop: 8 }]}>
+        Pictograms' author: Sergio Palao. Origin: ARASAAC (https://arasaac.org). License: CC (BY-NC-SA). Owner: Government of Aragón (Spain).
+      </Text>
+      <TouchableOpacity
+        onPress={() => navigation.navigate('Licenses')}
+        accessibilityRole="link"
+        accessibilityLabel="Credits and open-source licences"
+        style={styles.linkRow}
+      >
+        <Text style={[styles.linkText, { color: palette.primary }]}>Credits & open-source licences</Text>
       </TouchableOpacity>
       <Text style={[styles.versionText, { color: palette.textSecondary }]}>
         {brand.name} v{packageJson.version}
@@ -427,6 +654,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
+  pronRow: { gap: 8, marginTop: 12 },
+  pronInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, minHeight: 48, fontSize: 16 },
+  pronItem: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth },
+  pronItemMain: { flex: 1, minHeight: 48, justifyContent: 'center' },
+  pronItemText: { fontSize: 16 },
+  pronRemove: { minHeight: 48, minWidth: 64, alignItems: 'center', justifyContent: 'center' },
   linkRow: {
     paddingVertical: 12,
   },

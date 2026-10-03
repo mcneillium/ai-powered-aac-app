@@ -8,7 +8,8 @@ import {
   StyleSheet, ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../../firebaseConfig';
+import { auth, isFirebaseAvailable } from '../../firebaseConfig';
+import CloudUnavailableNotice from '../components/CloudUnavailableNotice';
 import { logEvent } from '../utils/enhancedLogger';
 import { useNavigation } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
@@ -25,6 +26,7 @@ function friendlyAuthError(code) {
     case 'auth/too-many-requests': return 'Too many attempts. Please wait a moment and try again.';
     case 'auth/network-request-failed': return 'Network error. Check your connection and try again.';
     case 'auth/invalid-credential': return 'Incorrect email or password.';
+    case 'app/unavailable': return 'Accounts are not available in this version of the app. You can keep communicating without an account.';
     default: return 'Login failed. Please check your details and try again.';
   }
 }
@@ -49,6 +51,7 @@ export default function LoginScreen() {
     }
     setLoading(true);
     try {
+      if (!isFirebaseAvailable()) throw Object.assign(new Error('unavailable'), { code: 'app/unavailable' });
       await signInWithEmailAndPassword(auth, trimmedEmail, password);
       // Do not log the email address — logs sync to Firebase and must not hold PII.
       logEvent('User logged in');
@@ -75,6 +78,7 @@ export default function LoginScreen() {
       return;
     }
     try {
+      if (!isFirebaseAvailable()) throw Object.assign(new Error('unavailable'), { code: 'app/unavailable' });
       await sendPasswordResetEmail(auth, trimmedEmail);
       Alert.alert(
         'Reset Email Sent',
@@ -97,6 +101,7 @@ export default function LoginScreen() {
       <Image source={logo} style={styles.logo} resizeMode="contain" accessibilityLabel={`${brand.name} logo`} />
       <Text style={[styles.title, { color: palette.text }]}>Log In</Text>
       <Text style={[styles.subtitle, { color: palette.textSecondary }]}>{brand.tagline}</Text>
+      <CloudUnavailableNotice />
 
       <TextInput
         style={[styles.input, { borderColor: palette.inputBorder, color: palette.text, backgroundColor: palette.inputBg }]}
