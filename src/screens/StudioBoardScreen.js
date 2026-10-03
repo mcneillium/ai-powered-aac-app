@@ -31,6 +31,7 @@ import ExplainSheet from '../components/studio/ExplainSheet';
 import PhrasesSheet from '../components/studio/PhrasesSheet';
 import SavedSheet from '../components/studio/SavedSheet';
 import ShowMessage from '../components/studio/ShowMessage';
+import TypeSheet from '../components/studio/TypeSheet';
 import ModeSheet from '../components/studio/ModeSheet';
 import MoreSheet from '../components/studio/MoreSheet';
 import { advanceScan, selectCurrent, getScanState } from '../services/switchScanService';
@@ -45,6 +46,7 @@ export default function StudioBoardScreen() {
     { id: 'tool-phrases', label: 'Phrases', onSelect: () => openRef.current?.('phrases') },
     { id: 'tool-saved', label: 'Saved', onSelect: () => openRef.current?.('saved') },
     { id: 'tool-show', label: 'Show', onSelect: () => openRef.current?.('show') },
+    { id: 'tool-type', label: 'Type', onSelect: () => openRef.current?.('type') },
   ], []);
   const b = useBoardController({ modelling, extraActions });
   const {
@@ -52,7 +54,7 @@ export default function StudioBoardScreen() {
     suggestions, history, favourites, undoWords, showFinder, setShowFinder,
     speechProblem, gridRef, sentenceScrollRef, predictionEnabled, chipFit, scanActive,
     toggleScan, isScanFocused, goBack, goHome, handleButtonPress, handleSuggestionPress,
-    speakSentence, removeLastWord, clearSentence, undo, replaceSentence, say,
+    speakSentence, removeLastWord, clearSentence, undo, replaceSentence, say, addWords,
     repeatFromHistory, speakFavourite, handleToggleFavourite, confirmRemoveFavourite,
     handleFinderAdd, handleFinderShowPage, handleFinderNoResults, isCurrentFavourite,
     voicePreset, setVoicePreset, updateSettings,
@@ -71,11 +73,21 @@ export default function StudioBoardScreen() {
   // word always speaks the message.
   const [speaking, setSpeaking] = useState(false);
   useEffect(() => subscribeSpeechStatus((st) => { if (!st.speaking) setSpeaking(false); }), []);
+  // "Add and speak" from Type: speak once the typed words are in the message,
+  // through the normal Speak path (history, learning, Stop all apply).
+  const [speakAfterAdd, setSpeakAfterAdd] = useState(false);
   const speakOrStop = useCallback(() => {
     if (speaking) { stop(); setSpeaking(false); return; }
     speakSentence();
     setSpeaking(true);
   }, [speaking, speakSentence]);
+  useEffect(() => {
+    if (!speakAfterAdd) return;
+    setSpeakAfterAdd(false);
+    speakSentence();
+    setSpeaking(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sentenceWords]);
 
   // Re-render tiles when symbols finish downloading.
   const [symbolTick, setSymbolTick] = useState(0);
@@ -217,7 +229,7 @@ export default function StudioBoardScreen() {
       ]}
     >
       <Ionicons name={icon} size={19} color={c.ink} />
-      <Text style={[type.label, { color: c.ink, fontSize: 13, lineHeight: 16 }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{label}</Text>
+      <Text style={[type.label, { color: c.ink, fontSize: narrow ? 11 : 13, lineHeight: 16, letterSpacing: narrow ? -0.2 : 0 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={1.3}>{label}</Text>
     </Pressable>
   );
   const tools = (
@@ -226,6 +238,7 @@ export default function StudioBoardScreen() {
       {tool('albums-outline', context ? context.label : 'Phrases', 'phrases', () => open('phrases'), `Phrases${context ? ` for ${context.label}` : ''}`)}
       {tool('star-outline', 'Saved', 'saved', () => open('saved'), 'Saved and recent messages')}
       {tool('expand-outline', 'Show', 'show', () => open('show'), t('showOnScreen'))}
+      {tool('create-outline', 'Type', 'type', () => open('type'), 'Type with the keyboard')}
     </View>
   );
 
@@ -387,6 +400,12 @@ export default function StudioBoardScreen() {
         favourites={favourites} history={history} hasWords={hasWords} isCurrentFavourite={isCurrentFavourite}
         onToggleCurrent={handleToggleFavourite} onFavourite={(f) => { speakFavourite(f); close(); }}
         onHistory={(h) => { repeatFromHistory(h); close(); }} onRemoveFavourite={confirmRemoveFavourite}
+      />
+      <TypeSheet
+        visible={sheet === 'type'} onClose={close} messageWords={sentenceWords}
+        context={settings.activeContext} mode={mode}
+        onAdd={(words) => addWords(words)}
+        onAddAndSpeak={(words) => { setSpeakAfterAdd(true); addWords(words); }}
       />
       <ShowMessage visible={sheet === 'show'} onClose={close} text={message} onSpeak={hasWords ? speakSentence : null} />
       <ModeSheet visible={sheet === 'mode'} onClose={close} />

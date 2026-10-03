@@ -43,11 +43,12 @@ export function setLearningEnabled(on) {
 /**
  * Suggestions for the words so far: [{ word, reason, source }].
  * A phrase the user often says may come first (multi-word suggestion).
+ * With `prefix` (typing), completes the word being typed instead.
  */
-export function suggestNext(words, { context, mode, k = 6 } = {}) {
+export function suggestNext(words, { context, mode, k = 6, prefix } = {}) {
   try {
     const out = [];
-    if (words.length > 0) {
+    if (words.length > 0 && !prefix) {
       const phrases = predictor.predictPhrases ? predictor.predictPhrases(words, { k: 1 }) : [];
       phrases.forEach((ph) => {
         if (ph.completion && ph.completion.split(' ').length > 1) {
@@ -55,7 +56,7 @@ export function suggestNext(words, { context, mode, k = 6 } = {}) {
         }
       });
     }
-    predictor.predict(words, { k, context: context || undefined, mode }).forEach((r) => {
+    predictor.predict(words, { k, context: context || undefined, mode, prefix: prefix || undefined }).forEach((r) => {
       if (!out.some((o) => o.word.toLowerCase() === r.label.toLowerCase())) {
         out.push({ word: r.label, reason: r.reason, source: r.source });
       }
