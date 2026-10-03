@@ -42,7 +42,7 @@ No claim of clinical benefit, market leadership or improved language development
 ## 4. Evidence
 
 ### Automated [auto]
-- `CI=1 npx jest`: see §7 for the final count. New suites: design tokens (AA in all three schemes incl. every Child fill), experience/modes, settings upgrade (rendered provider), explain, suggestion engine bridge, prediction engine + store (agent-written, verified by rerun).
+- `CI=1 npx jest`: 38 suites, 317 tests (see §7). New suites: design tokens (AA in all three schemes incl. every Child fill), experience/modes, settings upgrade (rendered provider), explain, suggestion engine bridge, prediction engine + store (agent-written, verified by rerun).
 - `npx eslint . --ext .js,.jsx`: 0 errors.
 
 ### Prediction (synthetic data only — not evidence of real-world benefit)
@@ -82,11 +82,40 @@ See §6.
 - Native file paths for symbol download and tile photos (`expo-file-system/legacy`) are exercised only by code review and web fallbacks.
 - Human listening and accessibility evaluation; AAC-user and SLP feedback on both modes.
 
-## 6. Native build and test APK
-(filled in below once built)
+## 6. Native build and test APK [native-build]
+- `expo prebuild --clean` + `./gradlew assembleRelease` (Android SDK 36, JDK 21) built from `a362ead` with no Firebase variables: **BUILD SUCCESSFUL**. The earlier commit `330925b` also built.
+- Test identity applied with the repo's own `scripts/native-ui/make-test-identity.js` (`PRTEST_ID=prtestv2 PRTEST_NAME="Voice 2 Test"`), arm64 only. The signing key file stays outside the repository.
+- `Voice-2-Test-a362ead.apk`: 31,191,787 bytes (29.75 MiB). SHA-256 `109ba1df7514f51ef838df039d737a12c055e5e90fb2a6b49702903e82fbd0a1`.
+  - Package `com.elpabloawakens.aipoweredaacapp.prtestv2`, label "Voice 2 Test", targetSdk 36.
+  - Signer certificate SHA-256 `63bc733c…42080f8`.
+- **Contents (checked with aapt2 and unzip):**
+  - The bundle contains the new board strings.
+  - `word_prediction_tfjs` is no longer packaged.
+  - Permissions: CAMERA, INTERNET, VIBRATE, ACCESS_NETWORK_STATE, ACCESS_WIFI_STATE. That is the same set as the PR #7 build: no storage or overlay permission.
+- APK size: the PR #7 arm64 build `35914e5` was 31.7 MiB; this build is 29.75 MiB.
+- **Not run:** native UI automation (`scripts/native-ui/suite.js`) needs the owner's emulators. This container has no KVM.
 
-## 7. Final validation
-(filled in below)
+## 7. Final validation (on `a362ead`)
+- `CI=1 npx jest`: **38 suites, 317 tests, all passing** (baseline 31 / 224).
+- `npx eslint . --ext .js,.jsx`: 0 errors, 15 warnings. All 15 were already present before these changes.
+- `npx expo export --platform android`: OK. The Hermes bundle is **4.08 MB, down from 7.29 MB** at `1d02930`.
+- Release APK built and inspected (§6).
+- **Browser:** the screens in §4 were re-rendered after the review fixes. Small-phone Speak truncation and large-text chip clipping were found this way and fixed.
+- **Demo recording (browser):** `docs/design/screens/voice2-demo.webm`. It shows the Welcome sheet, Child mode, a suggestion, Speak→Stop, Help me explain, switching to Adult, Work phrases and Show.
+- **Independent review:** 13 findings, all addressed in `a362ead`:
+  - Speak turned into Stop on every word tap.
+  - A mode profile could change the Classic board.
+  - Online suggestions were silently gated.
+  - Board choice on a new device for an existing account.
+  - Learning race at startup.
+  - Android ≤12 photo picker permission.
+  - iOS photo paths.
+  - TalkBack double speech.
+  - Modelling wrote to history.
+  - Cloud patches replaced whole per-mode nodes.
+  - Emotion screen learned without opt-in.
+  - The suggestion menu was not modal.
+  - The tool row could not be reached by in-app scanning.
 
 ## 8. Known issues and next tasks (priority order)
 1. Run checklist §G on the S24 Ultra and the two emulators (Android 15 / 11) with `scripts/native-ui`; fix what fails.
