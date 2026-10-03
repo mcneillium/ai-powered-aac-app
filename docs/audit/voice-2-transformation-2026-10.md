@@ -117,10 +117,28 @@ See §6.
   - The suggestion menu was not modal.
   - The tool row could not be reached by in-app scanning.
 
+## 7b. Follow-up round (after PR #7 was merged)
+PR #7 was merged into `master` (`0b18c0d`) at the owner's request. PR #8 was retargeted to `master`. It was **not merged**: the session's permission guard blocked merging without a review, so that decision stays with the owner.
+
+| Commit | Change | Evidence |
+|---|---|---|
+| `acbb3b9` | TensorFlow removed from the app: loader, hook, `expo-gl`, `tfjs-react-native`. `@tensorflow/tfjs` is a dev dependency only, for the eval baseline. Credits now describe the real prediction source. Notices regenerated (82 packages, was 96) | Jest, lint, export; eval baseline still reproduces |
+| `413298a` | New-design **Phrases** and **Me** tabs. Adds **Delete my words and messages**. `localData.js` lists every personal store, including learned prediction data and tile photos. Account deletion uses that list too. The delete-account warning wrongly said device data was kept and has been corrected | `localData.test.js` |
+| `d2f3537` | Secondary screens (Settings, Find, Insights, Login, Camera…) take the Voice 2 palette on the new board; Classic keeps its colours | AA tests for every filled button in all three themes |
+| `d765d9a` | **Type** tool: keyboard input with on-device word completion (prefix) | `typing.test.js`; browser render |
+| `c57fb1f` | **Switch scanning inside every sheet** (`useOverlayScan`), Select/Next bar in sheets, Select on the board's auto-scan strip | `overlayScan.test.js`; browser render |
+
+**Updated test APK** `Voice-2-Test-c57fb1f.apk`:
+- 30,941,998 bytes. SHA-256 `1976e3c1f6d39a5471fbd2ed12e66fdd58e94d1522b6a863fc19f6e439368aa2`.
+- Same package and test key as `a362ead`, so it installs over "Voice 2 Test" and keeps its test data.
+- Same permissions. No `expo-gl` or TF assets.
+
+**CI note.** No GitHub check runs have appeared on PR #8 at any head, including after it was retargeted to `master`. CI ran on PR #7. The owner should check why the workflow is not triggering before relying on CI for this PR.
+
 ## 8. Known issues and next tasks (priority order)
 1. Run checklist §G on the S24 Ultra and the two emulators (Android 15 / 11) with `scripts/native-ui`; fix what fails.
-2. Remove the TensorFlow packages and the unused loader/hook (APK size), after confirming nothing else imports them.
-3. Restyle the remaining legacy screens (Settings, Find, Profile, Phrases tab) with the design system; the board, sheets and Personalise are done.
+2. ~~Remove TensorFlow~~ (done in `acbb3b9`).
+3. ~~Restyle remaining screens~~ (done by palette mapping; Phrases and Me rebuilt). Settings could still be reorganised into Personalise-style cards.
 4. Owner decisions before release: ARASAAC non-commercial terms (symbols + API), tokenizer/model provenance (now unused by the board), "VOICE" icon artwork rights, native-only licence notices (`docs/legal/asset-inventory.md`).
 5. Photo-assisted label suggestions (only a vocabulary-based category suggestion exists); per-profile learning when multiple profiles exist (store already supports `profileId`).
 6. Evaluate prediction with consented real logs (none used); the synthetic personas were written by the same author as the seed corpus, so results are optimistic.

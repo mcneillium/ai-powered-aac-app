@@ -149,3 +149,6 @@ Emulator runs, 02/10/2026. Full method and values:
 | G20 | System reduce motion / remove animations ON | No tile scale animation; press still shows a tint |
 | G21 | Controls at bottom (Personalise) | Message and controls below the grid; thumb-reachable; grid still fixed |
 | G22 | Tablet | Two panes: message + tools + recent left, grid right |
+| G23 | New board › Type: type "I want to go to the par", tap the "park" chip, then Add and speak | The word completes; the message is spoken through the normal Speak path, and Stop works |
+| G24 | Start switch scanning (step mode), open Phrases, then Explain, Saved and Show | A focus ring moves through the items inside each sheet; Next and Select are at the bottom of the sheet; closing a sheet resumes scanning on the board |
+| G25 | Me › Delete my words and messages | History, favourites, your own words and their photos, pronunciations and learning are all gone; settings stay |
