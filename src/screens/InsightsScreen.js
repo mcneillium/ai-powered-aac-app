@@ -25,7 +25,7 @@ const VOCAB_REQUESTS_KEY = '@aac_vocab_requests';
 
 export default function InsightsScreen() {
   const { settings } = useSettings();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
   const [insights, setInsights] = useState(null);
   const [topWords, setTopWords] = useState([]);
   const [topSentences, setTopSentences] = useState([]);

@@ -1,0 +1,20 @@
+{
+  "note": "Trained on role=tune synthetic personas only. Linear weights over FEATURE_NAMES in src/services/prediction/ranker.js.",
+  "frozenAtZero": [
+    "recency",
+    "accepted",
+    "contextMatch"
+  ],
+  "examples": 515,
+  "targetsOutsideTopN": 126,
+  "finalMeanNll": 1.7026,
+  "weights": {
+    "logP": 0.8193,
+    "logPBase": -0.0222,
+    "logPPersonal": 0.1046,
+    "recency": 0,
+    "accepted": 0,
+    "contextMatch": 0,
+    "personalOrder": -0.055
+  }
+}

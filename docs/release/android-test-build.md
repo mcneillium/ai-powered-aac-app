@@ -1,3 +1,24 @@
+# Voice 2 Test (branch `voice2-transformation`)
+
+- **What it is.** A separate test app, **"Voice 2 Test"**, package
+  `com.elpabloawakens.aipoweredaacapp.prtestv2`. It installs next to your real
+  "Voice", "Voice PR7 Test" and "Voice PR7 Test 2" and changes none of them;
+  nothing needs uninstalling. It starts with empty test data.
+- **Built** in a cloud container from the commit named in the file name, arm64
+  only, cloud off (no Firebase config), signed with the earlier cloud test key
+  (the key file is kept outside the repository; it is not your release key).
+- **Install:** copy the `.apk` to the phone → open it in My Files → allow
+  "Install unknown apps" for My Files if asked → Install. If Auto Blocker is
+  on, turn it off for the install and back on afterwards. Play Protect may
+  warn about an unknown test app: More details › Install anyway.
+- **First launch** shows the new board with a Welcome sheet (that is the
+  new-install path). To test the upgrade path (Classic kept), install over an
+  older build of the *same* test app; the separate identity means this build
+  cannot upgrade your real Voice app.
+- **What to test:** `docs/release/device-test-checklist.md` section G, then A–F.
+
+---
+
 # Voice PR #7 — test on Samsung Galaxy S24 Ultra
 
 ## Update 03/10/2026: "Voice PR7 Test 2", installs alongside, no uninstall

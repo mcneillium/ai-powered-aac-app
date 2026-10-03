@@ -39,3 +39,23 @@ describe('device-only settings', () => {
   });
 });
 
+describe('Voice 2 board choice across devices', () => {
+  test('a fresh install joining a pre-Voice 2 account keeps the familiar board', () => {
+    const local = { boardLayout: 'studio', boardLayoutSource: 'new-install' };
+    const merged = mergeRemoteSettings(local, { theme: 'dark', speechRate: 0.7 });
+    expect(merged.boardLayout).toBe('classic');
+  });
+  test('an explicit choice on this device is never overridden', () => {
+    const local = { boardLayout: 'studio', boardLayoutSource: 'chosen' };
+    expect(mergeRemoteSettings(local, { theme: 'dark' }).boardLayout).toBe('studio');
+  });
+  test('a Voice 2 account keeps its recorded board', () => {
+    const local = { boardLayout: 'studio', boardLayoutSource: 'new-install' };
+    expect(mergeRemoteSettings(local, { boardLayout: 'studio', theme: 'dark' }).boardLayout).toBe('studio');
+  });
+  test('mode profiles merge per mode instead of replacing', () => {
+    const local = { modeProfiles: { child: { gridSize: 3, textScale: 1.25 } } };
+    const merged = mergeRemoteSettings(local, { modeProfiles: { child: { gridSize: 4 }, adult: { gridSize: 5 } } });
+    expect(merged.modeProfiles).toEqual({ child: { gridSize: 4, textScale: 1.25 }, adult: { gridSize: 5 } });
+  });
+});

@@ -45,7 +45,7 @@ export default function FeedbackScreen() {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('user');
   const [submitting, setSubmitting] = useState(false);
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
 
   // Deliver feedback queued while offline whenever we come back online.
   useEffect(() => {

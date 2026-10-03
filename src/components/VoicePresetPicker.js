@@ -18,7 +18,7 @@ const PRESET_LIST = Object.entries(voicePresets).map(([id, preset]) => ({
 
 export default function VoicePresetPicker({ activePreset, onSelect }) {
   const { settings } = useSettings();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
 
   return (
     <View style={[styles.container, { backgroundColor: palette.surface }]}>

@@ -34,8 +34,8 @@ function compile() {
     }));
 }
 
-export async function loadPronunciations() {
-  if (loaded) return entries;
+export async function loadPronunciations({ reload = false } = {}) {
+  if (loaded && !reload) return entries;
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     const parsed = await safeParse(STORAGE_KEY, raw, []);

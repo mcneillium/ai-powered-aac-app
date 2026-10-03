@@ -19,6 +19,12 @@ const fbdb = require('firebase/database');
 const { SettingsProvider, useSettings, cloudPatchFor } = require('../contexts/SettingsContext');
 
 describe('cloud settings writes', () => {
+  test('per-mode settings are written key by key, never as a whole node', () => {
+    const prev = { modeProfiles: { child: { gridSize: 3 }, adult: { gridSize: 4 } } };
+    const patch = cloudPatchFor({ modeProfiles: { child: { gridSize: 3 }, adult: { gridSize: 5 } } }, prev);
+    expect(patch).toEqual({ 'modeProfiles/adult/gridSize': 5 });
+  });
+
   test('cloudPatchFor keeps only changed, syncable keys', () => {
     expect(cloudPatchFor({ textScale: 1.5, compactLayout: true, speechVoice: 'v', x: undefined }))
       .toEqual({ textScale: 1.5 });
@@ -34,7 +40,9 @@ describe('cloud settings writes', () => {
 
     expect(fbdb.set).not.toHaveBeenCalled();
     expect(fbdb.update).toHaveBeenCalledTimes(1);
-    expect(fbdb.update.mock.calls[0][1]).toEqual({ speechRate: 0.5 });
+    // Only the changed key — plus, on a new install, the board it started on
+    // (so the account is not later mistaken for a pre-Voice 2 one).
+    expect(fbdb.update.mock.calls[0][1]).toEqual({ speechRate: 0.5, boardLayout: 'studio' });
     // Local state still has the full settings
     expect(ctx.settings.speechRate).toBe(0.5);
     expect(ctx.settings.theme).toBeDefined();
