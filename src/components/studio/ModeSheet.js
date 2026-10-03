@@ -10,6 +10,7 @@ import { usePaper } from '../../design/usePaper';
 import { useSettings } from '../../contexts/SettingsContext';
 import { MODE_DESCRIPTIONS } from '../../contexts/experience';
 import { categoryColors, space, type, touch, shape } from '../../design/tokens';
+import { useOverlayScan } from '../../hooks/useOverlayScan';
 
 const PREVIEW = [['I want', 'starter'], ['more', 'adjective'], ['help', 'verb'], ['stop', 'important'], ['Mum', 'noun'], ['yes', 'social']];
 
@@ -42,9 +43,16 @@ export default function ModeSheet({ visible, onClose }) {
   const current = settings.uiMode === 'child' ? 'child' : 'adult';
   const [choice, setChoice] = useState(current);
   useEffect(() => { if (visible) setChoice(current); }, [visible, current]);
+  const confirm = () => { if (choice !== current || !settings.uiMode) updateSettings({ uiMode: choice }); onClose(); };
+  const focused = useOverlayScan(visible, [
+    { id: 'child', onSelect: () => setChoice('child') },
+    { id: 'adult', onSelect: () => setChoice('adult') },
+    { id: 'confirm', onSelect: confirm },
+    { id: 'close', onSelect: onClose },
+  ]);
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Child or Adult" subtitle="Choose how Voice looks and works. You can switch at any time.">
+    <Sheet visible={visible} onClose={onClose} title="Child or Adult" subtitle="Choose how Voice looks and works. You can switch at any time." closeFocused={focused === 'close'} scanning={focused !== null}>
       {['child', 'adult'].map((m) => {
         const d = MODE_DESCRIPTIONS[m];
         const on = choice === m;
@@ -55,7 +63,7 @@ export default function ModeSheet({ visible, onClose }) {
             accessibilityRole="radio"
             accessibilityState={{ checked: on }}
             accessibilityLabel={`${d.title} mode. ${d.summary} ${d.details.join('. ')}`}
-            style={[styles.option, { borderColor: on ? c.signal : c.line, borderWidth: on ? 2.5 : 1, backgroundColor: c.card, borderRadius: r.sheet - 6 }]}
+            style={[styles.option, { borderColor: focused === m ? c.focus : on ? c.signal : c.line, borderWidth: focused === m ? 4 : on ? 2.5 : 1, backgroundColor: c.card, borderRadius: r.sheet - 6 }]}
           >
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -77,7 +85,8 @@ export default function ModeSheet({ visible, onClose }) {
         label={choice === current ? 'Keep this mode' : `Switch to ${MODE_DESCRIPTIONS[choice].title}`}
         variant="signal"
         size={touch.action}
-        onPress={() => { if (choice !== current || !settings.uiMode) updateSettings({ uiMode: choice }); onClose(); }}
+        onPress={confirm}
+        focused={focused === 'confirm'}
       />
     </Sheet>
   );

@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePaper } from './usePaper';
 import { getCategoryColors, space, type, touch, motion } from './tokens';
+import { getScanState, advanceScan, selectCurrent } from '../services/switchScanService';
 
 /** Press feedback: a quick scale-down (skipped with reduced motion). */
 function usePressScale(reduceMotion) {
@@ -191,7 +192,7 @@ export function SuggestionChip({ word, reason, onPress, onLongPress, focused, ma
 }
 
 /** Bottom sheet with a title and an always-visible Close button. */
-export function Sheet({ visible, onClose, title, subtitle, children, scroll = true, footer }) {
+export function Sheet({ visible, onClose, title, subtitle, children, scroll = true, footer, closeFocused = false, scanning = false }) {
   const { c, r } = usePaper();
   const insets = useSafeAreaInsets();
   const Body = scroll ? ScrollView : View;
@@ -208,12 +209,22 @@ export function Sheet({ visible, onClose, title, subtitle, children, scroll = tr
               <Text style={[type.title, { color: c.ink }]} accessibilityRole="header">{title}</Text>
               {subtitle ? <Text style={[type.body, { color: c.inkSoft, marginTop: 2 }]}>{subtitle}</Text> : null}
             </View>
-            <ActionButton icon="close" a11yLabel={`Close ${title}`} onPress={onClose} size={touch.min} />
+            <ActionButton icon="close" a11yLabel={`Close ${title}`} onPress={onClose} size={touch.min} focused={closeFocused} />
           </View>
           <Body style={scroll ? { flexGrow: 0 } : { flex: 0 }} contentContainerStyle={scroll ? { paddingBottom: space.md } : undefined}>
             {children}
           </Body>
           {footer}
+          {/* While switch scanning, Select (and Next in step mode) stay at the
+              bottom of the sheet, where the board's scan strip would be. */}
+          {scanning && (
+            <View style={[styles.scanBar, { borderColor: c.focus, borderRadius: r.control }]}>
+              {getScanState().scanMode === 'step' && (
+                <ActionButton label="Next" onPress={advanceScan} flex={1} size={touch.action} />
+              )}
+              <ActionButton label="Select" variant="signal" onPress={selectCurrent} flex={1} size={touch.action} />
+            </View>
+          )}
         </View>
       </View>
     </Modal>
@@ -317,14 +328,15 @@ export function EmptyState({ icon, title, body }) {
 }
 
 /** A tappable list row (phrase, history item...). */
-export function ListRow({ icon, iconColor, text, meta, onPress, a11yLabel, right }) {
+export function ListRow({ icon, iconColor, text, meta, onPress, a11yLabel, right, focused = false }) {
   const { c } = usePaper();
   return (
-    <View style={[styles.listRow, { borderBottomColor: c.line }]}>
+    <View style={[styles.listRow, { borderBottomColor: c.line }, focused && { borderWidth: 3, borderColor: c.focus, borderRadius: 8 }]}>
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={a11yLabel || text}
+        accessibilityState={{ selected: focused }}
         style={({ pressed }) => [styles.listMain, pressed && { backgroundColor: c.signalSoft }]}
       >
         {icon ? <Ionicons name={icon} size={20} color={iconColor || c.signal} /> : null}
@@ -359,6 +371,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingVertical: space.sm },
   card: { padding: space.lg, marginBottom: space.md },
   notice: { flexDirection: 'row', alignItems: 'center', padding: space.md },
+  scanBar: { flexDirection: 'row', gap: space.sm, padding: space.sm, borderWidth: 2, marginTop: space.sm },
   empty: { alignItems: 'center', padding: space.xl },
   listRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth },
   listMain: { flex: 1, flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingVertical: space.sm, paddingHorizontal: space.xs },

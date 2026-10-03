@@ -9,12 +9,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionButton } from '../../design/components';
 import { usePaper } from '../../design/usePaper';
 import { space, type, touch } from '../../design/tokens';
+import { useOverlayScan } from '../../hooks/useOverlayScan';
+import { selectCurrent } from '../../services/switchScanService';
 
 export default function ShowMessage({ visible, onClose, text, onSpeak }) {
   const { c } = usePaper();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [flipped, setFlipped] = useState(false);
+  const focused = useOverlayScan(visible, [
+    { id: 'back', onSelect: onClose },
+    { id: 'flip', onSelect: () => setFlipped((f) => !f) },
+    ...(onSpeak ? [{ id: 'speak', onSelect: onSpeak }] : []),
+  ]);
   const len = (text || '').length;
   const base = width > 600 ? 72 : 48;
   const size = len > 80 ? base * 0.6 : len > 30 ? base * 0.8 : base;
@@ -33,10 +40,15 @@ export default function ShowMessage({ visible, onClose, text, onSpeak }) {
           </Text>
         </View>
         <View style={styles.bar}>
-          <ActionButton icon="arrow-back" label="Back to board" onPress={onClose} flex={1} size={touch.action} />
-          <ActionButton icon="swap-vertical" a11yLabel={flipped ? 'Turn text back to me' : 'Turn text to face the other person'} onPress={() => setFlipped((f) => !f)} size={touch.action} />
-          {onSpeak && <ActionButton icon="volume-high" label="Speak" variant="signal" onPress={onSpeak} flex={1} size={touch.action} />}
+          <ActionButton icon="arrow-back" label="Back to board" onPress={onClose} flex={1} size={touch.action} focused={focused === 'back'} />
+          <ActionButton icon="swap-vertical" a11yLabel={flipped ? 'Turn text back to me' : 'Turn text to face the other person'} onPress={() => setFlipped((f) => !f)} size={touch.action} focused={focused === 'flip'} />
+          {onSpeak && <ActionButton icon="volume-high" label="Speak" variant="signal" onPress={onSpeak} flex={1} size={touch.action} focused={focused === 'speak'} />}
         </View>
+        {focused !== null && (
+          <View style={[styles.bar, { marginTop: space.sm }]}>
+            <ActionButton label="Select" variant="signal" onPress={selectCurrent} flex={1} size={touch.action} />
+          </View>
+        )}
         <Text style={[type.caption, { color: c.inkSoft, textAlign: 'center', marginTop: space.sm, letterSpacing: 0 }]}>
           Your message stays on the board when you go back.
         </Text>

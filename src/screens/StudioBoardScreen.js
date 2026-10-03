@@ -35,6 +35,7 @@ import TypeSheet from '../components/studio/TypeSheet';
 import ModeSheet from '../components/studio/ModeSheet';
 import MoreSheet from '../components/studio/MoreSheet';
 import { advanceScan, selectCurrent, getScanState } from '../services/switchScanService';
+import { useOverlayScan } from '../hooks/useOverlayScan';
 
 export default function StudioBoardScreen() {
   const [modelling, setModelling] = useState(false);
@@ -96,18 +97,11 @@ export default function StudioBoardScreen() {
     return subscribeSymbols(() => setSymbolTick((n) => n + 1));
   }, []);
 
-  // In-app scanning covers the board; it pauses while a sheet is open and
-  // resumes when the sheet closes (system Switch Access works throughout).
-  const resumeScan = useRef(false);
-  const open = useCallback((name) => {
-    if (scanActive) { resumeScan.current = true; toggleScan(); }
-    setSheet(name);
-  }, [scanActive, toggleScan]);
+  // Sheets take over in-app scanning while open and hand it back on close
+  // (useOverlayScan), so switch users can use everything inside them.
+  const open = useCallback((name) => setSheet(name), []);
   openRef.current = open;
-  const close = useCallback(() => {
-    setSheet(null);
-    if (resumeScan.current) { resumeScan.current = false; setTimeout(() => toggleScan(), 0); }
-  }, [toggleScan]);
+  const close = useCallback(() => setSheet(null), []);
 
   const hasWords = sentenceWords.length > 0;
   const message = sentenceWords.join(' ');
@@ -144,6 +138,14 @@ export default function StudioBoardScreen() {
 
   // Long press on a suggestion offers to stop suggesting it here.
   const [chipMenu, setChipMenu] = useState(null);
+  const dismissChip = useCallback(() => {
+    if (chipMenu) dismissSuggestion(chipMenu.word, chipMenu.before);
+    setChipMenu(null);
+  }, [chipMenu]);
+  const chipFocus = useOverlayScan(!!chipMenu, [
+    { id: 'keep', onSelect: () => setChipMenu(null) },
+    { id: 'dismiss', onSelect: dismissChip },
+  ]);
 
   // ── Pieces ──
   const topBar = (
@@ -362,7 +364,7 @@ export default function StudioBoardScreen() {
               <ActionButton label={t('scanSelect')} onPress={selectCurrent} variant="signal" size={touch.min} flex={1} />
             </>
           ) : (
-            <Text style={[type.label, { color: c.ink, flex: 1, marginLeft: space.sm }]}>{t('scanningSelectHint')}</Text>
+            <ActionButton label={t('scanSelect')} onPress={selectCurrent} variant="signal" size={touch.min} flex={1} />
           )}
         </View>
       )}
@@ -373,13 +375,14 @@ export default function StudioBoardScreen() {
         visible={!!chipMenu}
         onClose={() => setChipMenu(null)}
         title="Suggestion"
+        scanning={chipFocus !== null}
         subtitle={chipMenu ? `Stop suggesting “${chipMenu.word}” after “${chipMenu.before[chipMenu.before.length - 1] || 'the start'}”? You can still find it on the board.` : ''}
       >
         <View style={{ flexDirection: 'row', gap: space.sm }}>
-          <ActionButton label="Keep it" onPress={() => setChipMenu(null)} flex={1} size={touch.action} />
+          <ActionButton label="Keep it" onPress={() => setChipMenu(null)} flex={1} size={touch.action} focused={chipFocus === 'keep'} />
           <ActionButton
             label="Don't suggest" variant="signal" flex={1} size={touch.action}
-            onPress={() => { dismissSuggestion(chipMenu.word, chipMenu.before); setChipMenu(null); }}
+            onPress={dismissChip} focused={chipFocus === 'dismiss'}
           />
         </View>
       </Sheet>

@@ -9,15 +9,28 @@ import { Sheet, ActionButton, Card } from '../../design/components';
 import { usePaper } from '../../design/usePaper';
 import { space, type, touch } from '../../design/tokens';
 import { REPAIR_PHRASES, rephraseOptions } from '../../services/explain';
+import { useOverlayScan } from '../../hooks/useOverlayScan';
 
 export default function ExplainSheet({ visible, onClose, message, say, onReplace }) {
   const { c, r } = usePaper();
   const [preview, setPreview] = useState(null);
   const options = useMemo(() => rephraseOptions(message), [message]);
   const done = () => { setPreview(null); onClose(); };
+  // Switch scanning: the confirm choices first while previewing, otherwise
+  // repair phrases, rewordings, then Close.
+  const focused = useOverlayScan(visible, preview ? [
+    { id: 'keep', onSelect: () => setPreview(null) },
+    { id: 'say', onSelect: () => say(preview.text) },
+    { id: 'replace', onSelect: () => { onReplace(preview.text); setPreview(null); } },
+  ] : [
+    ...REPAIR_PHRASES.map((ph) => ({ id: `rep-${ph.id}`, onSelect: () => say(ph.text) })),
+    ...options.map((o) => ({ id: `opt-${o.id}`, onSelect: () => setPreview(o) })),
+    { id: 'close', onSelect: done },
+  ]);
+  const ring = (id) => (focused === id ? { borderWidth: 3, borderColor: c.focus } : null);
 
   return (
-    <Sheet visible={visible} onClose={done} title="Help me explain" subtitle="Repair a misunderstanding, or try other words.">
+    <Sheet visible={visible} onClose={done} title="Help me explain" subtitle="Repair a misunderstanding, or try other words." closeFocused={focused === 'close'} scanning={focused !== null}>
       <Text style={[type.caption, styles.cap, { color: c.inkSoft }]} accessibilityRole="header">SAY NOW</Text>
       <View style={styles.repairs}>
         {REPAIR_PHRASES.map((ph) => (
@@ -26,7 +39,7 @@ export default function ExplainSheet({ visible, onClose, message, say, onReplace
             onPress={() => say(ph.text)}
             accessibilityRole="button"
             accessibilityLabel={`Say: ${ph.text}`}
-            style={({ pressed }) => [styles.repair, { backgroundColor: pressed ? c.signalSoft : c.card, borderColor: c.line, borderRadius: r.control }]}
+            style={({ pressed }) => [styles.repair, { backgroundColor: pressed ? c.signalSoft : c.card, borderColor: c.line, borderRadius: r.control }, ring(`rep-${ph.id}`)]}
           >
             <Text style={[type.label, { color: c.ink, fontSize: 15 }]}>{ph.text}</Text>
           </Pressable>
@@ -48,7 +61,7 @@ export default function ExplainSheet({ visible, onClose, message, say, onReplace
               onPress={() => setPreview(o)}
               accessibilityRole="button"
               accessibilityLabel={`${o.label}: ${o.text}. Preview`}
-              style={({ pressed }) => [styles.option, { borderColor: preview?.id === o.id ? c.signal : c.lineStrong, backgroundColor: pressed ? c.signalSoft : 'transparent', borderRadius: r.control }]}
+              style={({ pressed }) => [styles.option, { borderColor: preview?.id === o.id ? c.signal : c.lineStrong, backgroundColor: pressed ? c.signalSoft : 'transparent', borderRadius: r.control }, ring(`opt-${o.id}`)]}
             >
               <Text style={[type.caption, { color: c.inkSoft }]}>{o.label.toUpperCase()}</Text>
               <Text style={[type.body, { color: c.ink, fontSize: 17, marginTop: 2 }]}>{o.text}</Text>
@@ -65,9 +78,9 @@ export default function ExplainSheet({ visible, onClose, message, say, onReplace
           <Text style={[type.body, { color: c.ink }]}>Replace your message with:</Text>
           <Text style={[type.heading, { color: c.ink, marginVertical: space.sm }]}>{preview.text}</Text>
           <View style={styles.confirmRow}>
-            <ActionButton label="Keep mine" onPress={() => setPreview(null)} flex={1} size={touch.min} />
-            <ActionButton label="Say it" icon="volume-high" onPress={() => say(preview.text)} flex={1} size={touch.min} />
-            <ActionButton label="Replace" variant="signal" onPress={() => { onReplace(preview.text); setPreview(null); }} flex={1} size={touch.min} a11yLabel={`Replace message with: ${preview.text}. Undo brings yours back.`} />
+            <ActionButton label="Keep mine" onPress={() => setPreview(null)} flex={1} size={touch.min} focused={focused === 'keep'} />
+            <ActionButton label="Say it" icon="volume-high" onPress={() => say(preview.text)} flex={1} size={touch.min} focused={focused === 'say'} />
+            <ActionButton label="Replace" variant="signal" onPress={() => { onReplace(preview.text); setPreview(null); }} flex={1} size={touch.min} focused={focused === 'replace'} a11yLabel={`Replace message with: ${preview.text}. Undo brings yours back.`} />
           </View>
         </View>
       )}

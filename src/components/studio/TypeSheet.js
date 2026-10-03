@@ -12,6 +12,7 @@ import { usePaper } from '../../design/usePaper';
 import { space, type, touch } from '../../design/tokens';
 import { suggestNext } from '../../services/suggestionEngine';
 import { splitTyping } from '../../utils/typing';
+import { useOverlayScan } from '../../hooks/useOverlayScan';
 
 export default function TypeSheet({ visible, onClose, messageWords, onAdd, onAddAndSpeak, context, mode }) {
   const { c, r, scale } = usePaper();
@@ -33,6 +34,11 @@ export default function TypeSheet({ visible, onClose, messageWords, onAdd, onAdd
   };
 
   const words = text.trim() ? text.trim().split(/\s+/) : [];
+  // Typing needs a keyboard; switch scanning here offers the chips and Close.
+  const focused = useOverlayScan(visible, [
+    ...suggestions.map((sg, i) => ({ id: `sg-${i}`, onSelect: () => accept(sg.word) })),
+    { id: 'close', onSelect: onClose },
+  ]);
   const finish = (speakToo) => {
     if (words.length === 0) return;
     Keyboard.dismiss();
@@ -42,7 +48,7 @@ export default function TypeSheet({ visible, onClose, messageWords, onAdd, onAdd
   };
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Type" subtitle="Typed words join your message. Suggestions complete the word you are typing.">
+    <Sheet visible={visible} onClose={onClose} closeFocused={focused === 'close'} scanning={focused !== null} title="Type" subtitle="Typed words join your message. Suggestions complete the word you are typing.">
       <TextInput
         ref={input}
         value={text}
@@ -68,7 +74,7 @@ export default function TypeSheet({ visible, onClose, messageWords, onAdd, onAdd
             keyboardShouldPersistTaps="always"
             showsHorizontalScrollIndicator={false}
             keyExtractor={(item, i) => `${item.word}-${i}`}
-            renderItem={({ item }) => <SuggestionChip word={item.word} onPress={() => accept(item.word)} />}
+            renderItem={({ item, index }) => <SuggestionChip word={item.word} onPress={() => accept(item.word)} focused={focused === `sg-${index}`} />}
           />
         )}
       </View>
