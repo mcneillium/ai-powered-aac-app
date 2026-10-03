@@ -15,7 +15,18 @@
         }
       ],
       "expo-asset",
-      "./plugins/withFontScaleConfigChange"
+      "./plugins/withFontScaleConfigChange",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "node_modules/@expo-google-fonts/atkinson-hyperlegible/400Regular/AtkinsonHyperlegible_400Regular.ttf",
+            "node_modules/@expo-google-fonts/atkinson-hyperlegible/700Bold/AtkinsonHyperlegible_700Bold.ttf",
+            "node_modules/@expo-google-fonts/fredoka/500Medium/Fredoka_500Medium.ttf",
+            "node_modules/@expo-google-fonts/fredoka/600SemiBold/Fredoka_600SemiBold.ttf"
+          ]
+        }
+      ]
     ],
     "assetBundlePatterns": [
       "assets/**/*"

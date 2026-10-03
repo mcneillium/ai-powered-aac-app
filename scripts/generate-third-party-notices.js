@@ -88,9 +88,14 @@ const packages = [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name)
 // Fonts bundled by @expo/vector-icons are separate works with their own
 // notices (sources: github.com/ionic-team/ionicons and
 // github.com/google/material-design-icons LICENSE files).
+// The text fonts are embedded by the expo-font config plugin (app.json) and
+// are SIL Open Font License 1.1 works (sources: the LICENSE_FONT files in
+// @expo-google-fonts/atkinson-hyperlegible and @expo-google-fonts/fredoka).
 const fonts = [
   { name: 'Ionicons (icon font)', license: 'MIT', copyright: 'Copyright (c) 2015-present Ionic (http://ionic.io/)' },
   { name: 'Material Icons (icon font)', license: 'Apache-2.0', copyright: 'Copyright Google LLC' },
+  { name: 'Atkinson Hyperlegible (text font)', license: 'OFL-1.1', copyright: 'Copyright 2020 Braille Institute of America, Inc.' },
+  { name: 'Fredoka (text font)', license: 'OFL-1.1', copyright: 'Copyright 2016 The Fredoka Project Authors (https://github.com/hafontia/Fredoka-One)' },
 ];
 
 // Licence texts for packages that ship no LICENSE file in node_modules, keyed
@@ -98,6 +103,7 @@ const fonts = [
 const STANDARD = {
   'Apache-2.0': 'apache-2.0.txt',
   MIT: 'mit.txt',
+  'OFL-1.1': 'ofl-1.1.txt',
 };
 const standardTexts = {};
 for (const [spdx, file] of Object.entries(STANDARD)) {

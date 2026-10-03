@@ -14,14 +14,15 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, AppState, View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { ActivityIndicator, AppState, View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { AuthProvider } from './src/contexts/AuthContext';
 import { SettingsProvider, useSettings } from './src/contexts/SettingsContext';
-import { NetworkProvider } from './src/contexts/NetworkContext';
-import { getPalette } from './src/theme';
+import { NetworkProvider, useNetwork } from './src/contexts/NetworkContext';
+import { getPalette, getExperience, fonts } from './src/theme';
+import { TAB_BAR_HEIGHT, TAB_BAR_MARGIN } from './src/components/tabBarMetrics';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import OfflineBanner from './src/components/OfflineBanner';
 import QuickRepairOverlay from './src/components/QuickRepairOverlay';
@@ -41,6 +42,7 @@ import CameraScreen from './src/screens/CameraScreen';
 import InsightsScreen from './src/screens/InsightsScreen';
 import VocabManagerScreen from './src/screens/VocabManagerScreen';
 import LicensesScreen from './src/screens/LicensesScreen';
+import LearningScreen from './src/screens/LearningScreen';
 
 // Non-blocking model load
 import { loadImprovedModel } from './src/services/improvedModelLoader';
@@ -63,11 +65,18 @@ loadCustomVocab().catch(err => console.warn('Custom vocab load failed (non-block
 loadPronunciations().catch(err => console.warn('Pronunciation load failed (non-blocking):', err));
 
 const TAB_ICONS = {
-  'AAC Board': 'grid-outline',
-  'Contexts': 'apps-outline',
-  'Sentence': 'text-outline',
-  'Emotion': 'happy-outline',
-  'Profile': 'person-outline',
+  'AAC Board': ['chatbubble-ellipses', 'chatbubble-ellipses-outline'],
+  'Contexts': ['compass', 'compass-outline'],
+  'Sentence': ['text', 'text-outline'],
+  'Emotion': ['happy', 'happy-outline'],
+  'Profile': ['person-circle', 'person-circle-outline'],
+};
+
+// Tab names per experience. Route names stay the same (they are what saved
+// navigation state and the native tests refer to).
+const TAB_TITLES = {
+  child: { 'AAC Board': 'Talk', Contexts: 'Places', Sentence: 'Build', Emotion: 'Feelings', Profile: 'Me' },
+  adult: { 'AAC Board': 'Talk', Contexts: 'Situations', Sentence: 'Builder', Emotion: 'Feelings', Profile: 'Me' },
 };
 
 function SettingsHeaderButton({ tintColor, navigation }) {
@@ -84,55 +93,82 @@ function SettingsHeaderButton({ tintColor, navigation }) {
   );
 }
 
-function MainApp() {
+// Floating tab bar: a dark rounded bar with the current tab as a filled pill.
+// Its footprint is fixed (tabBarMetrics) so screens can keep content clear.
+function FloatingTabBar({ state, descriptors, navigation, palette, titles }) {
   const insets = useSafeAreaInsets();
+  return (
+    <View
+      style={[
+        styles.tabBar,
+        { backgroundColor: palette.tabBarBg, bottom: Math.max(insets.bottom, 6), height: TAB_BAR_HEIGHT },
+      ]}
+      accessibilityRole="tablist"
+    >
+      {state.routes.map((route, index) => {
+        const focused = state.index === index;
+        const title = titles[route.name] || descriptors[route.key].options.title || route.name;
+        const [on, off] = TAB_ICONS[route.name] || ['help', 'help-outline'];
+        const color = focused ? palette.tabBarActive : palette.tabBarInactive;
+        const onPress = () => {
+          const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+          if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+        };
+        return (
+          <TouchableOpacity
+            key={route.key}
+            onPress={onPress}
+            style={[styles.tabItem, focused && { backgroundColor: palette.tabBarPill }]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: focused }}
+            accessibilityLabel={`${route.name} tab`}
+            accessibilityHint={title}
+          >
+            <Ionicons name={focused ? on : off} size={22} color={color} />
+            <Text
+              style={[styles.tabLabel, { color, fontFamily: focused ? fonts.bold : fonts.regular }]}
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.3}
+            >
+              {title}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+function MainApp() {
   const { settings } = useSettings();
   const palette = getPalette(settings.theme);
+  const experience = getExperience(settings.experience);
+  const titles = TAB_TITLES[experience.id] || TAB_TITLES.adult;
 
   return (
     <>
       <Tab.Navigator
+        tabBar={(props) => <FloatingTabBar {...props} palette={palette} titles={titles} />}
         screenOptions={({ route, navigation }) => ({
-          headerStyle: { backgroundColor: palette.tabBarBg },
+          headerStyle: { backgroundColor: palette.headerBg },
+          headerShadowVisible: false,
           headerTintColor: palette.text,
-          headerTitleStyle: { color: palette.text, fontWeight: '600' },
+          headerTitleStyle: { color: palette.text, fontFamily: experience.headlineFont, fontSize: 24 },
           headerRight: () => (
             <SettingsHeaderButton tintColor={palette.text} navigation={navigation} />
           ),
-          tabBarActiveTintColor: palette.tabBarActive,
-          tabBarInactiveTintColor: palette.tabBarInactive,
-          tabBarStyle: {
-            backgroundColor: palette.tabBarBg,
-            borderTopWidth: 0,
-            elevation: 5,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -1 },
-            shadowOpacity: 0.1,
-            shadowRadius: 3,
-            borderTopLeftRadius: 15,
-            borderTopRightRadius: 15,
-            position: 'absolute',
-            height: 60 + insets.bottom,
-            paddingBottom: insets.bottom,
-          },
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name={TAB_ICONS[route.name] || 'help-outline'} size={size} color={color} />
-          ),
-          tabBarAccessibilityLabel: `${route.name} tab`,
+          title: titles[route.name] || route.name,
+          sceneStyle: { backgroundColor: palette.background },
         })}
       >
         <Tab.Screen
           name="AAC Board"
           component={AACBoardScreen}
-          // Compact layout (opt-in) hides this header to give the word grid
-          // more room; Settings is then reachable from the board's page row.
-          options={{ title: 'Communicate', headerShown: settings.compactLayout !== true }}
+          // The board draws its own header (name, situation, quick phrases,
+          // settings) so the message bar sits as high as possible.
+          options={{ headerShown: false }}
         />
-        <Tab.Screen
-          name="Contexts"
-          component={ContextPackScreen}
-          options={{ title: 'Situations' }}
-        />
+        <Tab.Screen name="Contexts" component={ContextPackScreen} />
         <Tab.Screen name="Sentence" component={EasySentenceBuilderScreen} />
         <Tab.Screen name="Emotion" component={EmotionScreen} />
         <Tab.Screen name="Profile" component={ProfileScreen} />
@@ -191,12 +227,20 @@ function AppNavigator() {
 function RootNavigator() {
   const { settings } = useSettings();
   const palette = getPalette(settings.theme);
+  // While offline, the offline banner already covers the status bar; the
+  // native header must not add the status-bar height again (it left an
+  // empty band above every pushed screen's header).
+  const { isOnline } = useNetwork();
 
   return (
     <RootStack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: palette.tabBarBg },
+        headerStyle: { backgroundColor: palette.headerBg },
+        headerShadowVisible: false,
         headerTintColor: palette.text,
+        headerTitleStyle: { fontFamily: fonts.bold, fontSize: 20 },
+        contentStyle: { backgroundColor: palette.background },
+        headerTopInsetEnabled: isOnline,
       }}
     >
       <RootStack.Screen
@@ -235,6 +279,11 @@ function RootNavigator() {
         options={{ title: 'Credits & Licences' }}
       />
       <RootStack.Screen
+        name="Learning"
+        component={LearningScreen}
+        options={{ title: 'What Voice has learned' }}
+      />
+      <RootStack.Screen
         name="Login"
         component={AuthStackScreen}
         options={{ headerShown: false, presentation: 'modal' }}
@@ -270,6 +319,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
   },
+  tabBar: {
+    position: 'absolute',
+    left: TAB_BAR_MARGIN,
+    right: TAB_BAR_MARGIN,
+    borderRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    gap: 2,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+  },
+  tabItem: {
+    flex: 1,
+    height: TAB_BAR_HEIGHT - 12,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  tabLabel: { fontSize: 12 },
   headerBtn: {
     marginRight: Platform.OS === 'ios' ? 16 : 12,
     minWidth: 44,

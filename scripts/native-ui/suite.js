@@ -1,5 +1,5 @@
 /* eslint-env node */
-// Native UI suite for "Voice PR7 Test". Usage: SERIAL=... RUN=name node suite.js [sections]
+// Native UI suite for the separate test app ("Voice PR7 Test"). Usage: SERIAL=... RUN=name node suite.js [sections]
 // Sections: board, history, settings, compact, fonts, speech, longtext, ttserror, persist
 const d = require('./drv');
 const { sleep, note, check } = d;
@@ -66,6 +66,14 @@ async function openSettings() {
   const s = await d.find('Open settings', { timeout: 1500 });
   if (s) return d.tap(s, { wait: 1400 });
   return d.tap('Settings', { wait: 1400 }); // compact page row
+}
+// Favourites, history and other less frequent actions live in the More menu.
+async function openMore() {
+  await d.tap(/^More actions/, { wait: 1000 });
+}
+async function closeSheet() {
+  const c = await d.find('Close', { timeout: 1000 });
+  if (c) await d.tap(c, { wait: 800 }); else { d.sh('input keyevent KEYCODE_BACK'); await sleep(800); }
 }
 async function scrollTo(q, max = 10) {
   for (let i = 0; i < max; i++) {
@@ -187,33 +195,33 @@ async function samplePlayers(ms, every = 150) {
   }
 
   if (want.includes('history')) {
-    note('== F/history and favourites');
+    note('== F/history and favourites (More menu and sheets)');
     await toBoard(); await goHome(); await clearIfAny();
     await tapW(/^Say I need\./); await tapW(/^Say help\./);
     await d.tap(/^Speak sentence:/, { wait: 1500 });
     // Already a favourite from an earlier run (data kept across installs)? Then leave it.
+    await openMore();
     const add = await d.find('Add to favourites', { timeout: 1500 });
-    if (add) await d.tap(add, { wait: 800 }); else note('phrase was already a favourite (kept from an earlier run)');
+    if (add) await d.tap(add, { wait: 900 }); else { note('phrase was already a favourite (kept from an earlier run)'); await closeSheet(); }
+    await openMore();
     const remove = await d.find('Remove from favourites', { timeout: 1500 });
     check('F favourite toggle switches to Remove', !!remove, remove ? remove.label : 'missing');
+    await closeSheet();
     await d.tap('Clear');
-    await d.tap('Show sentence history', { wait: 900 });
+    await openMore(); await d.tap('Show sentence history', { wait: 1200 });
     const rep = await d.find(/^Repeat: I need help/, { timeout: 2000 });
     check('F history lists spoken sentence', !!rep, rep ? rep.label : 'not in history');
     d.screenshot('F-history-open');
     if (rep) {
-      await d.tap(rep, { wait: 900 });
+      await d.tap(rep, { wait: 1200 });
       const s = await sentence();
       check('F history item replaces sentence', s === 'Sentence: I need help', s);
     }
-    await d.tap(/^Hide sentence history|^Show favourites/, { wait: 600 });
-    const showFav = await d.find('Show favourites', { timeout: 1000 });
-    if (showFav) await d.tap(showFav, { wait: 900 });
+    await openMore(); await d.tap('Show favourites', { wait: 1200 });
     const fav = await d.find(/^Speak favourite: I need help/, { timeout: 2000 });
     check('F favourites list shows saved phrase', !!fav, fav ? fav.label : 'missing');
     d.screenshot('F-favourites-open');
-    const hide = await d.find('Hide favourites', { timeout: 800 });
-    if (hide) await d.tap(hide);
+    await closeSheet();
     await clearIfAny();
   }
 
@@ -221,7 +229,7 @@ async function samplePlayers(ms, every = 150) {
     note('== B/settings: speed 0.5x, pronunciation');
     await toBoard();
     await openSettings();
-    await d.tap('Speech speed 0.5x', { wait: 700 });
+    await d.tap(await scrollTo('Speech speed 0.5x'), { wait: 700 });
     const sp = await d.find('Speech speed 0.5x');
     check('B1 speed 0.5x selected', sp && sp.selected === 'true', `selected=${sp && sp.selected}`);
     const t1 = await typeInto('Word as written', 'help');
@@ -247,7 +255,7 @@ async function samplePlayers(ms, every = 150) {
     note(`frames delivered for "help"->"help me please" at 0.5x: ${frames05}`);
     await clearIfAny();
     // compare with 1.0x
-    await openSettings(); await d.tap('Speech speed 1x', { wait: 700 });
+    await openSettings(); await d.tap(await scrollTo('Speech speed 1x'), { wait: 700 });
     d.sh('input keyevent KEYCODE_BACK'); await sleep(900);
     d.logcatClear();
     await tapW(/^Say help\./, { wait: 3000 });
@@ -256,7 +264,7 @@ async function samplePlayers(ms, every = 150) {
     check('B1 0.5x produces longer audio than 1x (engine frames)', frames05 > frames10 * 1.2,
       `0.5x=${frames05} frames, 1x=${frames10} frames, ratio=${(frames05 / Math.max(frames10, 1)).toFixed(2)}`);
     await clearIfAny();
-    await openSettings(); await d.tap('Speech speed 0.5x', { wait: 700 });
+    await openSettings(); await d.tap(await scrollTo('Speech speed 0.5x'), { wait: 700 });
     d.sh('input keyevent KEYCODE_BACK'); await sleep(900);
   }
 
@@ -271,6 +279,7 @@ async function samplePlayers(ms, every = 150) {
       return new Set(full.map((n) => n.y1)).size;
     };
     const stdRows = await rowsOf();
+    const stdTop = await gridTop();
     note(`standard layout: ${stdRows} full word rows above tab bar at y=${tabTop}`);
     d.screenshot('E1-standard');
     await openSettings();
@@ -280,7 +289,10 @@ async function samplePlayers(ms, every = 150) {
     d.sh('input keyevent KEYCODE_BACK'); await sleep(1200);
     const cRows = await rowsOf();
     d.screenshot('E2-compact');
-    check('E2 compact shows more full rows', cRows > stdRows, `standard=${stdRows} compact=${cRows}`);
+    const yStd = stdTop;
+    const yCompact = await gridTop();
+    check('E2 compact gives the grid more room', yCompact < yStd && cRows >= stdRows,
+      `grid top standard=${yStd} compact=${yCompact}; full rows standard=${stdRows} compact=${cRows}`);
     const settingsBtn = await d.find('Settings', { timeout: 1500 }) || await d.find(/settings/i, { timeout: 500 });
     check('E2 Settings reachable from compact page row', !!settingsBtn, settingsBtn ? settingsBtn.label : 'missing');
     const ya = await gridTop();
@@ -329,7 +341,7 @@ async function samplePlayers(ms, every = 150) {
   if (want.includes('speech')) {
     note('== B8/B9/B7 rapid speech and Stop (Clear)');
     await toBoard(); await goHome(); await clearIfAny();
-    await openSettings(); await d.tap('Speech speed 1x', { wait: 600 });
+    await openSettings(); await d.tap(await scrollTo('Speech speed 1x'), { wait: 600 });
     d.sh('input keyevent KEYCODE_BACK'); await sleep(900);
     const nodes = await d.dump();
     const pick = ['I want', 'I need', 'you', 'go', 'like', 'help'].map((w) => nodes.find((n) => n.label.startsWith(`Say ${w}.`)));
@@ -450,7 +462,7 @@ async function samplePlayers(ms, every = 150) {
     d.forceStop(); d.launch(); await sleep(5000);
     await toBoard(); await goHome();
     const camBtn = await d.find('Open camera to describe what you see', { timeout: 2000 })
-      || (await d.tap('More actions: favourites, history, show on screen, camera, voice style', { wait: 800 }), await d.find('Open camera to describe what you see'));
+      || (await openMore(), await d.find('Open camera to describe what you see'));
     await d.tap(camBtn, { wait: 2500 });
     let nodes = await d.dump('C1-camera-open');
     const storagePrompt = nodes.find((n) => /photos|media|files|storage/i.test(n.label) && /Allow/.test(n.label));
@@ -519,20 +531,20 @@ async function samplePlayers(ms, every = 150) {
   if (want.includes('persist')) {
     note('== F/persistence after restart');
     await toBoard(); await openSettings();
-    await d.tap('Speech speed 0.75x', { wait: 800 });
+    await d.tap(await scrollTo('Speech speed 0.75x'), { wait: 800 });
     d.sh('input keyevent KEYCODE_BACK'); await sleep(800);
     d.forceStop(); await sleep(800); d.launch(); await sleep(5000);
     await toBoard(); await goHome();
-    await d.tap('Show favourites', { wait: 900 });
+    await openMore(); await d.tap('Show favourites', { wait: 1200 });
     const fav = await d.find(/^Speak favourite: I need help/, { timeout: 2000 });
     check('A4/F favourite survives restart', !!fav, fav ? fav.label : 'missing');
-    const hide = await d.find('Hide favourites', { timeout: 800 }); if (hide) await d.tap(hide);
-    await d.tap('Show sentence history', { wait: 900 });
+    await closeSheet();
+    await openMore(); await d.tap('Show sentence history', { wait: 1200 });
     const rep = await d.find(/^Repeat: I need help/, { timeout: 2000 });
     check('F history survives restart', !!rep, rep ? rep.label : 'missing');
-    const hh = await d.find('Hide sentence history', { timeout: 800 }); if (hh) await d.tap(hh);
+    await closeSheet();
     await openSettings();
-    const sp = await d.find('Speech speed 0.75x');
+    const sp = await scrollTo('Speech speed 0.75x');
     check('F speech speed 0.75x survives restart', sp && sp.selected === 'true', `selected=${sp && sp.selected}`);
     const entry = await scrollTo(/^help, said as help me please/);
     check('F1b pronunciation survives restart', !!entry, entry ? entry.label : 'missing');

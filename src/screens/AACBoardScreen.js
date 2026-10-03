@@ -3,13 +3,15 @@
 //
 // Design principles:
 // 1. OFFLINE-FIRST: Works without internet using local core vocabulary
-// 2. MOTOR-PLAN STABLE: Button positions never change unless user explicitly edits
+// 2. MOTOR-PLAN STABLE: Button positions never change unless the user edits
+//    the board or the grid size. Child/Adult, symbols, suggestions, panels and
+//    the situation never move a word: panels open as sheets over the board,
+//    and the suggestion row has a fixed height and a fixed number of slots.
 // 3. ACCESSIBLE: Every button has proper accessibility labels and roles
 // 4. LOW-LATENCY: Speech fires immediately on tap with no network dependency
-// 5. Fitzgerald Key color coding for part-of-speech awareness
-// 6. AI suggestions strip shows contextual next-word predictions
-// 7. Favourites: Users can pin frequently-used phrases
-// 8. Persistent history: Sentence history survives app restarts
+// 5. Fitzgerald Key colour coding (a colour cap on every tile)
+// 6. Suggestions: built-in + (opt-in) learned on this device, tap to add
+// 7. Favourites, history, situations and "Help me explain" one tap away
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
@@ -24,25 +26,28 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSettings } from '../contexts/SettingsContext';
-import { getPalette } from '../theme';
+import { getPalette, getExperience, symbolsOn, fonts, radii } from '../theme';
 import { speak, stop, buildSpeechOptions, subscribeSpeechStatus } from '../services/speechService';
-import { getHomePage, getPage } from '../data/coreVocabulary';
+import { getHomePage, getPage, getPageIds } from '../data/coreVocabulary';
+import { getContextPack } from '../data/contextPacks';
+import { symbolFor } from '../data/symbols';
 import { getAISuggestions } from '../services/getAISuggestions';
-import { useOnDevicePrediction } from '../hooks/useOnDevicePrediction';
+import { rank, placeInSlots, displayForm, norm } from '../services/predictionEngine';
 import { useScrollToTopOnChange } from '../hooks/useScrollToTopOnChange';
-import { suggestionChipFit, stripHeight } from '../utils/suggestionChipFit';
+import { suggestionChipFit } from '../utils/suggestionChipFit';
 import { saveSentenceDraft, takeSentenceDraftAfterFontChange } from '../services/sentenceDraft';
 import { t } from '../i18n/strings';
 import {
   recordWordSelection,
   recordSentenceSpoken,
   recordSuggestionsShown,
-  getBigramPredictions,
-  getTopWords,
-  scoreWithExplanation,
   recordSourceShown,
   recordFailedSearch,
+  getPersonalModel,
+  getBlockedSuggestions,
+  blockSuggestion,
 } from '../services/aiProfileStore';
 import {
   loadSentenceHistory,
@@ -59,10 +64,14 @@ import {
 } from '../services/favouritesStore';
 import { getAACPhraseSuggestions } from '../services/vertexAISuggestions';
 import DisplayMode from '../components/DisplayMode';
-import VoicePresetPicker from '../components/VoicePresetPicker';
 import WordFinder from '../components/WordFinder';
 import MoreActionsMenu from '../components/MoreActionsMenu';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Sheet, { useAfterClose } from '../components/Sheet';
+import ContextPanel from '../components/ContextPanel';
+import HelpMeExplain from '../components/HelpMeExplain';
+import VocabTile from '../components/board/VocabTile';
+import SuggestionRow from '../components/board/SuggestionRow';
+import { tabBarSpace } from '../components/tabBarMetrics';
 import { openQuickPhrases, setQuickPhrasesButtonHidden } from '../components/QuickRepairOverlay';
 import {
   setScanItems, setScanMode, setScanSpeed, getScanState,
@@ -70,18 +79,42 @@ import {
   advanceScan, selectCurrent, cleanup as cleanupScan,
 } from '../services/switchScanService';
 
+// The suggestion row always has this many slots.
+export const SUGGESTION_SLOTS = 4;
+const EMPTY_SLOTS = new Array(SUGGESTION_SLOTS).fill(null);
+
+// Every word on every page (lower case) and its board spelling, so learned
+// and model suggestions are real vocabulary shown the way the board shows it.
+function buildBoardVocabulary() {
+  const casing = new Map();
+  for (const id of getPageIds()) {
+    const page = getPage(id);
+    if (!page) continue;
+    for (const b of page.buttons) {
+      if (b.navigateTo) continue;
+      const k = norm(b.label);
+      if (!casing.has(k)) casing.set(k, b.label);
+    }
+  }
+  return casing;
+}
+
 export default function AACBoardScreen() {
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
   const palette = getPalette(settings.theme);
+  const experience = getExperience(settings.experience);
+  const showSymbols = symbolsOn(settings);
   const navigation = useNavigation();
-  const { predictNext: personalPredict, recordTap } = useOnDevicePrediction();
 
   const [sentenceWords, setSentenceWords] = useState([]);
   const [currentPageId, setCurrentPageId] = useState('home');
   const [pageHistory, setPageHistory] = useState([]);
-  const [suggestions, setSuggestions] = useState([]);
+  const [slots, setSlots] = useState(EMPTY_SLOTS);
+  const [suggestionRefresh, setSuggestionRefresh] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const [showFavourites, setShowFavourites] = useState(false);
+  const [showSituations, setShowSituations] = useState(false);
+  const [showExplain, setShowExplain] = useState(false);
   const [history, setHistory] = useState([]);
   const [favourites, setFavourites] = useState([]);
   const [voicePreset, setVoicePreset] = useState('normal');
@@ -96,11 +129,11 @@ export default function AACBoardScreen() {
   const [showMore, setShowMore] = useState(false);
   const insets = useSafeAreaInsets();
   const [speechProblem, setSpeechProblem] = useState(null); // null | 'unavailable' | 'failed'
-  const sentenceBarRef = useRef(null);
   const sentenceScrollRef = useRef(null);
   const gridRef = useRef(null);
+  const slotsRef = useRef(EMPTY_SLOTS);
 
-  // The board has its own Quick Phrases button in the action row; hide the
+  // The board has its own Quick Phrases button in the header; hide the
   // floating one here so it never sits on top of a vocabulary button.
   useFocusEffect(useCallback(() => {
     setQuickPhrasesButtonHidden(true);
@@ -117,18 +150,22 @@ export default function AACBoardScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [currentPageId, isFocused]
   );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const boardCasing = useMemo(() => buildBoardVocabulary(), [isFocused]);
   // Every page opens with its first row in the same place.
   useScrollToTopOnChange(gridRef, currentPageId);
   const aiEnabled = settings.aiPersonalisationEnabled !== false;
+  const learningOn = settings.localLearning === true;
   const cloudEnabled = settings.cloudSuggestionsEnabled !== false;
   const predictionEnabled = settings.predictionEnabled !== false;
   const speakWordsOnTap = settings.speakWordsOnTap !== false;
   const textScale = settings.textScale || 1;
   const { fontScale } = useWindowDimensions();
   const chipFit = suggestionChipFit({ textScale, fontScale });
-  // Opt-in layout for small screens. Never switched on automatically, so
-  // existing users' button positions only change if they choose it.
+  // Opt-in layout for small screens: hides the board header. Never switched
+  // on automatically.
   const compact = settings.compactLayout === true;
+  const situation = settings.activeSituation ? getContextPack(settings.activeSituation) : null;
 
   // One set of speech options for every utterance on this screen, so the
   // user's voice, speed and pitch (plus the chosen voice style) always apply.
@@ -140,12 +177,11 @@ export default function AACBoardScreen() {
 
   // Tell the user (once, non-blocking) when speech could not be produced.
   // The message itself stays on screen, so communication can continue by
-  // showing it (Show on screen button).
+  // showing it (Show on screen).
   useEffect(() => {
     let timer = null;
     const unsubscribe = subscribeSpeechStatus(({ error }) => {
       if (!error) {
-        // Speech started (or a late start recovered): drop any old notice.
         clearTimeout(timer);
         setSpeechProblem(null);
         return;
@@ -183,12 +219,7 @@ export default function AACBoardScreen() {
 
   // ── Switch scanning ──
   // Scan order: vocab grid first (main communication), then suggestions, then actions last.
-  // This puts the most-used items at the start of the scan cycle.
   const scanItemList = useRef([]);
-
-  // Use refs for action callbacks to avoid stale closures in scan select handler.
-  // The callbacks are declared with `const` further down, so the refs start
-  // empty and are populated by the effects below (which run after render).
   const speakRef = useRef(null);
   const backspaceRef = useRef(null);
   const clearRef = useRef(null);
@@ -197,13 +228,12 @@ export default function AACBoardScreen() {
   const suggestionPressRef = useRef(null);
 
   useEffect(() => {
-    // Rebuild scan items: vocab → suggestions → actions
     const vocabItems = currentPage.buttons.map(b => ({
       type: 'vocab', id: b.id, button: b, label: b.label,
     }));
-    const suggItems = suggestions.map((s, i) => ({
-      type: 'suggestion', id: `sug-${i}`, word: typeof s === 'string' ? s : s.word, label: typeof s === 'string' ? s : s.word,
-    }));
+    const suggItems = slots
+      .map((s, i) => (s ? { type: 'suggestion', id: `sug-${i}`, word: s.word, label: s.display } : null))
+      .filter(Boolean);
     const actionItems = [
       { type: 'action', id: 'speak', label: 'Speak' },
       { type: 'action', id: 'backspace', label: 'Delete' },
@@ -214,9 +244,8 @@ export default function AACBoardScreen() {
     if (scanActive) {
       setScanItems(scanItemList.current);
     }
-  }, [currentPage, suggestions, scanActive]);
+  }, [currentPage, slots, scanActive]);
 
-  // Register scan callbacks once — use refs to avoid stale closures
   useEffect(() => {
     onScanChange(({ currentIndex, isRunning }) => {
       setScanFocusIndex(isRunning ? currentIndex : -1);
@@ -237,13 +266,10 @@ export default function AACBoardScreen() {
     return () => { cleanupScan(); };
   }, []);
 
-  // Initialize scan service from persisted settings
   useEffect(() => {
     if (settings.scanMode) setScanMode(settings.scanMode);
     if (settings.scanSpeed) setScanSpeed(settings.scanSpeed);
   }, [settings.scanMode, settings.scanSpeed]);
-
-  const { updateSettings } = useSettings();
 
   const toggleScan = useCallback(() => {
     if (scanActive) {
@@ -258,28 +284,6 @@ export default function AACBoardScreen() {
     }
   }, [scanActive, settings.scanMode, settings.scanSpeed]);
 
-  const changeScanMode = useCallback((newMode) => {
-    setScanMode(newMode);
-    updateSettings({ scanMode: newMode });
-    if (scanActive) {
-      stopScan();
-      setScanItems(scanItemList.current);
-      startScan();
-    }
-  }, [scanActive, updateSettings]);
-
-  const changeScanSpeed = useCallback((delta) => {
-    const state = getScanState();
-    const newSpeed = Math.max(500, Math.min(5000, state.scanSpeed + delta));
-    setScanSpeed(newSpeed);
-    updateSettings({ scanSpeed: newSpeed });
-    if (scanActive) {
-      stopScan();
-      setScanItems(scanItemList.current);
-      startScan();
-    }
-  }, [scanActive, updateSettings]);
-
   const isScanFocused = useCallback((type, id) => {
     if (!scanActive || scanFocusIndex < 0) return false;
     const focused = scanItemList.current[scanFocusIndex];
@@ -291,93 +295,77 @@ export default function AACBoardScreen() {
     [palette.focusRing]
   );
 
-  // Fetch AI suggestions when sentence changes
+  // ── Suggestions ──
+  // Ranked locally (predictionEngine) into a fixed number of slots. Learned
+  // evidence is only used when the user has switched learning on.
   useEffect(() => {
     let cancelled = false;
+    if (!predictionEnabled) {
+      slotsRef.current = EMPTY_SLOTS;
+      setSlots(EMPTY_SLOTS);
+      return undefined;
+    }
+    const vocabulary = new Set(boardCasing.keys());
+    const show = (modelWords) => {
+      const ranked = rank({
+        context: sentenceWords,
+        model: learningOn ? getPersonalModel() : null,
+        learning: learningOn,
+        modelWords,
+        vocabulary,
+        blocked: getBlockedSuggestions(),
+        limit: 8,
+      }).map(r => ({ ...r, display: displayForm(r.word, boardCasing) }));
+      const next = placeInSlots(slotsRef.current, ranked, SUGGESTION_SLOTS);
+      slotsRef.current = next;
+      setSlots(next);
+      return next;
+    };
+    show([]);
+
     (async () => {
-      if (!predictionEnabled) {
-        setSuggestions([]);
-        return;
-      }
-      if (sentenceWords.length === 0) {
-        if (aiEnabled) {
-          const top = getTopWords(6);
-          if (!cancelled) setSuggestions(top.length > 0 ? top.map(w => ({ word: w, reason: 'used often' })) : []);
-        } else {
-          setSuggestions([]);
-        }
-        return;
-      }
-
-      // Layer 1: Bigram predictions (instant, local, personalised by usage history)
-      const lastWord = sentenceWords[sentenceWords.length - 1];
-      const bigramResults = aiEnabled ? getBigramPredictions(lastWord, 4) : [];
-      if (bigramResults.length > 0 && !cancelled) {
-        if (aiEnabled) recordSourceShown('bigram', bigramResults.length);
-        const scored = scoreWithExplanation(bigramResults);
-        setSuggestions(scored.map(s => ({ word: s.word, reason: s.reason })));
-      }
-
-      // Layer 2: On-device personalized model (adapts to this user's patterns during session)
-      let personalResults = [];
+      if (sentenceWords.length === 0) return;
+      // Bundled neural model (offline, not personal): extra candidates.
       try {
-        personalResults = await personalPredict(sentenceWords, 4);
-        if (!cancelled && personalResults.length > 0) {
-          // Merge personal predictions with bigram results, label as 'learned'
-          const combined = [...new Set([...bigramResults, ...personalResults])];
-          const scored = scoreWithExplanation(combined);
-          // Override reason for words that came only from the personalized model
-          const bigramSet = new Set(bigramResults);
-          const labeled = scored.map(s => ({
-            word: s.word,
-            reason: !bigramSet.has(s.word) && personalResults.includes(s.word) ? 'learned' : s.reason,
-          }));
-          setSuggestions(labeled.slice(0, 6));
-        }
-      } catch {
-        // Personalized model is optional — bigram results still showing
-      }
-
-      // Layer 3: Static neural model (async, pre-trained, not personalized)
-      try {
-        const text = sentenceWords.join(' ');
-        const aiResults = await getAISuggestions(text);
+        const aiResults = await getAISuggestions(sentenceWords.join(' '));
         if (!cancelled && aiResults.length > 0) {
-          if (aiEnabled) recordSourceShown('neural', aiResults.length);
-          const allLocal = [...new Set([...bigramResults, ...personalResults, ...aiResults])].slice(0, 6);
-          const scored = aiEnabled ? scoreWithExplanation(allLocal) : allLocal.map(w => ({ word: w, score: 0, reason: 'suggested' }));
-          setSuggestions(scored.map(s => ({ word: s.word, reason: s.reason })));
-          if (aiEnabled) recordSuggestionsShown(scored.length).catch(() => {});
+          const shown = show(aiResults);
+          if (learningOn) {
+            recordSourceShown('neural', shown.filter(Boolean).length);
+            recordSuggestionsShown(shown.filter(Boolean).length).catch(() => {});
+          }
         }
       } catch {
-        // Bigram + personal results are already showing
+        // Built-in suggestions are already showing.
       }
 
-      // Also try Vertex AI for richer phrase suggestions (async, non-blocking).
-      // Gated on the "Online suggestions" privacy setting — this is the only
-      // suggestion path that sends sentence content off-device.
+      // Online phrase suggestions (opt-in privacy setting): only ever fill
+      // empty slots, never replace a word the user can see.
       if (aiEnabled && cloudEnabled && sentenceWords.length >= 2) {
         try {
           const recentTexts = getSentenceHistory().slice(0, 3).map(h => h.text);
           const vertexPhrases = await getAACPhraseSuggestions(sentenceWords, recentTexts);
           if (!cancelled && vertexPhrases.length > 0) {
-            if (aiEnabled) recordSourceShown('vertex', vertexPhrases.length);
-            setSuggestions(prev => {
-              const existingWords = prev.map(s => typeof s === 'string' ? s : s.word);
-              const newPhrases = vertexPhrases
-                .filter(p => !existingWords.includes(p))
-                .map(p => ({ word: p, reason: 'AI suggested' }));
-              return [...prev, ...newPhrases].slice(0, 8);
-            });
+            const current = slotsRef.current.slice();
+            const have = new Set(current.filter(Boolean).map(s => s.word));
+            const extra = vertexPhrases.filter(p => !have.has(norm(p)));
+            for (let i = 0; i < current.length && extra.length; i++) {
+              if (!current[i]) {
+                const p = extra.shift();
+                current[i] = { word: p, display: p, source: 'online', reason: 'online' };
+              }
+            }
+            slotsRef.current = current;
+            setSlots(current);
           }
         } catch {
-          // Vertex AI is optional
+          // Online suggestions are optional
         }
       }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sentenceWords, aiEnabled, cloudEnabled, predictionEnabled]);
+  }, [sentenceWords, learningOn, aiEnabled, cloudEnabled, predictionEnabled, boardCasing, suggestionRefresh]);
 
   const navigateToPage = useCallback((pageId) => {
     setPageHistory(prev => [...prev, currentPageId]);
@@ -405,25 +393,28 @@ export default function AACBoardScreen() {
     });
   }, []);
 
-  const addWords = useCallback((words) => {
-    setUndoWords(null);
-    setSentenceWords(prev => [...prev, ...words]);
-  }, []);
+  // Learning (opt-in, on this device): each word, in context.
+  const learnWords = useCallback((prev, words, wasSuggestion) => {
+    if (!learningOn) return;
+    let ctx = prev;
+    words.forEach((w) => {
+      recordWordSelection(w, ctx, wasSuggestion).catch(() => {});
+      ctx = [...ctx, w];
+    });
+  }, [learningOn]);
 
-  const addWord = useCallback((label, wasSuggestion = false) => {
+  const addWords = useCallback((words, wasSuggestion = false) => {
     setUndoWords(null);
     setSentenceWords(prev => {
-      const next = [...prev, label];
-      if (aiEnabled) {
-        recordWordSelection(label, prev, wasSuggestion).catch(() => {});
-        // Feed the on-device model: prev words → selected word
-        // This runs async, never blocks speech, and silently fails if model isn't loaded
-        recordTap(prev, label).catch(() => {});
-      }
-      return next;
+      learnWords(prev, words, wasSuggestion);
+      return [...prev, ...words];
     });
+  }, [learnWords]);
+
+  const addWord = useCallback((label, wasSuggestion = false) => {
+    addWords([label], wasSuggestion);
     if (speakWordsOnTap) say(label);
-  }, [aiEnabled, recordTap, say, speakWordsOnTap]);
+  }, [addWords, say, speakWordsOnTap]);
 
   const handleButtonPress = useCallback((button) => {
     if (button.navigateTo) {
@@ -439,27 +430,46 @@ export default function AACBoardScreen() {
 
   // Suggestions are only ever added on an explicit tap — never automatically.
   const handleSuggestionPress = useCallback((word) => {
-    // If suggestion is a multi-word phrase, add all words
-    const words = word.split(' ');
+    const shown = displayForm(word, boardCasing);
+    const words = shown.split(' ');
     if (words.length > 1) {
-      addWords(words);
-      if (speakWordsOnTap) say(word);
+      addWords(words, true);
+      if (speakWordsOnTap) say(shown);
     } else {
-      addWord(word, true);
+      addWord(shown, true);
     }
-  }, [addWord, addWords, say, speakWordsOnTap]);
+  }, [addWord, addWords, say, speakWordsOnTap, boardCasing]);
+
+  const handleSuggestionLongPress = useCallback((word) => {
+    const shown = displayForm(word, boardCasing);
+    Alert.alert(
+      `Stop suggesting "${shown}"?`,
+      'It stays on the board. You can undo this in Settings › Learning.',
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: "Don't suggest",
+          onPress: () => {
+            blockSuggestion(word)
+              .then(() => setSuggestionRefresh(n => n + 1))
+              .catch(() => {});
+          },
+        },
+      ]
+    );
+  }, [boardCasing]);
 
   const speakSentence = useCallback(async () => {
     const text = sentenceWords.join(' ');
     if (text.trim()) {
       say(text);
       setLastSpoken(text);
-      if (aiEnabled) recordSentenceSpoken(sentenceWords).catch(() => {});
+      if (learningOn) recordSentenceSpoken(sentenceWords).catch(() => {});
 
       await addSentenceToHistory(text);
       setHistory([...getSentenceHistory()]);
     }
-  }, [sentenceWords, aiEnabled, say]);
+  }, [sentenceWords, learningOn, say]);
 
   const removeLastWord = useCallback(() => {
     setSentenceWords(prev => {
@@ -479,7 +489,6 @@ export default function AACBoardScreen() {
     setUndoWords(null);
   }, [undoWords]);
 
-  // Keep the scan-select refs pointing at the latest callbacks.
   useEffect(() => { speakRef.current = speakSentence; }, [speakSentence]);
   useEffect(() => { backspaceRef.current = removeLastWord; }, [removeLastWord]);
   useEffect(() => { clearRef.current = clearSentence; }, [clearSentence]);
@@ -494,7 +503,6 @@ export default function AACBoardScreen() {
     incrementSpeakCount(text)
       .then(() => setHistory([...getSentenceHistory()]))
       .catch(() => {});
-    setShowHistory(false);
   }, [replaceSentence, say]);
 
   const handleToggleFavourite = useCallback(async () => {
@@ -525,17 +533,22 @@ export default function AACBoardScreen() {
     ]);
   }, []);
 
-  const speakFavourite = useCallback((phrase) => {
+  // A whole phrase (favourite, situation phrase): put it in the message bar
+  // and speak it.
+  const speakPhrase = useCallback((phrase) => {
     replaceSentence(phrase.split(' '));
     say(phrase);
     setLastSpoken(phrase);
     addSentenceToHistory(phrase)
       .then(() => setHistory([...getSentenceHistory()]))
       .catch(() => {});
-    setShowFavourites(false);
   }, [replaceSentence, say]);
 
-  // Find-a-word: add the word exactly as a board tap would.
+  // Help me explain: "Use" puts the message in the bar to check first.
+  const applyExplanation = useCallback((text) => {
+    replaceSentence(text.split(' '));
+  }, [replaceSentence]);
+
   const handleFinderAdd = useCallback((button) => {
     setShowFinder(false);
     handleButtonPress(button);
@@ -549,185 +562,123 @@ export default function AACBoardScreen() {
 
   const handleFinderNoResults = useCallback((term) => {
     // Helps caregivers spot missing vocabulary (stays on-device).
-    if (aiEnabled) recordFailedSearch(term).catch(() => {});
-  }, [aiEnabled]);
+    if (learningOn) recordFailedSearch(term).catch(() => {});
+  }, [learningOn]);
+
+  const chooseSituation = useCallback((id) => {
+    updateSettings({ activeSituation: id });
+  }, [updateSettings]);
 
   const numColumns = settings.gridSize || 4;
   const currentSentenceText = sentenceWords.join(' ').trim();
   const isCurrentFavourite = currentSentenceText ? isFavourite(currentSentenceText) : false;
 
-  const renderButton = useCallback(({ item }) => {
-    const isNavButton = !!item.navigateTo;
-    const buttonColor = settings.theme === 'highContrast' ? palette.cardBg : item.color;
-    const buttonTextColor = settings.theme === 'highContrast' ? palette.text : item.textColor;
-    const focused = isScanFocused('vocab', item.id);
-    const labelSize = (numColumns >= 4 ? 13 : 15) * textScale;
-
-    return (
-      <TouchableOpacity
-        style={[
-          styles.vocabButton,
-          {
-            backgroundColor: buttonColor,
-            borderColor: settings.theme === 'highContrast' ? palette.border : '#DDD',
-            flex: 1 / numColumns,
-            minHeight: Math.round(72 * textScale),
-          },
-          focused && scanRingStyle,
-        ]}
-        onPress={() => handleButtonPress(item)}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel={
-          isNavButton ? `Go to ${item.label} page` : `Say ${item.label}. ${item.category}`
-        }
-        accessibilityHint={
-          isNavButton ? 'Opens a new vocabulary page' : 'Adds this word to your sentence'
-        }
-        accessibilityState={{ selected: focused }}
-      >
-        {item.icon && (
-          <Ionicons name={item.icon} size={Math.round(20 * textScale)} color={buttonTextColor} style={styles.buttonIcon} />
-        )}
-        <Text
-          style={[styles.buttonLabel, { color: buttonTextColor, fontSize: labelSize }]}
-          numberOfLines={2}
-          adjustsFontSizeToFit
-        >
-          {item.label}
-        </Text>
-      </TouchableOpacity>
-    );
-  }, [handleButtonPress, numColumns, palette, settings.theme, isScanFocused, textScale, scanRingStyle]);
+  const renderButton = useCallback(({ item }) => (
+    <VocabTile
+      item={item}
+      onPress={handleButtonPress}
+      palette={palette}
+      theme={settings.theme}
+      experience={experience}
+      showSymbol={showSymbols}
+      symbol={showSymbols ? symbolFor(item) : null}
+      textScale={textScale}
+      numColumns={numColumns}
+      focused={isScanFocused('vocab', item.id)}
+      focusStyle={scanRingStyle}
+    />
+  ), [handleButtonPress, palette, settings.theme, experience, showSymbols, textScale, numColumns, isScanFocused, scanRingStyle]);
 
   const hasWords = sentenceWords.length > 0;
-  const sentenceLineHeight = Math.round(26 * textScale);
-  const showScanBar = settings.showScanControls !== false || scanActive;
+  // Same size in both modes, so the message card (and the board) keep their height.
+  const sentenceFont = Math.round(24 * textScale);
+  const sentenceLineHeight = Math.round(sentenceFont * 1.3);
   const isHome = currentPageId === 'home';
+  const bottomSpace = tabBarSpace(insets.bottom);
 
-  // Small helper so every sentence action has the same size, disabled look
-  // and accessibility state.
-  const actionButton = ({ onPress, icon, iconSize = 20, bg, fg = palette.buttonText, label, disabled, scanId, style, children }) => (
+  // Square action button in the message card.
+  const actionButton = ({ onPress, icon, label, disabled, scanId, tone = 'plain' }) => {
+    const bg = palette.surface;
+    const fg = tone === 'danger' ? palette.danger : palette.text;
+    const focused = scanId && isScanFocused('action', scanId);
+    return (
+      <TouchableOpacity
+        onPress={onPress}
+        style={[styles.squareBtn, { backgroundColor: bg, borderRadius: experience.chipRadius }, disabled && styles.disabled, focused && scanRingStyle]}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        disabled={disabled}
+        accessibilityState={{ disabled: !!disabled, selected: !!focused }}
+      >
+        <Ionicons name={icon} size={24} color={fg} />
+      </TouchableOpacity>
+    );
+  };
+
+  const headerIcon = ({ onPress, icon, label, active }) => (
     <TouchableOpacity
       onPress={onPress}
-      style={[
-        style || styles.sentenceActionBtn,
-        { backgroundColor: bg },
-        disabled && styles.disabled,
-        scanId && isScanFocused('action', scanId) && scanRingStyle,
-      ]}
+      style={[styles.headerBtn, { backgroundColor: active ? palette.focusRing : palette.cardBg, borderColor: palette.tileBorder }]}
       accessibilityRole="button"
       accessibilityLabel={label}
-      disabled={disabled}
-      accessibilityState={{ disabled: !!disabled, selected: scanId ? isScanFocused('action', scanId) : false }}
+      accessibilityState={{ selected: !!active }}
     >
-      <Ionicons name={icon} size={iconSize} color={fg} />
-      {children}
+      <Ionicons name={icon} size={22} color={active ? '#000' : palette.text} />
     </TouchableOpacity>
   );
 
-  const speakButton = actionButton({
-    onPress: speakSentence,
-    icon: 'volume-high',
-    iconSize: 24,
-    bg: palette.primary,
-    label: hasWords ? `Speak sentence: ${sentenceWords.join(' ')}` : 'Speak button. Build a sentence first.',
-    disabled: !hasWords,
-    scanId: 'speak',
-    style: styles.speakBtn,
-  });
-  const deleteButton = actionButton({
-    onPress: removeLastWord, icon: 'backspace-outline', bg: palette.danger,
-    label: t('deleteLastWord'), disabled: !hasWords, scanId: 'backspace',
-  });
-  const clearButton = actionButton({
-    onPress: clearSentence, icon: 'trash-outline', bg: palette.danger,
-    label: t('clearSentence'), disabled: !hasWords, scanId: 'clear',
-  });
-  const toggleFavourites = () => { setShowFavourites(f => !f); setShowHistory(false); };
-  const toggleHistory = () => { setShowHistory(h => !h); setShowFavourites(false); };
-  const favListButton = actionButton({
-    onPress: toggleFavourites, icon: 'star', iconSize: 18, bg: palette.warning,
-    label: showFavourites ? t('hideFavourites') : t('showFavourites'),
-  });
-  const historyButton = actionButton({
-    onPress: toggleHistory, icon: 'time-outline', iconSize: 18, bg: palette.info,
-    label: showHistory ? t('hideHistory') : t('showHistory'),
-  });
-  const cameraButton = actionButton({
-    onPress: () => navigation.navigate('Camera'),
-    icon: 'camera-outline', iconSize: 18, bg: palette.accent,
-    label: t('openCamera'),
-  });
-  const undoButton = actionButton({
-    onPress: undo, icon: 'arrow-undo-outline', iconSize: 18, bg: palette.chipBg, fg: palette.text,
-    label: undoWords ? t('undoLabel') : t('nothingToUndo'), disabled: !undoWords, scanId: 'undo',
-  });
-  const favToggleButton = actionButton({
-    onPress: handleToggleFavourite,
-    icon: isCurrentFavourite ? 'star' : 'star-outline',
-    iconSize: 18,
-    bg: isCurrentFavourite ? palette.warning : palette.chipBg,
-    fg: isCurrentFavourite ? palette.buttonText : palette.text,
-    label: isCurrentFavourite ? t('removeFromFavourites') : t('addToFavourites'),
-    disabled: !hasWords,
-  });
-  const displayButton = actionButton({
-    onPress: () => setDisplayMode('display'),
-    icon: 'tv-outline', iconSize: 18, bg: palette.chipBg, fg: palette.text,
-    label: t('showOnScreen'),
-    disabled: !hasWords,
-  });
-  const quickButton = actionButton({
-    onPress: openQuickPhrases,
-    icon: 'flash', iconSize: 18, bg: palette.primary,
-    label: t('quickPhrasesLabel'),
-  });
-  const moreButton = actionButton({
-    onPress: () => setShowMore(true),
-    icon: 'ellipsis-horizontal', iconSize: 20, bg: palette.chipBg, fg: palette.text,
-    label: t('moreActionsLabel'),
-  });
+  const situationChip = (
+    <TouchableOpacity
+      onPress={() => setShowSituations(true)}
+      style={[styles.situationChip, { backgroundColor: situation ? palette.primaryMuted : palette.cardBg, borderColor: situation ? palette.primaryMuted : palette.tileBorder }]}
+      accessibilityRole="button"
+      accessibilityLabel={situation ? `Situation: ${situation.label}. Open its phrases` : 'Choose a situation'}
+    >
+      <Ionicons name={situation ? situation.icon : 'compass-outline'} size={18} color={situation ? palette.onPrimaryMuted : palette.text} />
+      <Text style={[styles.situationText, { color: situation ? palette.onPrimaryMuted : palette.text }]} numberOfLines={1}>
+        {situation ? situation.label : 'Situation'}
+      </Text>
+      <Ionicons name="chevron-down" size={16} color={situation ? palette.onPrimaryMuted : palette.textSecondary} />
+    </TouchableOpacity>
+  );
+
   const moreItems = [
-    { key: 'favs', icon: 'star', label: showFavourites ? t('hideFavourites') : t('showFavourites'), onPress: toggleFavourites },
-    { key: 'history', icon: 'time-outline', label: showHistory ? t('hideHistory') : t('showHistory'), onPress: toggleHistory },
+    { key: 'favs', icon: 'star', label: t('showFavourites'), onPress: () => setShowFavourites(true) },
+    { key: 'history', icon: 'time-outline', label: t('showHistory'), onPress: () => setShowHistory(true) },
     {
       key: 'favToggle', icon: isCurrentFavourite ? 'star' : 'star-outline',
       label: isCurrentFavourite ? t('removeFromFavourites') : t('addToFavourites'),
       onPress: handleToggleFavourite, disabled: !hasWords,
     },
     { key: 'display', icon: 'tv-outline', label: t('showOnScreen'), onPress: () => setDisplayMode('display'), disabled: !hasWords },
+    { key: 'explain', icon: 'extension-puzzle-outline', label: 'Help me explain', onPress: () => setShowExplain(true) },
+    { key: 'situations', icon: 'compass-outline', label: 'Situations', onPress: () => setShowSituations(true) },
     { key: 'camera', icon: 'camera-outline', label: t('openCamera'), onPress: () => navigation.navigate('Camera') },
   ];
 
-  // Small square icon button used by the compact page row.
-  const iconButton = ({ onPress, icon, label, disabled, active }) => (
-    <TouchableOpacity
-      onPress={onPress}
-      disabled={disabled}
-      style={[styles.iconBtn, { backgroundColor: active ? palette.focusRing : palette.surface }, disabled && styles.disabled]}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: !!disabled, selected: !!active }}
-    >
-      <Ionicons name={icon} size={20} color={active ? '#000' : palette.text} />
-    </TouchableOpacity>
-  );
-
   return (
-    <View style={[styles.container, { backgroundColor: palette.background }, compact && { paddingTop: insets.top }]}>
-      {/* Sentence bar — words on top, actions below */}
-      <View
-        ref={sentenceBarRef}
-        style={[styles.sentenceBar, { backgroundColor: palette.surface, borderColor: palette.border }]}
-      >
-        {/* Only the words are grouped as one accessible element. Grouping the
-            whole bar hid the action buttons from VoiceOver / Switch Control. */}
+    <View style={[styles.container, { backgroundColor: palette.background, paddingTop: insets.top }]}>
+      {/* Header: name, situation, quick phrases, settings (hidden in compact) */}
+      {!compact && (
+        <View style={styles.header}>
+          <Text
+            style={[styles.wordmark, { color: palette.text, fontFamily: experience.headlineFont }]}
+            accessibilityRole="header"
+          >
+            {t('appName')}
+          </Text>
+          {situationChip}
+          {headerIcon({ onPress: openQuickPhrases, icon: 'flash', label: t('quickPhrasesLabel') })}
+          {headerIcon({ onPress: () => navigation.navigate('Settings'), icon: 'settings-outline', label: 'Open settings' })}
+        </View>
+      )}
+
+      {/* Message card: the words, then Speak and the editing actions in a
+          fixed order so their positions never move. */}
+      <View style={[styles.messageCard, { backgroundColor: palette.cardBg, borderColor: palette.tileBorder, borderRadius: experience.tileRadius + 4 }]}>
         <ScrollView
           ref={sentenceScrollRef}
-          // Standard: two lines. Compact: exactly one line (no half-cut line);
-          // earlier words scroll and the whole message can be shown on screen.
-          style={{ height: compact ? sentenceLineHeight + 8 : Math.round(64 * textScale) }}
+          style={{ height: compact ? sentenceLineHeight + 6 : sentenceLineHeight * 2 + 6 }}
           contentContainerStyle={styles.sentenceWords}
           onContentSizeChange={() => sentenceScrollRef.current?.scrollToEnd({ animated: false })}
           accessible
@@ -740,326 +691,153 @@ export default function AACBoardScreen() {
           accessibilityLiveRegion="polite"
         >
           {!hasWords ? (
-            <Text style={[styles.placeholder, { color: palette.textSecondary }]}>
-              {t('tapToSpeak')}
+            <Text style={[styles.placeholder, { color: palette.textSecondary, fontSize: Math.round(18 * textScale), lineHeight: sentenceLineHeight }]}>
+              {experience.id === 'child' ? 'Tap the words to talk' : t('tapToSpeak')}
             </Text>
           ) : (
             sentenceWords.map((word, i) => (
               <Text
                 key={`${i}-${word}`}
-                style={[styles.sentenceWord, { color: palette.text, fontSize: Math.round(20 * textScale), lineHeight: sentenceLineHeight }]}
+                style={[styles.sentenceWord, { color: palette.text, fontSize: sentenceFont, lineHeight: sentenceLineHeight }]}
               >
                 {word}
               </Text>
             ))
           )}
         </ScrollView>
-
-        {/* Action buttons — fixed order so their positions never move.
-            Compact layout: one row of core actions + More. */}
-        {compact ? (
-          <View style={[styles.sentenceActions, styles.sentenceActionsCompact]}>
-            {speakButton}{deleteButton}{clearButton}{undoButton}{quickButton}{moreButton}
-          </View>
-        ) : (
-          <View style={styles.sentenceActions}>
-            {speakButton}{deleteButton}{clearButton}{favListButton}{historyButton}
-            {cameraButton}{undoButton}{favToggleButton}{displayButton}{quickButton}
-          </View>
-        )}
-      </View>
-
-      {/* Voice preset picker (optional) */}
-      {!compact && settings.showVoiceStyles !== false && (
-        <VoicePresetPicker activePreset={voicePreset} onSelect={setVoicePreset} />
-      )}
-
-      {/* Scan control bar (optional; always shown while scanning so it can be stopped) */}
-      {!compact && showScanBar && (
-      <View style={[styles.scanBar, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-        <TouchableOpacity
-          onPress={toggleScan}
-          style={[styles.scanToggle, { backgroundColor: scanActive ? palette.focusRing : palette.chipBg }]}
-          accessibilityRole="button"
-          accessibilityLabel={scanActive ? t('stopScanning') : t('startScanning')}
-          accessibilityState={{ selected: scanActive }}
-        >
-          <Ionicons name={scanActive ? 'stop' : 'scan-outline'} size={16} color={scanActive ? '#000' : palette.text} />
-          <Text style={[styles.scanToggleText, { color: scanActive ? '#000' : palette.text }]}>
-            {scanActive ? t('scanning') : t('scan')}
-          </Text>
-        </TouchableOpacity>
-        {scanActive && (
-          <>
-            <TouchableOpacity
-              onPress={() => changeScanMode(getScanState().scanMode === 'auto' ? 'step' : 'auto')}
-              style={[styles.scanOptionBtn, { backgroundColor: palette.chipBg }]}
-              accessibilityRole="button"
-              accessibilityLabel={`Switch to ${getScanState().scanMode === 'auto' ? 'step' : 'auto'} scan`}
+        <View style={styles.actions}>
+          <TouchableOpacity
+            onPress={speakSentence}
+            disabled={!hasWords}
+            style={[
+              styles.speakBtn,
+              { backgroundColor: palette.primary, borderRadius: experience.chipRadius },
+              !hasWords && styles.disabled,
+              isScanFocused('action', 'speak') && scanRingStyle,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={hasWords ? `Speak sentence: ${sentenceWords.join(' ')}` : 'Speak button. Build a sentence first.'}
+            accessibilityState={{ disabled: !hasWords, selected: isScanFocused('action', 'speak') }}
+          >
+            <Ionicons name="volume-high" size={24} color={palette.buttonText} />
+            <Text
+              style={[styles.speakText, { color: palette.buttonText, fontFamily: experience.headlineFont }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              maxFontSizeMultiplier={1.4}
             >
-              <Text style={[styles.scanOptionText, { color: palette.text }]}>
-                {getScanState().scanMode === 'auto' ? 'Auto' : 'Step'}
-              </Text>
-            </TouchableOpacity>
-            {getScanState().scanMode === 'auto' && (
-              <>
-                <TouchableOpacity
-                  onPress={() => changeScanSpeed(500)}
-                  style={[styles.scanOptionBtn, { backgroundColor: palette.chipBg }]}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('scanSlower')}
-                >
-                  <Text style={[styles.scanOptionText, { color: palette.text }]}>{t('scanSlower')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => changeScanSpeed(-500)}
-                  style={[styles.scanOptionBtn, { backgroundColor: palette.chipBg }]}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('scanFaster')}
-                >
-                  <Text style={[styles.scanOptionText, { color: palette.text }]}>{t('scanFaster')}</Text>
-                </TouchableOpacity>
-              </>
-            )}
-            {getScanState().scanMode === 'step' && (
-              <>
-                <TouchableOpacity
-                  onPress={advanceScan}
-                  style={[styles.scanOptionBtn, { backgroundColor: palette.info }]}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('scanNext')}
-                >
-                  <Text style={[styles.scanOptionText, { color: palette.buttonText }]}>{t('scanNext')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={selectCurrent}
-                  style={[styles.scanOptionBtn, { backgroundColor: palette.primary }]}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('scanSelect')}
-                >
-                  <Text style={[styles.scanOptionText, { color: palette.buttonText }]}>{t('scanSelect')}</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </>
-        )}
+              {experience.speakLabel}
+            </Text>
+          </TouchableOpacity>
+          {actionButton({ onPress: undo, icon: 'arrow-undo-outline', label: undoWords ? t('undoLabel') : t('nothingToUndo'), disabled: !undoWords, scanId: 'undo' })}
+          {actionButton({ onPress: removeLastWord, icon: 'backspace-outline', label: t('deleteLastWord'), disabled: !hasWords, scanId: 'backspace', tone: 'danger' })}
+          {actionButton({ onPress: clearSentence, icon: 'close', label: t('clearSentence'), disabled: !hasWords, scanId: 'clear', tone: 'danger' })}
+          {actionButton({ onPress: () => setShowMore(true), icon: 'ellipsis-horizontal', label: t('moreActionsLabel') })}
+        </View>
       </View>
-      )}
 
-      {/* Display mode overlay */}
-      <DisplayMode
-        visible={displayMode === 'display'}
-        onClose={() => setDisplayMode(null)}
-        text={sentenceWords.join(' ')}
-        mode="display"
-      />
-      <DisplayMode
-        visible={displayMode === 'listener'}
-        onClose={() => setDisplayMode(null)}
-        text={lastSpoken}
-        mode="listener"
-      />
-
-      <WordFinder
-        visible={showFinder}
-        onClose={() => setShowFinder(false)}
-        onAddWord={handleFinderAdd}
-        onShowPage={handleFinderShowPage}
-        onNoResults={handleFinderNoResults}
-      />
-
-      {/* Favourites panel — scrolls so every saved favourite is reachable */}
-      {showFavourites && (
-        <View style={[styles.historyPanel, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-          <Text style={[styles.historyTitle, { color: palette.textSecondary }]}>
-            {t('favourites')}{favourites.length > 0 ? ` (${favourites.length})` : ''}
-          </Text>
-          {favourites.length === 0 ? (
-            <Text style={[styles.emptyText, { color: palette.textSecondary }]}>
-              {t('noFavourites')}
-            </Text>
-          ) : (
-            <ScrollView style={styles.panelScroll} nestedScrollEnabled>
-              {favourites.map((fav) => (
-                <View key={fav.id} style={[styles.historyItem, { borderBottomColor: palette.border }]}>
-                  <TouchableOpacity
-                    style={styles.historyMain}
-                    onPress={() => speakFavourite(fav.phrase)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Speak favourite: ${fav.phrase}`}
-                  >
-                    <Ionicons name="star" size={16} color={palette.warning} />
-                    <Text style={[styles.historyText, { color: palette.text }]} numberOfLines={2}>
-                      {fav.phrase}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.rowIconBtn}
-                    onPress={() => confirmRemoveFavourite(fav)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${t('removeFavourite')}: ${fav.phrase}`}
-                  >
-                    <Ionicons name="close-circle-outline" size={22} color={palette.textSecondary} />
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </ScrollView>
-          )}
-        </View>
-      )}
-
-      {/* Sentence history dropdown — scrolls through all saved sentences */}
-      {showHistory && (
-        <View style={[styles.historyPanel, { backgroundColor: palette.surface, borderColor: palette.border }]}>
-          <Text style={[styles.historyTitle, { color: palette.textSecondary }]}>{t('sentenceHistory')}</Text>
-          {history.length === 0 ? (
-            <Text style={[styles.emptyText, { color: palette.textSecondary }]}>
-              {t('noHistory')}
-            </Text>
-          ) : (
-            <ScrollView style={styles.panelScroll} nestedScrollEnabled>
-              {history.map((item, i) => (
-                <TouchableOpacity
-                  key={`${i}-${item.timestamp}`}
-                  style={[styles.historyItem, styles.historyMain, { borderBottomColor: palette.border }]}
-                  onPress={() => repeatFromHistory(item.text)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Repeat: ${item.text}`}
-                >
-                  <Ionicons name="refresh-outline" size={16} color={palette.primary} />
-                  <Text style={[styles.historyText, { color: palette.text }]} numberOfLines={2}>
-                    {item.text}
-                  </Text>
-                  {(item.speakCount || 0) > 1 && (
-                    <Text style={[styles.speakCount, { color: palette.textSecondary }]}>
-                      {item.speakCount}x
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
-        </View>
-      )}
-
-      {/* Suggestions strip — fixed height so the grid below never jumps when
-          suggestions appear or disappear (protects learned motor plans). */}
+      {/* Fixed suggestion area */}
       {predictionEnabled && (
-        <View
-          // A fixed height (not minHeight): chips with a reason line are
-          // taller than an empty row, and the grid must not move when they
-          // appear. Compact layout uses the same height for that reason.
-          style={[styles.suggestionsBar, { backgroundColor: palette.surface, height: stripHeight(textScale) }]}
-        >
-          <Ionicons name="sparkles-outline" size={16} color={palette.textSecondary} style={{ marginRight: 4 }} />
-          {suggestions.length === 0 ? (
-            <Text style={[styles.suggestionsEmpty, { color: palette.textSecondary }]}>
-              {t('suggestionsEmpty')}
-            </Text>
-          ) : (
-          <FlatList
-            data={suggestions}
-            horizontal
-            keyExtractor={(item, i) => `${typeof item === 'string' ? item : item.word}-${i}`}
-            showsHorizontalScrollIndicator={false}
-            renderItem={({ item, index }) => {
-              const word = typeof item === 'string' ? item : item.word;
-              const reason = typeof item === 'string' ? null : item.reason;
-              const sugFocused = isScanFocused('suggestion', `sug-${index}`);
-              return (
-                <TouchableOpacity
-                  style={[styles.suggestionChip, { backgroundColor: palette.chipBg, borderColor: palette.border }, sugFocused && scanRingStyle]}
-                  onPress={() => handleSuggestionPress(word)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Suggestion: ${word}${reason ? `. ${reason}` : ''}`}
-                  accessibilityHint="Add this word to your sentence"
-                >
-                  <Text
-                    style={[styles.suggestionText, { color: palette.text, fontSize: Math.round(15 * textScale) }]}
-                    maxFontSizeMultiplier={chipFit.wordMaxMultiplier}
-                    numberOfLines={1}
-                  >
-                    {word}
-                  </Text>
-                  {reason && chipFit.showReason && (
-                    <Text style={[styles.suggestionReason, { color: palette.textSecondary }]} numberOfLines={1}>{reason}</Text>
-                  )}
-                </TouchableOpacity>
-              );
-            }}
-          />
-          )}
-        </View>
+        <SuggestionRow
+          slots={slots}
+          palette={palette}
+          experience={experience}
+          textScale={textScale}
+          chipFit={chipFit}
+          onPress={handleSuggestionPress}
+          onLongPress={handleSuggestionLongPress}
+          isFocused={(i) => isScanFocused('suggestion', `sug-${i}`)}
+          focusStyle={scanRingStyle}
+          learningOn={learningOn}
+        />
       )}
 
-      {/* Compact page row: icon-only buttons, plus Scan and Settings (the
-          board header is hidden in compact layout). Always present. */}
-      {compact ? (
-        <View style={[styles.breadcrumb, styles.breadcrumbCompact]}>
-          {iconButton({ onPress: goHome, icon: 'home-outline', label: t('goHome'), disabled: isHome })}
-          {iconButton({ onPress: goBack, icon: 'arrow-back', label: t('goBack'), disabled: pageHistory.length === 0 })}
-          <Text style={[styles.pageTitle, { color: palette.text, flex: 1 }]} numberOfLines={1} accessibilityRole="header">
-            {currentPage.label}
-          </Text>
-          {iconButton({ onPress: () => setShowFinder(true), icon: 'search', label: t('findWordLabel') })}
-          {settings.showScanControls !== false && iconButton({
-            onPress: toggleScan, icon: scanActive ? 'stop' : 'scan-outline',
-            label: scanActive ? t('stopScanning') : t('startScanning'), active: scanActive,
-          })}
-          {iconButton({ onPress: () => navigation.navigate('Settings'), icon: 'settings-outline', label: 'Open settings' })}
-        </View>
-      ) : (
-      // Standard navigation row — always present (also on Home) so the grid
-      // starts at the same place on every page.
-      <View style={styles.breadcrumb}>
+      {/* Page row — always present (also on Home) so the grid starts at the
+          same place on every page. */}
+      <View style={styles.pageRow}>
         <TouchableOpacity
           onPress={goHome}
           disabled={isHome}
-          style={[styles.breadcrumbBtn, { backgroundColor: palette.surface }, isHome && styles.disabled]}
+          style={[styles.pageBtn, { backgroundColor: palette.cardBg, borderColor: palette.tileBorder }, isHome && styles.disabled]}
           accessibilityRole="button"
           accessibilityLabel={t('goHome')}
           accessibilityState={{ disabled: isHome }}
         >
-          <Ionicons name="home-outline" size={18} color={palette.text} />
-          <Text style={[styles.breadcrumbText, { color: palette.text }]}>Home</Text>
+          <Ionicons name="home-outline" size={20} color={palette.text} />
         </TouchableOpacity>
         <TouchableOpacity
           onPress={goBack}
           disabled={pageHistory.length === 0}
-          style={[styles.breadcrumbBtn, { backgroundColor: palette.surface }, pageHistory.length === 0 && styles.disabled]}
+          style={[styles.pageBtn, { backgroundColor: palette.cardBg, borderColor: palette.tileBorder }, pageHistory.length === 0 && styles.disabled]}
           accessibilityRole="button"
           accessibilityLabel={t('goBack')}
           accessibilityState={{ disabled: pageHistory.length === 0 }}
         >
-          <Ionicons name="arrow-back" size={18} color={palette.text} />
-          <Text style={[styles.breadcrumbText, { color: palette.text }]}>{t('goBack')}</Text>
+          <Ionicons name="arrow-back" size={20} color={palette.text} />
         </TouchableOpacity>
-        <Text style={[styles.pageTitle, { color: palette.text }]} numberOfLines={1} accessibilityRole="header">
+        <Text style={[styles.pageTitle, { color: palette.text, fontFamily: experience.headlineFont }]} numberOfLines={1} accessibilityRole="header">
           {currentPage.label}
         </Text>
+        {compact && (
+          <TouchableOpacity
+            onPress={() => setShowSituations(true)}
+            style={[styles.pageBtn, { backgroundColor: situation ? palette.primaryMuted : palette.cardBg, borderColor: palette.tileBorder }]}
+            accessibilityRole="button"
+            accessibilityLabel={situation ? `Situation: ${situation.label}. Open its phrases` : 'Choose a situation'}
+          >
+            <Ionicons name={situation ? situation.icon : 'compass-outline'} size={20} color={situation ? palette.onPrimaryMuted : palette.text} />
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           onPress={() => setShowFinder(true)}
-          style={[styles.breadcrumbBtn, styles.findBtn, { backgroundColor: palette.surface }]}
+          style={[styles.pageBtn, { backgroundColor: palette.cardBg, borderColor: palette.tileBorder }]}
           accessibilityRole="button"
           accessibilityLabel={t('findWordLabel')}
         >
-          <Ionicons name="search" size={18} color={palette.text} />
-          <Text style={[styles.breadcrumbText, { color: palette.text }]}>{t('findWord')}</Text>
+          <Ionicons name="search" size={20} color={palette.text} />
         </TouchableOpacity>
+        {settings.showScanControls !== false && (
+          <TouchableOpacity
+            onPress={toggleScan}
+            style={[styles.pageBtn, { backgroundColor: scanActive ? palette.focusRing : palette.cardBg, borderColor: palette.tileBorder }]}
+            accessibilityRole="button"
+            accessibilityLabel={scanActive ? t('stopScanning') : t('startScanning')}
+            accessibilityState={{ selected: scanActive }}
+          >
+            <Ionicons name={scanActive ? 'stop' : 'scan-outline'} size={20} color={scanActive ? '#000' : palette.text} />
+          </TouchableOpacity>
+        )}
+        {compact && (
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Settings')}
+            style={[styles.pageBtn, { backgroundColor: palette.cardBg, borderColor: palette.tileBorder }]}
+            accessibilityRole="button"
+            accessibilityLabel="Open settings"
+          >
+            <Ionicons name="settings-outline" size={20} color={palette.text} />
+          </TouchableOpacity>
+        )}
       </View>
-      )}
+
+      {/* Vocabulary grid */}
+      <FlatList
+        ref={gridRef}
+        data={currentPage.buttons}
+        keyExtractor={(item) => item.id}
+        numColumns={numColumns}
+        key={`grid-${numColumns}`}
+        contentContainerStyle={[styles.grid, { paddingBottom: bottomSpace + (scanActive ? 84 : 12) }]}
+        renderItem={renderButton}
+        extraData={scanFocusIndex}
+        removeClippedSubviews={false}
+      />
 
       {/* Speech problem notice — overlays (does not move the grid) and lets
           taps pass through to the buttons underneath. */}
       {speechProblem && (
         <View
           pointerEvents="none"
-          style={[
-            styles.speechNotice,
-            // Sit above the tab bar and above the compact scanning strip so
-            // neither is covered.
-            { backgroundColor: palette.text, bottom: 60 + insets.bottom + (compact && scanActive ? 76 : 12) },
-          ]}
+          style={[styles.speechNotice, { backgroundColor: palette.text, bottom: bottomSpace + (scanActive ? 76 : 8) }]}
           accessibilityLiveRegion="assertive"
           accessibilityRole="alert"
         >
@@ -1070,11 +848,10 @@ export default function AACBoardScreen() {
         </View>
       )}
 
-      {/* Compact layout scanning strip: overlays the bottom of the grid
-          instead of inserting a row, so words do not move when scanning
-          starts. Scan mode and speed are set in Settings. */}
-      {compact && scanActive && (
-        <View style={[styles.scanStrip, { backgroundColor: palette.surface, borderColor: palette.focusRing, bottom: 60 + insets.bottom }]}>
+      {/* Scanning strip: overlays the bottom of the grid instead of inserting
+          a row, so words do not move when scanning starts. */}
+      {scanActive && (
+        <View style={[styles.scanStrip, { backgroundColor: palette.cardBg, borderColor: palette.focusRing, bottom: bottomSpace }]}>
           <TouchableOpacity
             onPress={toggleScan}
             style={[styles.scanOptionBtn, { backgroundColor: palette.focusRing }]}
@@ -1100,6 +877,27 @@ export default function AACBoardScreen() {
         </View>
       )}
 
+      <DisplayMode
+        visible={displayMode === 'display'}
+        onClose={() => setDisplayMode(null)}
+        text={sentenceWords.join(' ')}
+        mode="display"
+      />
+      <DisplayMode
+        visible={displayMode === 'listener'}
+        onClose={() => setDisplayMode(null)}
+        text={lastSpoken}
+        mode="listener"
+      />
+
+      <WordFinder
+        visible={showFinder}
+        onClose={() => setShowFinder(false)}
+        onAddWord={handleFinderAdd}
+        onShowPage={handleFinderShowPage}
+        onNoResults={handleFinderNoResults}
+      />
+
       <MoreActionsMenu
         visible={showMore}
         onClose={() => setShowMore(false)}
@@ -1108,170 +906,158 @@ export default function AACBoardScreen() {
         onSelectVoicePreset={setVoicePreset}
       />
 
-      {/* Vocabulary grid */}
-      <FlatList
-        ref={gridRef}
-        data={currentPage.buttons}
-        keyExtractor={(item) => item.id}
-        numColumns={numColumns}
-        key={`grid-${numColumns}`}
-        contentContainerStyle={[styles.grid, compact && scanActive && { paddingBottom: 150 }]}
-        renderItem={renderButton}
-        extraData={scanFocusIndex}
-        removeClippedSubviews={false}
+      <PhraseListSheet
+        visible={showFavourites}
+        onClose={() => setShowFavourites(false)}
+        title={`${t('favourites')}${favourites.length ? ` (${favourites.length})` : ''}`}
+        icon="⭐"
+        empty={t('noFavourites')}
+        palette={palette}
+        experience={experience}
+        items={favourites.map(f => ({ key: f.id, text: f.phrase, fav: f }))}
+        onPick={(item) => speakPhrase(item.text)}
+        pickLabel={(item) => `Speak favourite: ${item.text}`}
+        onRemove={(item) => confirmRemoveFavourite(item.fav)}
+        removeLabel={(item) => `${t('removeFavourite')}: ${item.text}`}
+      />
+
+      <PhraseListSheet
+        visible={showHistory}
+        onClose={() => setShowHistory(false)}
+        title={t('sentenceHistory')}
+        icon="🕘"
+        empty={t('noHistory')}
+        palette={palette}
+        experience={experience}
+        items={history.map((h, i) => ({ key: `${i}-${h.timestamp}`, text: h.text, count: h.speakCount || 0 }))}
+        onPick={(item) => repeatFromHistory(item.text)}
+        pickLabel={(item) => `Repeat: ${item.text}`}
+      />
+
+      <ContextPanel
+        visible={showSituations}
+        onClose={() => setShowSituations(false)}
+        palette={palette}
+        experience={experience}
+        situationId={settings.activeSituation}
+        onChooseSituation={chooseSituation}
+        onUsePhrase={speakPhrase}
+        onHelpExplain={() => setShowExplain(true)}
+      />
+
+      <HelpMeExplain
+        visible={showExplain}
+        onClose={() => setShowExplain(false)}
+        palette={palette}
+        experience={experience}
+        onUse={applyExplanation}
+        onSpeak={speakPhrase}
       />
     </View>
   );
 }
 
+// Favourites / history list in a sheet. Picking a phrase closes the sheet,
+// puts the phrase in the message bar and speaks it.
+function PhraseListSheet({
+  visible, onClose, title, icon, empty, palette, experience, items, onPick, pickLabel, onRemove, removeLabel,
+}) {
+  const { closeThen, onDismiss } = useAfterClose(onClose);
+  return (
+    <Sheet visible={visible} onClose={onClose} onDismiss={onDismiss} title={title} icon={icon}>
+      {items.length === 0 ? (
+        <Text style={[styles.emptyText, { color: palette.textSecondary }]}>{empty}</Text>
+      ) : (
+        <ScrollView contentContainerStyle={styles.listBody}>
+          {items.map((item) => (
+            <View key={item.key} style={[styles.listItem, { backgroundColor: palette.cardBg, borderColor: palette.tileBorder, borderRadius: experience.chipRadius }]}>
+              <TouchableOpacity
+                style={styles.listMain}
+                onPress={() => closeThen(() => onPick(item))}
+                accessibilityRole="button"
+                accessibilityLabel={pickLabel(item)}
+              >
+                <Ionicons name="volume-high-outline" size={20} color={palette.primary} />
+                <Text style={[styles.listText, { color: palette.text }]} numberOfLines={2}>{item.text}</Text>
+                {item.count > 1 ? (
+                  <Text style={[styles.listCount, { color: palette.textSecondary }]}>{item.count}×</Text>
+                ) : null}
+              </TouchableOpacity>
+              {onRemove ? (
+                <TouchableOpacity
+                  style={styles.listRemove}
+                  onPress={() => onRemove(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={removeLabel(item)}
+                >
+                  <Ionicons name="close-circle-outline" size={24} color={palette.textSecondary} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </Sheet>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  sentenceBar: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderBottomWidth: 2,
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 14, paddingTop: 8, paddingBottom: 8,
   },
-  sentenceWords: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    minHeight: 32,
-    paddingBottom: 4,
+  wordmark: { fontSize: 26, marginRight: 'auto', letterSpacing: -0.3 },
+  headerBtn: {
+    width: 48, height: 48, borderRadius: 24, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
   },
-  sentenceWord: { fontSize: 20, fontWeight: '500', marginRight: 6, paddingVertical: 2 },
-  placeholder: { fontSize: 16, fontStyle: 'italic' },
-  sentenceActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 5,
+  situationChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, height: 48, paddingHorizontal: 14,
+    borderRadius: radii.pill, borderWidth: 1, maxWidth: 170,
   },
-  sentenceActionBtn: {
-    padding: 6,
-    borderRadius: 8,
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+  situationText: { fontSize: 16, fontFamily: fonts.bold, flexShrink: 1 },
+  messageCard: {
+    marginHorizontal: 12, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12,
+    borderWidth: 1,
+    shadowColor: '#1F2433', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8, elevation: 2,
   },
+  sentenceWords: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
+  sentenceWord: { fontFamily: fonts.bold, marginRight: 8 },
+  placeholder: { fontFamily: fonts.regular },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
   speakBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    flex: 1, height: 56, flexDirection: 'row', gap: 8,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10,
   },
-  historyPanel: { paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1 },
-  panelScroll: { maxHeight: 260 },
-  historyMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
-  rowIconBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  speakText: { fontSize: 20 },
+  squareBtn: { width: 52, height: 56, alignItems: 'center', justifyContent: 'center' },
   disabled: { opacity: 0.4 },
-  sentenceActionsCompact: { flexWrap: 'nowrap', justifyContent: 'space-between' },
-  breadcrumbCompact: { gap: 6, paddingVertical: 4 },
-  iconBtn: { width: 44, height: 44, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  pageRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 4 },
+  pageBtn: { width: 48, height: 48, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  pageTitle: { flex: 1, fontSize: 20, marginLeft: 4 },
+  grid: { paddingHorizontal: 8, paddingTop: 2 },
   scanStrip: {
     position: 'absolute', left: 8, right: 8, zIndex: 15,
     flexDirection: 'row', alignItems: 'center', gap: 8, padding: 6,
-    borderRadius: 12, borderWidth: 2,
+    borderRadius: 14, borderWidth: 2,
   },
-  scanHintText: { flex: 1, fontSize: 13, fontWeight: '600' },
+  scanHintText: { flex: 1, fontSize: 14, fontFamily: fonts.bold },
+  scanOptionBtn: {
+    paddingHorizontal: 14, paddingVertical: 10, minHeight: 48, borderRadius: 12, justifyContent: 'center',
+  },
+  scanOptionText: { fontSize: 14, fontFamily: fonts.bold },
   speechNotice: {
     position: 'absolute', left: 12, right: 12, zIndex: 20,
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    padding: 12, borderRadius: 10, opacity: 0.95,
+    padding: 12, borderRadius: 12, opacity: 0.95,
   },
-  speechNoticeText: { flex: 1, fontSize: 15, fontWeight: '600', lineHeight: 20 },
-  suggestionsEmpty: { fontSize: 13, fontStyle: 'italic' },
-  findBtn: { marginLeft: 'auto' },
-  historyTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  historyItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 8,
-  },
-  historyText: { fontSize: 15, flex: 1 },
-  speakCount: { fontSize: 12, fontWeight: '500' },
-  emptyText: { fontSize: 14, fontStyle: 'italic', paddingVertical: 4 },
-  suggestionsBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  suggestionChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    minHeight: 44,
-    justifyContent: 'center',
-    borderRadius: 20,
-    marginRight: 8,
-    borderWidth: 1,
-  },
-  suggestionText: { fontSize: 15, fontWeight: '500' },
-  suggestionReason: { fontSize: 10, marginTop: 1 },
-  breadcrumb: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    gap: 8,
-  },
-  breadcrumbBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    minHeight: 44,
-    borderRadius: 6,
-    gap: 4,
-  },
-  breadcrumbText: { fontSize: 14, fontWeight: '500' },
-  pageTitle: { fontSize: 16, fontWeight: '600', marginLeft: 4, flexShrink: 1 },
-  grid: { padding: 4, paddingBottom: 80 },
-  vocabButton: {
-    margin: 3,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    padding: 8,
-    minHeight: 72,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonIcon: { marginBottom: 2 },
-  buttonLabel: { fontSize: 15, fontWeight: '600', textAlign: 'center' },
-  scanBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    gap: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  scanToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    minHeight: 44,
-    borderRadius: 16,
-    gap: 4,
-  },
-  scanToggleText: { fontSize: 13, fontWeight: '600' },
-  scanOptionBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    minHeight: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-  },
-  scanOptionText: { fontSize: 12, fontWeight: '600' },
+  speechNoticeText: { flex: 1, fontSize: 15, fontFamily: fonts.bold, lineHeight: 20 },
+  emptyText: { fontSize: 16, fontFamily: fonts.regular, lineHeight: 22, paddingVertical: 8 },
+  listBody: { gap: 8, paddingBottom: 12 },
+  listItem: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, minHeight: 56 },
+  listMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, minHeight: 56 },
+  listText: { flex: 1, fontSize: 18, fontFamily: fonts.bold },
+  listCount: { fontSize: 14, fontFamily: fonts.regular },
+  listRemove: { width: 52, minHeight: 56, alignItems: 'center', justifyContent: 'center' },
 });
