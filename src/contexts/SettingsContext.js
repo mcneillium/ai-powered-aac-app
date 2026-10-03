@@ -9,6 +9,7 @@ import { db } from '../../firebaseConfig';
 import { useAuth } from './AuthContext';
 import { DB_PATHS, dbPath } from '../shared/schema';
 import { safeParse } from '../utils/safeStorage';
+import { effectiveSettings, routeSettingsUpdate, migrateExperience } from './experience';
 
 const SETTINGS_STORAGE_KEY = '@aac_settings';
 
@@ -20,7 +21,7 @@ const defaultSettings = {
   speechPitch: 1.0,
   speechVoice: null, // null = system default
   aiPersonalisationEnabled: true, // learn from user input to improve suggestions
-  cloudSuggestionsEnabled: true,  // allow sending sentence context to the AI backend
+  cloudSuggestionsEnabled: false, // off unless chosen: sends sentence context to the AI backend
   scanMode: 'auto',   // 'auto' | 'step'
   scanSpeed: 1500,     // ms between auto-scan steps
   // Communication preferences — defaults preserve the original board layout
@@ -31,6 +32,17 @@ const defaultSettings = {
   showVoiceStyles: true,     // show the voice-style bar on the board
   showScanControls: true,    // show the switch-scanning bar on the board
   compactLayout: false,      // opt-in small-screen layout (never enabled automatically)
+  // Voice 2 experience. boardLayout is set by migrateExperience on first
+  // read: 'classic' (the familiar board) for existing installs, 'studio' for
+  // new ones. uiMode stays null until someone chooses Child or Adult.
+  boardLayout: null,         // 'studio' | 'classic'
+  uiMode: null,              // null | 'child' | 'adult'
+  modeProfiles: null,        // { child: {...}, adult: {...} } per-mode presentation settings
+  symbolStyle: 'mixed',      // 'symbols' | 'mixed' | 'text'
+  personalLearning: false,   // on-device learning from spoken sentences — off until enabled
+  activeContext: null,       // explicitly chosen context panel id, or null
+  controlsPosition: 'top',   // 'top' | 'bottom' (one-handed) — new board only
+  editLock: false,           // protect Personalise from accidental changes
 };
 
 export { defaultSettings };
@@ -104,10 +116,18 @@ export function SettingsProvider({ children }) {
       try {
         const stored = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
         const parsed = await safeParse(SETTINGS_STORAGE_KEY, stored, null);
-        if (parsed && typeof parsed === 'object') {
+        const hasStored = !!(parsed && typeof parsed === 'object');
+        if (hasStored) {
           latestSettings.current = { ...latestSettings.current, ...parsed };
-          setSettings(latestSettings.current);
         }
+        // Existing installs keep the familiar board until they opt in.
+        const launched = await AsyncStorage.getItem('hasLaunched').catch(() => null);
+        const migration = migrateExperience(hasStored ? parsed : null, hasStored || launched === 'true');
+        if (migration) {
+          latestSettings.current = { ...latestSettings.current, ...migration };
+          AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(latestSettings.current)).catch(() => {});
+        }
+        setSettings(latestSettings.current);
       } catch (e) {
         console.warn('Failed to load local settings:', e);
       }
@@ -154,7 +174,12 @@ export function SettingsProvider({ children }) {
   // Update settings: write to AsyncStorage immediately, sync to Firebase if possible
   const updateSettings = useCallback(async (updates) => {
     await localLoaded.current.promise;
-    const newSettings = { ...latestSettings.current, ...updates };
+    // Per-mode presentation keys are stored in the active mode's profile.
+    const newSettings = routeSettingsUpdate(latestSettings.current, updates);
+    const changed = {};
+    Object.keys(newSettings).forEach((k) => {
+      if (newSettings[k] !== latestSettings.current[k]) changed[k] = newSettings[k];
+    });
     latestSettings.current = newSettings;
     setSettings(newSettings);
 
@@ -169,7 +194,7 @@ export function SettingsProvider({ children }) {
     try {
       const uid = user && !user.isAnonymous ? user.uid : null;
       if (uid && db) {
-        const patch = cloudPatchFor(updates);
+        const patch = cloudPatchFor(changed);
         if (Object.keys(patch).length > 0) {
           await update(ref(db, dbPath(DB_PATHS.USER_SETTINGS, uid)), patch);
         }
@@ -180,8 +205,11 @@ export function SettingsProvider({ children }) {
     }
   }, [user]);
 
+  // Screens read the active mode's settings; storage keeps both modes.
+  const effective = React.useMemo(() => effectiveSettings(settings), [settings]);
+
   return (
-    <SettingsContext.Provider value={{ settings, loading, updateSettings }}>
+    <SettingsContext.Provider value={{ settings: effective, storedSettings: settings, loading, updateSettings }}>
       {children}
     </SettingsContext.Provider>
   );

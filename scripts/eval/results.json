@@ -1,0 +1,634 @@
+{
+  "note": "ALL DATA ARE SYNTHETIC (authored for this project). These numbers describe algorithm behaviour on that data only and are NOT evidence of real-world communication or developmental benefit.",
+  "seed": 42,
+  "assumptions": {
+    "predictionBarChips": 3,
+    "costModel": "home-page word or multi-word button = 1 action; other page = 2 (navigate + tap); word not on board = letters + 1; word shown in top-3 prediction bar = 1; cheapest path per sentence; no keyboard completion",
+    "personaProtocol": "learn from the first 50% of each persona's sentences in order, then evaluate (frozen) on the remaining sentences only",
+    "clock": "simulated: 3 hours between a persona's sentences"
+  },
+  "data": {
+    "seedSentencesUnique": 666,
+    "seedTrain": 533,
+    "seedTest": 133,
+    "seedTrainTestOverlap": 0,
+    "personas": [
+      {
+        "id": "child_dinosaurs",
+        "role": "eval",
+        "mode": "child",
+        "context": "home",
+        "sentences": 50,
+        "identicalToSeedSentence": 3
+      },
+      {
+        "id": "uni_student",
+        "role": "eval",
+        "mode": "adult",
+        "context": "university",
+        "sentences": 44,
+        "identicalToSeedSentence": 2
+      },
+      {
+        "id": "adult_work",
+        "role": "eval",
+        "mode": "adult",
+        "context": "work",
+        "sentences": 44,
+        "identicalToSeedSentence": 4
+      },
+      {
+        "id": "child_football",
+        "role": "tune",
+        "mode": "child",
+        "context": "school",
+        "sentences": 40,
+        "identicalToSeedSentence": 2
+      },
+      {
+        "id": "teen_school",
+        "role": "tune",
+        "mode": "adult",
+        "context": "school",
+        "sentences": 36,
+        "identicalToSeedSentence": 2
+      },
+      {
+        "id": "retired_gardener",
+        "role": "tune",
+        "mode": "adult",
+        "context": "home",
+        "sentences": 32,
+        "identicalToSeedSentence": 2
+      }
+    ]
+  },
+  "seedHeldOut": {
+    "description": "Base model trained on the seed TRAIN split only; scored on unseen TEST sentences. Cold start (no personal data).",
+    "existingApproach": {
+      "tokens": 619,
+      "top1": 0,
+      "top3": 0.0016,
+      "oovRate": 0.6527,
+      "actionsBoardOnly": 1793,
+      "actionsWithPrediction": 1793,
+      "selectionSavings": 0
+    },
+    "newBase": {
+      "tokens": 619,
+      "top1": 0.3796,
+      "top3": 0.5153,
+      "oovRate": 0.0727,
+      "actionsBoardOnly": 1793,
+      "actionsWithPrediction": 1506,
+      "selectionSavings": 0.1601
+    },
+    "newBaseRanker": {
+      "tokens": 619,
+      "top1": 0.3796,
+      "top3": 0.5153,
+      "oovRate": 0.0727,
+      "actionsBoardOnly": 1793,
+      "actionsWithPrediction": 1506,
+      "selectionSavings": 0.1601
+    },
+    "newBaseWithTrueModeTag": {
+      "tokens": 619,
+      "top1": 0.3796,
+      "top3": 0.5153,
+      "oovRate": 0.0727,
+      "actionsBoardOnly": 1793,
+      "actionsWithPrediction": 1506,
+      "selectionSavings": 0.1601
+    },
+    "topicBias": {
+      "sentences": 101,
+      "off": {
+        "tokens": 504,
+        "top1": 0.379,
+        "top3": 0.5119,
+        "oovRate": 0.0833,
+        "actionsBoardOnly": 1541,
+        "actionsWithPrediction": 1294,
+        "selectionSavings": 0.1603
+      },
+      "on": {
+        "tokens": 504,
+        "top1": 0.381,
+        "top3": 0.5179,
+        "oovRate": 0.0833,
+        "actionsBoardOnly": 1541,
+        "actionsWithPrediction": 1289,
+        "selectionSavings": 0.1635
+      }
+    },
+    "latencyMs": {
+      "p50": 0.052,
+      "p95": 0.148,
+      "calls": 619
+    }
+  },
+  "tuning": {
+    "description": "personalWeight (α) grid on role=tune personas only; eval personas never used for tuning. Rule: smallest α with top-3 within 0.01 of the best.",
+    "grid": [
+      {
+        "personalWeight": 1,
+        "top1": 0.4475,
+        "top3": 0.608
+      },
+      {
+        "personalWeight": 2,
+        "top1": 0.466,
+        "top3": 0.6265
+      },
+      {
+        "personalWeight": 4,
+        "top1": 0.4784,
+        "top3": 0.6543
+      },
+      {
+        "personalWeight": 6,
+        "top1": 0.4877,
+        "top3": 0.6605
+      },
+      {
+        "personalWeight": 8,
+        "top1": 0.4846,
+        "top3": 0.6698
+      },
+      {
+        "personalWeight": 12,
+        "top1": 0.4753,
+        "top3": 0.6759
+      },
+      {
+        "personalWeight": 16,
+        "top1": 0.4815,
+        "top3": 0.679
+      },
+      {
+        "personalWeight": 24,
+        "top1": 0.4907,
+        "top3": 0.6698
+      }
+    ],
+    "selectedOnTune": 8,
+    "shippedDefault": 8
+  },
+  "personas": {
+    "description": "Eval personas (role=eval). Base = shipped model (full seed corpus; personas are not in it except identical common sentences, see data.personas).",
+    "combined": {
+      "existingApproach": {
+        "tokens": 422,
+        "top1": 0.3483,
+        "top3": 0.5427,
+        "oovRate": 0.1896,
+        "actionsBoardOnly": 1645,
+        "actionsWithPrediction": 1079,
+        "selectionSavings": 0.3441
+      },
+      "newBase": {
+        "tokens": 422,
+        "top1": 0.3626,
+        "top3": 0.519,
+        "oovRate": 0.173,
+        "actionsBoardOnly": 1645,
+        "actionsWithPrediction": 1335,
+        "selectionSavings": 0.1884
+      },
+      "newBasePersonal": {
+        "tokens": 422,
+        "top1": 0.4502,
+        "top3": 0.6706,
+        "oovRate": 0.0711,
+        "actionsBoardOnly": 1645,
+        "actionsWithPrediction": 978,
+        "selectionSavings": 0.4055
+      },
+      "newBasePersonalTopic": {
+        "tokens": 422,
+        "top1": 0.4479,
+        "top3": 0.6777,
+        "oovRate": 0.0711,
+        "actionsBoardOnly": 1645,
+        "actionsWithPrediction": 966,
+        "selectionSavings": 0.4128
+      },
+      "ablationAlpha16": {
+        "tokens": 422,
+        "top1": 0.4479,
+        "top3": 0.6848,
+        "oovRate": 0.0711,
+        "actionsBoardOnly": 1645,
+        "actionsWithPrediction": 956,
+        "selectionSavings": 0.4188
+      },
+      "newBasePersonalRanker": {
+        "tokens": 422,
+        "top1": 0.4787,
+        "top3": 0.6896,
+        "oovRate": 0.0711,
+        "actionsBoardOnly": 1645,
+        "actionsWithPrediction": 948,
+        "selectionSavings": 0.4237
+      }
+    },
+    "perPersona": {
+      "child_dinosaurs": {
+        "adaptSentences": 25,
+        "evalSentences": 25,
+        "existingApproach": {
+          "tokens": 142,
+          "top1": 0.4718,
+          "top3": 0.5986,
+          "oovRate": 0.1549,
+          "actionsBoardOnly": 503,
+          "actionsWithPrediction": 325,
+          "selectionSavings": 0.3539
+        },
+        "newBase": {
+          "tokens": 142,
+          "top1": 0.3944,
+          "top3": 0.5141,
+          "oovRate": 0.1901,
+          "actionsBoardOnly": 503,
+          "actionsWithPrediction": 445,
+          "selectionSavings": 0.1153
+        },
+        "newBasePersonal": {
+          "tokens": 142,
+          "top1": 0.4859,
+          "top3": 0.6761,
+          "oovRate": 0.0563,
+          "actionsBoardOnly": 503,
+          "actionsWithPrediction": 303,
+          "selectionSavings": 0.3976
+        },
+        "newBasePersonalTopic": {
+          "tokens": 142,
+          "top1": 0.4718,
+          "top3": 0.6761,
+          "oovRate": 0.0563,
+          "actionsBoardOnly": 503,
+          "actionsWithPrediction": 303,
+          "selectionSavings": 0.3976
+        },
+        "ablationAlpha16": {
+          "tokens": 142,
+          "top1": 0.4718,
+          "top3": 0.7113,
+          "oovRate": 0.0563,
+          "actionsBoardOnly": 503,
+          "actionsWithPrediction": 293,
+          "selectionSavings": 0.4175
+        },
+        "newBasePersonalRanker": {
+          "tokens": 142,
+          "top1": 0.5,
+          "top3": 0.7113,
+          "oovRate": 0.0563,
+          "actionsBoardOnly": 503,
+          "actionsWithPrediction": 293,
+          "selectionSavings": 0.4175
+        },
+        "personalStoreBytes": 6448,
+        "personalStats": "Learned from 25 sentences, 55 word pairs."
+      },
+      "uni_student": {
+        "adaptSentences": 22,
+        "evalSentences": 22,
+        "existingApproach": {
+          "tokens": 142,
+          "top1": 0.3944,
+          "top3": 0.5493,
+          "oovRate": 0.1761,
+          "actionsBoardOnly": 590,
+          "actionsWithPrediction": 344,
+          "selectionSavings": 0.4169
+        },
+        "newBase": {
+          "tokens": 142,
+          "top1": 0.4014,
+          "top3": 0.5563,
+          "oovRate": 0.1549,
+          "actionsBoardOnly": 590,
+          "actionsWithPrediction": 462,
+          "selectionSavings": 0.2169
+        },
+        "newBasePersonal": {
+          "tokens": 142,
+          "top1": 0.4859,
+          "top3": 0.7042,
+          "oovRate": 0.0423,
+          "actionsBoardOnly": 590,
+          "actionsWithPrediction": 322,
+          "selectionSavings": 0.4542
+        },
+        "newBasePersonalTopic": {
+          "tokens": 142,
+          "top1": 0.4859,
+          "top3": 0.7113,
+          "oovRate": 0.0423,
+          "actionsBoardOnly": 590,
+          "actionsWithPrediction": 317,
+          "selectionSavings": 0.4627
+        },
+        "ablationAlpha16": {
+          "tokens": 142,
+          "top1": 0.493,
+          "top3": 0.7113,
+          "oovRate": 0.0423,
+          "actionsBoardOnly": 590,
+          "actionsWithPrediction": 310,
+          "selectionSavings": 0.4746
+        },
+        "newBasePersonalRanker": {
+          "tokens": 142,
+          "top1": 0.493,
+          "top3": 0.7183,
+          "oovRate": 0.0423,
+          "actionsBoardOnly": 590,
+          "actionsWithPrediction": 303,
+          "selectionSavings": 0.4864
+        },
+        "personalStoreBytes": 9287,
+        "personalStats": "Learned from 22 sentences, 85 word pairs."
+      },
+      "adult_work": {
+        "adaptSentences": 22,
+        "evalSentences": 22,
+        "existingApproach": {
+          "tokens": 138,
+          "top1": 0.1739,
+          "top3": 0.4783,
+          "oovRate": 0.2391,
+          "actionsBoardOnly": 552,
+          "actionsWithPrediction": 410,
+          "selectionSavings": 0.2572
+        },
+        "newBase": {
+          "tokens": 138,
+          "top1": 0.2899,
+          "top3": 0.4855,
+          "oovRate": 0.1739,
+          "actionsBoardOnly": 552,
+          "actionsWithPrediction": 428,
+          "selectionSavings": 0.2246
+        },
+        "newBasePersonal": {
+          "tokens": 138,
+          "top1": 0.3768,
+          "top3": 0.6304,
+          "oovRate": 0.1159,
+          "actionsBoardOnly": 552,
+          "actionsWithPrediction": 353,
+          "selectionSavings": 0.3605
+        },
+        "newBasePersonalTopic": {
+          "tokens": 138,
+          "top1": 0.3841,
+          "top3": 0.6449,
+          "oovRate": 0.1159,
+          "actionsBoardOnly": 552,
+          "actionsWithPrediction": 346,
+          "selectionSavings": 0.3732
+        },
+        "ablationAlpha16": {
+          "tokens": 138,
+          "top1": 0.3768,
+          "top3": 0.6304,
+          "oovRate": 0.1159,
+          "actionsBoardOnly": 552,
+          "actionsWithPrediction": 353,
+          "selectionSavings": 0.3605
+        },
+        "newBasePersonalRanker": {
+          "tokens": 138,
+          "top1": 0.442,
+          "top3": 0.6377,
+          "oovRate": 0.1159,
+          "actionsBoardOnly": 552,
+          "actionsWithPrediction": 352,
+          "selectionSavings": 0.3623
+        },
+        "personalStoreBytes": 9963,
+        "personalStats": "Learned from 22 sentences, 92 word pairs."
+      }
+    },
+    "latencyMs": {
+      "base": {
+        "p50": 0.066,
+        "p95": 0.13
+      },
+      "basePersonal": {
+        "p50": 0.078,
+        "p95": 0.146
+      }
+    }
+  },
+  "existingLstm": {
+    "loaded": true,
+    "outputVocabulary": [
+      ".",
+      "?",
+      "you",
+      "the",
+      "it",
+      "i",
+      "a",
+      "and",
+      "that",
+      "xxx",
+      "in",
+      "to",
+      "no",
+      "oh",
+      "do",
+      "is",
+      "what",
+      "yeah",
+      "on",
+      "there"
+    ],
+    "personaCalls": 353,
+    "personaCallsThatThrew": 302,
+    "note": "Embedding/output layer has 21 ids, but the app feeds ids from a 5000-word tokenizer; any context word with id >= 21 makes predict() throw (GatherV2 out of range) and getAISuggestions() returns []."
+  },
+  "learningCurve": {
+    "child_dinosaurs": [
+      {
+        "sentences": "1-10",
+        "newBasePersonalTop3": 0.6122,
+        "existingTop3": 0.3673
+      },
+      {
+        "sentences": "11-20",
+        "newBasePersonalTop3": 0.551,
+        "existingTop3": 0.449
+      },
+      {
+        "sentences": "21-30",
+        "newBasePersonalTop3": 0.6481,
+        "existingTop3": 0.6111
+      },
+      {
+        "sentences": "31-40",
+        "newBasePersonalTop3": 0.7288,
+        "existingTop3": 0.6271
+      },
+      {
+        "sentences": "41-50",
+        "newBasePersonalTop3": 0.7091,
+        "existingTop3": 0.6
+      }
+    ],
+    "uni_student": [
+      {
+        "sentences": "1-10",
+        "newBasePersonalTop3": 0.5538,
+        "existingTop3": 0.2923
+      },
+      {
+        "sentences": "11-20",
+        "newBasePersonalTop3": 0.6111,
+        "existingTop3": 0.4167
+      },
+      {
+        "sentences": "21-30",
+        "newBasePersonalTop3": 0.7361,
+        "existingTop3": 0.5417
+      },
+      {
+        "sentences": "31-40",
+        "newBasePersonalTop3": 0.7119,
+        "existingTop3": 0.5932
+      },
+      {
+        "sentences": "41-50",
+        "newBasePersonalTop3": 0.75,
+        "existingTop3": 0.625
+      }
+    ],
+    "adult_work": [
+      {
+        "sentences": "1-10",
+        "newBasePersonalTop3": 0.6061,
+        "existingTop3": 0.1818
+      },
+      {
+        "sentences": "11-20",
+        "newBasePersonalTop3": 0.5571,
+        "existingTop3": 0.3714
+      },
+      {
+        "sentences": "21-30",
+        "newBasePersonalTop3": 0.6232,
+        "existingTop3": 0.4928
+      },
+      {
+        "sentences": "31-40",
+        "newBasePersonalTop3": 0.661,
+        "existingTop3": 0.4746
+      },
+      {
+        "sentences": "41-50",
+        "newBasePersonalTop3": 0.75,
+        "existingTop3": 0.5417
+      }
+    ]
+  },
+  "sizes": {
+    "baseModelBytes": 33817,
+    "baseModelGzipBytes": 11672,
+    "baseModelWords": 519,
+    "personalAfterEvalPersonas": {
+      "child_dinosaurs": 6448,
+      "uni_student": 9287,
+      "adult_work": 9963
+    },
+    "personalStress": {
+      "sentences": 3000,
+      "maxDistinctNgramsObserved": 4998,
+      "cap": 5000,
+      "bytes": 166190,
+      "gzipBytes": 41613
+    }
+  },
+  "behaviour": {
+    "dismissal": {
+      "word": "grandma",
+      "dismissedAfter": "I want to see",
+      "shownBefore": {
+        "I want to see": true,
+        "I love": true
+      },
+      "shownAfterDismiss": {
+        "I want to see": false,
+        "I love": true
+      },
+      "shownAfter13Days": false,
+      "shownAfter30Days": true,
+      "note": "Dismissal hides the word only after that context word; strength halves every 14 days, so it is hidden while strength >= 0.5 and only down-weighted afterwards."
+    },
+    "resetReturnsToBase": true,
+    "learningOffStoresNothing": true
+  },
+  "ranker": {
+    "trainedOn": "role=tune personas (prequential); see scripts/eval/train-ranker.js",
+    "weights": {
+      "logP": 0.8193,
+      "logPBase": -0.0222,
+      "logPPersonal": 0.1046,
+      "recency": 0,
+      "accepted": 0,
+      "contextMatch": 0,
+      "personalOrder": -0.055
+    },
+    "evalTop1": {
+      "interpolation": 0.4502,
+      "ranker": 0.4787,
+      "alpha16": 0.4479
+    },
+    "evalTop3": {
+      "interpolation": 0.6706,
+      "ranker": 0.6896,
+      "alpha16": 0.6848
+    },
+    "rankerVsInterpolation": {
+      "top1Diff": 0.0284,
+      "top1CI95": [
+        0.0091,
+        0.0477
+      ],
+      "top3Diff": 0.019,
+      "top3CI95": [
+        0.0069,
+        0.0331
+      ]
+    },
+    "alpha16VsInterpolation": {
+      "top1Diff": -0.0024,
+      "top1CI95": [
+        -0.0165,
+        0.012
+      ],
+      "top3Diff": 0.0142,
+      "top3CI95": [
+        0.0047,
+        0.0264
+      ]
+    },
+    "topicVsNoTopic": {
+      "top1Diff": -0.0024,
+      "top1CI95": [
+        -0.0189,
+        0.0144
+      ],
+      "top3Diff": 0.0071,
+      "top3CI95": [
+        0,
+        0.016
+      ]
+    }
+  }
+}

@@ -22,6 +22,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, brand } from '../theme';
 import { speak, getAvailableVoices, buildSpeechOptions } from '../services/speechService';
 import { resetAIProfile, hasLearnedData } from '../services/aiProfileStore';
+import { resetLearning, setLearningEnabled } from '../services/suggestionEngine';
 import {
   loadPronunciations, getPronunciations, setPronunciation, removePronunciation,
 } from '../services/pronunciationStore';
@@ -344,6 +345,27 @@ export default function SettingsScreen() {
       <Text style={[styles.sectionTitle, { color: palette.text, borderBottomColor: palette.border }]} accessibilityRole="header">
         Board & Communication
       </Text>
+      <Text style={[styles.label, { color: palette.text }]}>Board design</Text>
+      <View style={styles.gridSizeRow}>
+        {[['studio', 'New Voice'], ['classic', 'Classic']].map(([value, name]) => {
+          const on = (settings.boardLayout || 'studio') === value;
+          return (
+            <TouchableOpacity
+              key={value}
+              onPress={() => updateSettings({ boardLayout: value })}
+              style={[styles.gridSizeBtn, { backgroundColor: on ? palette.primary : palette.surface, borderColor: palette.border }]}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: on }}
+              accessibilityLabel={`${name} board design`}
+            >
+              <Text style={{ color: on ? palette.buttonText : palette.text, fontWeight: '600' }}>{name}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <Text style={[styles.helperText, { color: palette.textSecondary, marginBottom: 8 }]}>
+        The new design adds Child and Adult modes, picture symbols, Help me explain and phrase panels. Classic keeps the familiar board. Your words, favourites and messages are the same in both, and you can switch back any time.
+      </Text>
       {switchRow(
         'Compact layout',
         'For small screens. Puts the most-used actions in one row (favourites, history and voice style move into a More menu) and hides the page header, so more words fit. Changes where some buttons are, so it is off unless you turn it on.',
@@ -462,15 +484,15 @@ export default function SettingsScreen() {
       </Text>
       <View style={styles.switchContainer}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.label, { color: palette.text, marginTop: 0 }]}>Learn from my usage</Text>
+          <Text style={[styles.label, { color: palette.text, marginTop: 0 }]}>Learn from my messages</Text>
           <Text style={[styles.helperText, { color: palette.textSecondary }]}>
-            Improves suggestions based on your communication patterns. Learned patterns stay on this device.
+            Off until you turn it on. When on, Voice counts the words you use together in messages you speak, on this device only, to improve suggestions. Taps you delete are never learned.
           </Text>
         </View>
         <Switch
-          value={settings.aiPersonalisationEnabled !== false}
-          onValueChange={(val) => updateSettings({ aiPersonalisationEnabled: val })}
-          accessibilityLabel="Toggle AI personalisation"
+          value={settings.personalLearning === true}
+          onValueChange={(val) => { updateSettings({ personalLearning: val, aiPersonalisationEnabled: true }); setLearningEnabled(val); }}
+          accessibilityLabel="Learn from my messages"
         />
       </View>
 
@@ -483,7 +505,7 @@ export default function SettingsScreen() {
           </Text>
         </View>
         <Switch
-          value={settings.cloudSuggestionsEnabled !== false}
+          value={settings.cloudSuggestionsEnabled === true}
           onValueChange={(val) => updateSettings({ cloudSuggestionsEnabled: val })}
           accessibilityLabel="Toggle online AI suggestions"
         />
@@ -502,7 +524,7 @@ export default function SettingsScreen() {
                   text: 'Reset',
                   style: 'destructive',
                   onPress: () => {
-                    resetAIProfile()
+                    Promise.all([resetAIProfile(), resetLearning()])
                       .then(() => {
                         setLearnedData(false);
                         Alert.alert('Done', 'AI personalisation data has been reset.');

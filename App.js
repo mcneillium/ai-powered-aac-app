@@ -36,24 +36,29 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import FeedbackScreen from './src/screens/FeedbackScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
-import OnboardingScreen from './src/screens/OnboardingScreen';
 import CameraScreen from './src/screens/CameraScreen';
 import InsightsScreen from './src/screens/InsightsScreen';
 import VocabManagerScreen from './src/screens/VocabManagerScreen';
 import LicensesScreen from './src/screens/LicensesScreen';
+import StudioBoardScreen from './src/screens/StudioBoardScreen';
+import StudioScreen from './src/screens/StudioScreen';
+import WelcomeSheet from './src/components/studio/WelcomeSheet';
+import { getScheme } from './src/design/tokens';
 
-// Non-blocking model load
-import { loadImprovedModel } from './src/services/improvedModelLoader';
+// On-device prediction (pure JS; no model download, no TensorFlow at startup)
+import { initPrediction, flushPrediction } from './src/services/suggestionEngine';
 import { loadAIProfile, recordSessionStart, flushAIProfile } from './src/services/aiProfileStore';
 import { loadCustomVocab } from './src/services/customVocabStore';
 import { loadPronunciations } from './src/services/pronunciationStore';
+import { loadTilePhotos } from './src/services/tilePhotoStore';
 
 const Tab = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();
 const RootStack = createNativeStackNavigator();
 
-// Start model loading in background — do not block app render
-loadImprovedModel().catch(err => console.warn('Model load failed (non-blocking):', err));
+// Load any personal prediction data in the background — suggestions already
+// work from the built-in model before this finishes.
+initPrediction();
 
 // Load AI profile and record session start
 loadAIProfile()
@@ -61,6 +66,7 @@ loadAIProfile()
   .catch(err => console.warn('AI profile load failed (non-blocking):', err));
 loadCustomVocab().catch(err => console.warn('Custom vocab load failed (non-blocking):', err));
 loadPronunciations().catch(err => console.warn('Pronunciation load failed (non-blocking):', err));
+loadTilePhotos().catch(() => {});
 
 const TAB_ICONS = {
   'AAC Board': 'grid-outline',
@@ -84,7 +90,54 @@ function SettingsHeaderButton({ tintColor, navigation }) {
   );
 }
 
+// Voice 2 navigation: four destinations, styled with the design tokens.
+const STUDIO_TAB_ICONS = {
+  Talk: 'chatbubble-ellipses-outline',
+  Phrases: 'albums-outline',
+  Personalise: 'color-palette-outline',
+  Me: 'person-circle-outline',
+};
+
+function StudioApp() {
+  const { settings } = useSettings();
+  const c = getScheme(settings.theme);
+  return (
+    <Tab.Navigator
+      screenOptions={({ route, navigation }) => ({
+        headerStyle: { backgroundColor: c.paper },
+        headerShadowVisible: false,
+        headerTintColor: c.ink,
+        headerTitleStyle: { color: c.ink, fontWeight: '700' },
+        headerRight: () => <SettingsHeaderButton tintColor={c.ink} navigation={navigation} />,
+        tabBarActiveTintColor: c.signal,
+        tabBarInactiveTintColor: c.inkSoft,
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
+        tabBarStyle: { backgroundColor: c.card, borderTopColor: c.line },
+        tabBarIcon: ({ color, size }) => (
+          <Ionicons name={STUDIO_TAB_ICONS[route.name] || 'ellipse-outline'} size={size} color={color} />
+        ),
+        tabBarAccessibilityLabel: `${route.name} tab`,
+      })}
+    >
+      <Tab.Screen name="Talk" component={StudioBoardScreen} options={{ headerShown: false }} />
+      <Tab.Screen name="Phrases" component={ContextPackScreen} options={{ title: 'Phrases' }} />
+      <Tab.Screen name="Personalise" component={StudioScreen} options={{ title: 'Personalise' }} />
+      <Tab.Screen name="Me" component={ProfileScreen} options={{ title: 'Me' }} />
+    </Tab.Navigator>
+  );
+}
+
 function MainApp() {
+  const { settings, loading } = useSettings();
+  // Wait for saved settings so the layout never flashes the wrong board.
+  if (loading) return <View style={styles.center} />;
+  // The new board is the default for new installs; existing users keep the
+  // familiar board until they choose the new one (Settings or Personalise).
+  if (settings.boardLayout !== 'classic') return <StudioApp />;
+  return <ClassicApp />;
+}
+
+function ClassicApp() {
   const insets = useSafeAreaInsets();
   const { settings } = useSettings();
   const palette = getPalette(settings.theme);
@@ -168,6 +221,7 @@ function AppNavigator() {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'background' || state === 'inactive') {
         flushAIProfile().catch(() => {});
+        flushPrediction().catch(() => {});
       }
     });
     return () => sub.remove();
@@ -181,11 +235,14 @@ function AppNavigator() {
     );
   }
 
-  if (!hasLaunched) {
-    return <OnboardingScreen onComplete={() => setHasLaunched(true)} />;
-  }
-
-  return <MainApp />;
+  // First run: the board is usable immediately; the welcome sheet sits on
+  // top and can be closed at once. It never blocks communication.
+  return (
+    <>
+      <MainApp />
+      {!hasLaunched && <WelcomeSheet onDone={() => setHasLaunched(true)} />}
+    </>
+  );
 }
 
 function RootNavigator() {
@@ -228,6 +285,21 @@ function RootNavigator() {
         name="VocabManager"
         component={VocabManagerScreen}
         options={{ title: 'Manage Vocabulary' }}
+      />
+      <RootStack.Screen
+        name="Studio"
+        component={StudioScreen}
+        options={{ title: 'Personalise' }}
+      />
+      <RootStack.Screen
+        name="Sentence"
+        component={EasySentenceBuilderScreen}
+        options={{ title: 'Sentence builder' }}
+      />
+      <RootStack.Screen
+        name="Emotion"
+        component={EmotionScreen}
+        options={{ title: 'Feelings' }}
       />
       <RootStack.Screen
         name="Licenses"

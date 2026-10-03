@@ -14,6 +14,7 @@
 // - deletedIds syncs to Firebase so other devices respect deletions
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getTilePhoto } from './tilePhotoStore';
 import { ref, set as fbSet, get as fbGet } from 'firebase/database';
 import { auth as cloudAuth, db as cloudDb } from '../../firebaseConfig';
 import { safeParse } from '../utils/safeStorage';
@@ -162,6 +163,8 @@ export function getCustomButtons() {
       category: item.category,
       color: cat.color,
       textColor: cat.textColor,
+      // Device-only photo (never synced); shown by the new board's tiles.
+      imageUri: getTilePhoto(item.id) || undefined,
     };
   });
 }
