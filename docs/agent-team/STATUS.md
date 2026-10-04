@@ -193,3 +193,15 @@ Owner: link a GitHub user in Expo (or turn off that integration); install the AP
 - Native suite.
 - Device-level text rendering of hyphenated labels.
 - TalkBack, switch scanning, real speech, permission dialogs, airplane mode, checklist §H.
+
+### After owner merge of PR #12 (head `cdf9cd9`, 2026-10-04)
+- **Change:** the owner merged master (PR #12: database/storage rules, log whitelist, axios 1.19.0) into `codex/voice-agent-team` and then into this branch. There were no conflicts. The `feedback/{uid}` rules are unchanged, so the owner-decision table still stands.
+- **Fresh `npm ci` from a clean archive of `cdf9cd9`** (axios 1.19.0):
+  - lint exit 0 (0 errors, 15 warnings);
+  - jest exit 0, 56 suites / 824 tests;
+  - Android export exit 0;
+  - GitHub CI "Lint, Test & Build": success.
+- **APKs** from the same archive, same test key (cert `63bc733c…e42080f8`), package `…prtestv2`, 1.2.0 (2):
+  - arm64-v8a: SHA-256 `66d7102e5a2b4cc7b5f8048339a70e3fddea2159aee8379da79959841dce62af`, 30,964,674 bytes (`native-ui-evidence/Voice2Test-cdf9cd9-arm64.apk`).
+  - arm64-v8a + x86_64: SHA-256 `f6b0f306f65f44dc0dc75a845e961716216f1b4766b2c84cc405a77c210d42e3`, 38,535,035 bytes (`native-ui-evidence/Voice2Test-cdf9cd9.apk`).
+  - These supersede the `f74dd96` APKs.
