@@ -4,7 +4,7 @@
 // to the board with the same message.
 
 import React, { useState } from 'react';
-import { View, Text, Modal, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Modal, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionButton } from '../../design/components';
 import { usePaper } from '../../design/usePaper';
@@ -24,20 +24,23 @@ export default function ShowMessage({ visible, onClose, text, onSpeak }) {
   ]);
   const len = (text || '').length;
   const base = width > 600 ? 72 : 48;
-  const size = len > 80 ? base * 0.6 : len > 30 ? base * 0.8 : base;
+  const size = len > 240 ? base * 0.5 : len > 80 ? base * 0.6 : len > 30 ? base * 0.8 : base;
 
   return (
     <Modal visible={visible} animationType="fade" onRequestClose={onClose} supportedOrientations={['portrait', 'landscape']}>
       <View style={[styles.root, { backgroundColor: c.card, paddingTop: insets.top + space.md, paddingBottom: insets.bottom + space.md }]}>
+        {/* A long message scrolls rather than being cut off behind the
+            buttons (Android only shrinks text to fit with a line limit). */}
         <View style={[styles.body, flipped && { transform: [{ rotate: '180deg' }] }]}>
-          <Text
-            style={{ color: c.ink, fontSize: size, lineHeight: Math.round(size * 1.2), fontWeight: '700', textAlign: 'center' }}
-            accessibilityRole="text"
-            accessibilityLabel={text ? `Message: ${text}` : 'No message yet'}
-            adjustsFontSizeToFit
-          >
-            {text || 'No message yet'}
-          </Text>
+          <ScrollView testID="show-message-scroll" contentContainerStyle={styles.scroll}>
+            <Text
+              style={{ color: c.ink, fontSize: size, lineHeight: Math.round(size * 1.2), fontWeight: '700', textAlign: 'center' }}
+              accessibilityRole="text"
+              accessibilityLabel={text ? `Message: ${text}` : 'No message yet'}
+            >
+              {text || 'No message yet'}
+            </Text>
+          </ScrollView>
         </View>
         <View style={styles.bar}>
           <ActionButton icon="arrow-back" label="Back" a11yLabel="Back to board" onPress={onClose} flex={1} size={touch.action} focused={focused === 'back'} />
@@ -59,6 +62,7 @@ export default function ShowMessage({ visible, onClose, text, onSpeak }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, paddingHorizontal: space.lg },
-  body: { flex: 1, justifyContent: 'center' },
+  body: { flex: 1 },
+  scroll: { flexGrow: 1, justifyContent: 'center' },
   bar: { flexDirection: 'row', gap: space.sm },
 });

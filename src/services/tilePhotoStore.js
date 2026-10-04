@@ -23,9 +23,15 @@ export async function loadTilePhotos() {
 
 // Stored as a file name and resolved against the current documents folder:
 // on iOS the app's container path can change after an update or restore.
+// The first Voice 2 build stored absolute file:// URIs; a photo copied into a
+// (possibly older) container's tiles folder is found again by its file name.
+const LEGACY_TILE_URI = /^file:\/\/.*\/tiles\/([^/]+)$/i;
 function resolve(stored) {
   if (!stored) return null;
-  if (Platform.OS === 'web' || !DIR || /^[a-z]+:/i.test(stored)) return stored;
+  if (Platform.OS === 'web' || !DIR) return stored;
+  const legacy = LEGACY_TILE_URI.exec(stored);
+  if (legacy) return `${DIR}${legacy[1]}`;
+  if (/^[a-z]+:/i.test(stored)) return stored;
   return `${DIR}${stored}`;
 }
 
