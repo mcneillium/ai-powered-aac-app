@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePaper } from './usePaper';
 import { getCategoryColors, space, type, touch, motion } from './tokens';
-import { fitLabelSize, linesAt } from './fitLabel';
+import { fitLabelSize, fitTileLabel } from './fitLabel';
 import { getScanState, advanceScan, selectCurrent } from '../services/switchScanService';
 
 /** Press feedback: a quick scale-down (skipped with reduced motion). */
@@ -66,21 +66,34 @@ export function Tile({
   const imageOk = !!symbolSource && !(symbolSource.uri && symbolSource.uri === failedUri);
   const showImage = symbolStyle !== 'text' && imageOk;
   const showEmoji = symbolStyle !== 'text' && !showImage && !!emoji;
-  const showSymbol = showImage || showEmoji;
+  const wantSymbol = showImage || showEmoji;
+  const wantIcon = !wantSymbol && !!button.icon;
+  // Fit the label so no word is broken, cut off or clipped by the tile:
+  // the user's size when it fits, otherwise the largest size that does
+  // (never below 12; 11 and the side padding only for a word that is wider
+  // than the tile at 12). The picture shrinks first (to 20 px) and is
+  // dropped only if even the smallest label does not fit beside it.
+  // Width and height budgets: 6 px padding and up to 4 px focus border on
+  // each side.
+  const wantedSize = Math.round((child ? 17 : 15) * textScale * fontScale);
+  const iconSize = Math.round(20 * textScale);
+  const fit = fitTileLabel(button.label, wantedSize, {
+    width: tileWidth ? tileWidth - 20 : 0,
+    height: height ? height - 20 : Infinity,
+    symbol: wantSymbol ? 20 + space.xs : wantIcon ? iconSize + 2 : 0,
+    pad: 12,
+  });
+  const labelSize = fit.size;
+  const labelLine = fit.lineHeight;
+  const showSymbol = wantSymbol && fit.symbol;
+  const showImageNow = showImage && showSymbol;
+  const showEmojiNow = showEmoji && showSymbol;
   const bigSymbol = showSymbol && symbolStyle === 'symbols';
   const bg = hc ? '#000' : child ? cat.fill : (isNav ? c.sunk : c.card);
-  const iconName = !showSymbol && button.icon ? button.icon : null;
-  // Fit the label so no word is broken or cut off: the user's size when it
-  // fits, otherwise the largest size that does (never below 12).
-  // Width budget: 6 px padding and up to 4 px focus border on each side.
-  const wantedSize = Math.round((child ? 17 : 15) * textScale * fontScale);
-  const labelWidth = tileWidth ? tileWidth - 20 : 0;
-  const labelSize = fitLabelSize(button.label, wantedSize, labelWidth);
-  const labelLine = Math.round(labelSize * 1.25);
-  const labelLines = labelWidth ? Math.min(2, linesAt(button.label, labelSize, labelWidth)) : 1;
+  const iconName = wantIcon && fit.symbol ? button.icon : null;
   // The picture gives way to the label when both do not fit the tile.
   const baseSymbol = bigSymbol ? Math.round(height * 0.5) : Math.round(Math.min(34, height * 0.38));
-  const symbolSize = Math.max(20, Math.min(baseSymbol, height - 20 - space.xs - labelLines * labelLine));
+  const symbolSize = Math.max(20, Math.min(baseSymbol, height - 20 - space.xs - fit.lines * labelLine));
   // Pictures are black line art: in dark and high contrast they sit on a
   // light plate so they stay visible.
   const plate = c.symbolPlate;
@@ -107,6 +120,8 @@ export function Tile({
             styles.tile,
             {
               height,
+              // A word wider than the tile at 12 px may use the side padding.
+              ...(fit.wide ? { paddingHorizontal: 0 } : null),
               backgroundColor: bg,
               borderRadius: r.tile,
               borderColor: focused ? c.focus : hc ? c.line : child ? 'transparent' : c.line,
@@ -118,7 +133,7 @@ export function Tile({
           {/* Category edge (Adult / High contrast); Child uses the fill. */}
           {!child && <View style={[styles.edge, { backgroundColor: cat.edge }]} />}
           {pressed && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.signal, opacity: 0.14 }]} />}
-          {showEmoji && (
+          {showEmojiNow && (
             <Text
               style={{ fontSize: Math.round(symbolSize * 0.8), lineHeight: symbolSize, marginBottom: space.xs, textAlign: 'center' }}
               importantForAccessibility="no"
@@ -128,7 +143,7 @@ export function Tile({
               {emoji}
             </Text>
           )}
-          {showImage && (
+          {showImageNow && (
             <View style={{ width: symbolSize, height: symbolSize, marginBottom: space.xs, alignItems: 'center', justifyContent: 'center', borderRadius: Math.round(symbolSize / 5), backgroundColor: plate || 'transparent' }}>
               <Image
                 source={symbolSource}

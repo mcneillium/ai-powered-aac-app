@@ -45,16 +45,68 @@ export function linesAt(label, size, width) {
   return lines;
 }
 
+/** Line height used for tile labels at `size` px. */
+export function lineHeightFor(size) {
+  return Math.round(size * 1.25);
+}
+
 /**
  * Largest whole font size in [min, size] at which `label` fits `width`
- * without breaking a word, in at most `maxLines` lines. Returns `size`
- * unchanged when the width is not known yet. If nothing fits even at `min`,
- * returns `min` (the smallest readable size; the platform then wraps).
+ * without breaking a word, in at most `maxLines` lines and, when
+ * `maxHeight` is given, with lines x line height <= maxHeight. Returns
+ * `size` unchanged when the width is not known yet. If nothing fits even at
+ * `min`, returns `min` (the smallest readable size).
  */
-export function fitLabelSize(label, size, width, { min = 12, maxLines = 2 } = {}) {
+export function fitLabelSize(label, size, width, { min = 12, maxLines = 2, maxHeight = Infinity } = {}) {
   if (!width || width <= 0) return size;
+  const fits = (s) => {
+    const n = linesAt(label, s, width);
+    return n <= maxLines && n * lineHeightFor(s) <= maxHeight;
+  };
   for (let s = size; s > min; s -= 1) {
-    if (linesAt(label, s, width) <= maxLines) return s;
+    if (fits(s)) return s;
   }
   return Math.min(size, min);
+}
+
+/**
+ * Fits a tile label into the tile's content box, in this order of
+ * preference: the user's size; a smaller size (down to `min`) with the
+ * picture kept; the label using the side padding (`pad`) and then `floor`
+ * px when a single word is wider than the box at `min`; and finally the
+ * picture dropped. A word is never broken or cut off while any of these
+ * fit; `fits` is false only when even `floor` px on one line is too wide.
+ *
+ * @param {string} label
+ * @param {number} size     wanted size in px (user text size x system font size)
+ * @param {object} box
+ *   width:  label width in px inside padding and the widest border
+ *   height: content height in px inside padding and the widest border
+ *   symbol: height the smallest picture needs (incl. gap), 0 for none
+ *   pad:    extra width available by using the side padding
+ * @returns {{ size, lines, lineHeight, wide, symbol, fits }}
+ */
+export function fitTileLabel(label, size, { width, height = Infinity, symbol = 0, pad = 0, min = 12, floor = 11 }) {
+  if (!width || width <= 0) {
+    // Width not known yet: assume one line and keep the height.
+    let s = size;
+    while (s > min && lineHeightFor(s) + symbol > height) s -= 1;
+    return { size: s, lines: 1, lineHeight: lineHeightFor(s), wide: false, symbol: symbol > 0, fits: true };
+  }
+  const options = [{ w: width, m: min, wide: false }, { w: width + pad, m: min, wide: true }, { w: width + pad, m: floor, wide: true }];
+  const opt = options.find((o) => linesAt(label, Math.min(size, o.m), o.w) <= 2) || null;
+  const result = (s, w, wide, keep, fits) => {
+    const lines = Math.min(2, linesAt(label, s, w));
+    return { size: s, lines, lineHeight: lineHeightFor(s), wide, symbol: keep, fits };
+  };
+  if (!opt) return result(Math.min(size, floor), width + pad, pad > 0, symbol > 0 && 2 * lineHeightFor(floor) + symbol <= height, false);
+  const m = Math.min(size, opt.m);
+  const fitsIn = (h) => fitLabelSize(label, size, opt.w, { min: m, maxHeight: h });
+  const ok = (s, h) => linesAt(label, s, opt.w) * lineHeightFor(s) <= h;
+  if (symbol > 0) {
+    const s = fitsIn(height - symbol);
+    if (ok(s, height - symbol)) return result(s, opt.w, opt.wide, true, true);
+  }
+  const s = fitsIn(height);
+  return result(s, opt.w, opt.wide, false, ok(s, height));
 }
