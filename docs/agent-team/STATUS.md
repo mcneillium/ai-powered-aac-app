@@ -71,12 +71,58 @@
 4. Signed-in delete re-syncing own words from the cloud.
 5. After account deletion, `hasLaunched` keeps new-board users on Classic at relaunch.
 6. ARASAAC (CC BY-NC-SA) and emoji pictures in store screenshots / commercial use.
-8. Residual: tile height ignores system font size, so at 2x a two-line label plus picture can be clipped (needs a height budget; not reproduced here).
-7. Residual: "bathroom" still wraps at 320 dp with 4 per row and largest text; suggest fewer per row.
+7. Residual (run 2): long words ("Overwhelmed", "Appointments") and 13 labels at 5 per row on 320 dp still cannot fit even at 11 px; going smaller or limiting words per row is a product decision.
 
-### NOT TESTED in this run
-- Emulator (no `/dev/kvm`), S24 / any physical device (no adb device), iOS.
-- Human checks: TalkBack, switch scanning, real speech output, picture-symbol readability, checklist §H rows H1–H25.
+## Run 2 (2026-10-04)
+**Goal (owner):** continue the agent-team workflow: report PR #11, verify the EAS Update diagnosis, complete unblocked implementation/review/testing, build a test APK of the latest changes, list human checks.
+
+**Source:** `claude/voice-team-run` from `a59c5d3`; final app source `2fe281e`.
+
+### Runtime discovery (fixed since run 1)
+A fresh cloud session started on `a59c5d3` (Claude Code 2.1.289) listed all six `voice-*` agent types and registered `/voice-team`. A real `Agent(subagent_type: "voice-reviewer")` call ran with only Read/Glob/Grep, as defined. Run 2 workers were still briefed manually in this older session.
+
+### EAS Update status (diagnosis, no change made)
+- The status is posted by the Expo GitHub app (`expo[bot]`), not by a workflow in this repo. There is no `.eas/workflows`, no `expo-updates` dependency and no update channel in `eas.json`.
+- It errors with "This Expo account doesn't have a member with a linked github.com user that has access to this repository" on every one of the last 8 `master` commits and on PR #10 and #11. The repo's own CI ("Lint, Test & Build") is green on all of them.
+- There are no job logs because the job never starts.
+- The fix is the account owner's (see the PR #11 comment). The check was not disabled.
+
+### Defects fixed (reproduced first)
+| Commit | Role | Fix | Evidence level |
+|---|---|---|---|
+| `a1d725f` | design | At system font size up to 2x, two-line labels plus picture overflowed and were clipped; "bathroom" broke mid-word at 320 dp / 4 per row | unit (`design2-tileHeight`: 38/198 fail on previous code) |
+| `618b941` | engineer | Tile photos saved by the first Voice 2 build (absolute paths) were lost after an iOS update/restore, and replacing one deleted the wrong path | unit (`eng2-tilePhotoUpgrade`: 2 fail on previous code) |
+| `618b941` | coordinator | "Open camera" left an unhandled rejection when the permission request failed; long Show-screen messages could be cut off on Android | unit (`coord2-cameraShow`: 2 fail on previous code) |
+| `4aa0f30` | privacy → coordinator | A stored `tiles/..` value could resolve to the documents folder (hardening) | unit (1 fails on previous code) |
+| `2fe281e` | reviewer → coordinator | Persistent scroll bar on the Show screen | static |
+
+New coverage without a defect: upgrade fixtures for oldest settings/history/favourites/words shapes, photo permission denial/cancel/throw, 12,000-character speech, long DisplayMode text.
+
+### Gate on `2fe281e`
+| Check | Exit | Result |
+|---|---|---|
+| `CI=1 npx jest` | 0 | 54 suites, 618 tests |
+| `npm run lint` | 0 | 0 errors, 15 warnings (pre-existing) |
+| `npx expo export --platform android` | 0 | on `618b941` (later commits: hardening and one prop) |
+| Release build | 0 | BUILD SUCCESSFUL (Gradle) |
+
+### Reviews (static, read-only)
+- **voice-reviewer:** APPROVE. Not changed:
+  - Wide labels may draw 1.5–4 px over the Adult category stripe when focused. An edge-safe padding would make "bathroom" break again at 320 dp, so this needs a device check.
+  - Very long words can still break.
+  - Switch-scan users cannot scroll a long Show message.
+- **voice-privacy:** OK. Hardening applied in `4aa0f30`. Fixtures are artificial; no secrets.
+
+### Test APK (built, not installed anywhere)
+- Source: clean `git archive` of `2fe281e`; `expo prebuild --clean`; `assembleRelease`, arm64-v8a; Firebase env unset (cloud features off).
+- Package `com.elpabloawakens.aipoweredaacapp.prtestv2`, "Voice 2 Test", versionName 1.2.0, versionCode 2.
+- Certificate SHA-256 `63bc733cf7c902117b0936e5ac96387d70692e398a4a6892711856c1e42080f8`, same test key as run 1, so it updates in place.
+- APK SHA-256 `8d7506a69839542a2f5449b3a26db5b9f837173eae8ee782d3b62c0c29d9c7da`, 30,960,850 bytes.
+- Local copy: `native-ui-evidence/Voice2Test-2fe281e.apk` (ignored by Git).
+
+### NOT TESTED (runs 1 and 2)
+- Emulator (no `/dev/kvm`), S24 and any physical device (no adb device), iOS.
+- Human and device checks: checklist §H (H1–H25), TalkBack, switch scanning, real speech, picture readability, real permission dialogs, airplane-mode start, Android font size at maximum, long Show message flipped, iOS photo after update.
 
 ### Next
-Owner: install the test APK on the S24 and run checklist §H plus TalkBack/switch checks; decide the owner items above. Team: start a fresh session in a checkout of this branch to confirm the agents and `/voice-team` load.
+Owner: link a GitHub user in Expo (or turn off that integration); install the APK and run the device checks above; decide the owner items.
