@@ -1,18 +1,52 @@
 rules_version = '2';
+
+// Cloud Storage rules for commai-b98fe.
+//
+// NOTE (2026-08): no shipped code path in either the app repo or the dashboard
+// repo reads from or writes to Cloud Storage — there is no `getStorage()` /
+// `firebase/storage` import anywhere outside node_modules. These rules are a
+// lockdown of an otherwise-default bucket, plus guardrails that any future
+// upload feature will inherit rather than have to remember.
+
 service firebase.storage {
   match /b/{bucket}/o {
-    // User-specific files: only the owner can read/write
+
+    // User-owned files: only the owner, and only within hard caps.
+    //
+    // Reads and deletes are ownership-gated only. Creates/updates additionally
+    // require a non-anonymous account and satisfy size + content-type limits.
+    // `write` is split into create/update/delete because `request.resource` is
+    // null on delete — a size check inside a combined `write` rule would error
+    // and deny every delete.
     match /users/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null
+                  && request.auth.uid == userId;
+
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId
+                            // Guests are local-only by design (see
+                            // src/utils/enhancedLogger.js — anonymous sessions
+                            // never sync). Without this, anyone can mint
+                            // unlimited anonymous uids and upload under each.
+                            && request.auth.token.firebase.sign_in_provider != 'anonymous'
+                            // 5 MB ceiling per object.
+                            && request.resource.size < 5 * 1024 * 1024
+                            // Images only; the only plausible upload source is
+                            // the camera/describe flow.
+                            && request.resource.contentType.matches('image/(jpeg|jpg|png|webp|heic)');
+
+      allow delete: if request.auth != null
+                    && request.auth.uid == userId;
     }
 
-    // Model artifacts: readable by all authenticated users, writable by none (deploy via CI/admin)
+    // Model artifacts: readable by any signed-in client, written only by an
+    // admin/CI principal using the Admin SDK (which bypasses these rules).
     match /models/{allPaths=**} {
       allow read: if request.auth != null;
       allow write: if false;
     }
 
-    // Deny everything else
+    // Everything else is denied, including listing the bucket root.
     match /{allPaths=**} {
       allow read, write: if false;
     }

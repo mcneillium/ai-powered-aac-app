@@ -26,8 +26,11 @@ jest.mock('firebase/database', () => ({
   serverTimestamp: jest.fn(() => 'SERVER_TIMESTAMP'),
 }));
 
+// The logger reads the signed-in user from firebaseConfig (null when cloud is
+// not configured), so the sync tests need a signed-in, non-anonymous user here.
 jest.mock('../../firebaseConfig', () => ({
   db: {},
+  auth: { currentUser: { uid: 'test-user', isAnonymous: false } },
 }));
 
 jest.mock('@react-native-community/netinfo', () => ({
@@ -43,13 +46,48 @@ describe('enhancedLogger', () => {
 
   test('logEvent creates a log entry with required fields', async () => {
     const { logEvent } = require('../utils/enhancedLogger');
-    const entry = await logEvent('test_action', { extra: 'data' });
+    const entry = await logEvent('test_action', { error: 'auth/wrong-password' });
 
     expect(entry).toBeDefined();
     expect(entry.action).toBe('test_action');
-    expect(entry.extra).toBe('data');
+    expect(entry.error).toBe('auth/wrong-password');
     expect(entry.timestamp).toBeDefined();
     expect(entry.level).toBe('INFO');
+  });
+
+  // database.rules.json ends userLogs/$uid/$logId with `"$other": false`, so an
+  // unlisted field makes the write fail — and syncLogsToFirebase only clears
+  // AsyncStorage after every entry resolves, so one such entry wedges sync
+  // permanently. logEvent must drop unknown metadata keys before they get there.
+  test('logEvent drops metadata keys the database rules do not whitelist', async () => {
+    const { logEvent } = require('../utils/enhancedLogger');
+    const entry = await logEvent('test_action', {
+      error: 'auth/wrong-password',
+      count: 3,
+      extra: 'data',
+      screen: 'Login',
+    });
+
+    expect(entry.error).toBe('auth/wrong-password');
+    expect(entry.count).toBe(3);
+    expect(entry.extra).toBeUndefined();
+    expect(entry.screen).toBeUndefined();
+  });
+
+  // Metadata is spread before the fields logEvent owns, so a caller cannot
+  // replace them with a value the rules' type validators would reject.
+  test('logEvent metadata cannot override its own authoritative fields', async () => {
+    const { logEvent } = require('../utils/enhancedLogger');
+    const entry = await logEvent('real_action', {
+      action: 'spoofed_action',
+      timestamp: 1,
+      deviceInfo: { imei: '123456' },
+    });
+
+    expect(entry.action).toBe('real_action');
+    expect(entry.timestamp).not.toBe(1);
+    expect(entry.deviceInfo.imei).toBeUndefined();
+    expect(entry.deviceInfo.platform).toBeDefined();
   });
 
   test('logEvent respects log level filtering', async () => {
@@ -64,6 +102,59 @@ describe('enhancedLogger', () => {
     const errorEntry = await logEvent('error_action', {}, 'error');
     expect(errorEntry).toBeDefined();
     expect(errorEntry.action).toBe('error_action');
+  });
+
+  // A write the rules reject fails identically forever. syncLogsToFirebase used
+  // to await Promise.all and only clear AsyncStorage on total success, so one
+  // rejected entry blocked every later sync on that device permanently.
+  test('syncLogsToFirebase drops entries rejected by the database rules', async () => {
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    const database = require('firebase/database');
+    await AsyncStorage.setItem('userInteractionLog', JSON.stringify([
+      { action: 'good_entry', timestamp: 100 },
+      { action: 'poison_entry', timestamp: 200 },
+    ]));
+
+    database.set.mockImplementation((_ref, value) => {
+      if (value.action === 'poison_entry') {
+        const err = new Error('PERMISSION_DENIED: Permission denied');
+        err.code = 'PERMISSION_DENIED';
+        return Promise.reject(err);
+      }
+      return Promise.resolve();
+    });
+
+    const { syncLogsToFirebase } = require('../utils/enhancedLogger');
+    const result = await syncLogsToFirebase();
+
+    expect(result).toBe(true);
+    const remaining = JSON.parse(await AsyncStorage.getItem('userInteractionLog'));
+    expect(remaining).toHaveLength(0);
+  });
+
+  // The opposite case: a transient failure must not lose the entry.
+  test('syncLogsToFirebase keeps entries that failed for transient reasons', async () => {
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    const database = require('firebase/database');
+    await AsyncStorage.setItem('userInteractionLog', JSON.stringify([
+      { action: 'good_entry', timestamp: 100 },
+      { action: 'flaky_entry', timestamp: 200 },
+    ]));
+
+    database.set.mockImplementation((_ref, value) => {
+      if (value.action === 'flaky_entry') {
+        return Promise.reject(new Error('Network request failed'));
+      }
+      return Promise.resolve();
+    });
+
+    const { syncLogsToFirebase } = require('../utils/enhancedLogger');
+    const result = await syncLogsToFirebase();
+
+    expect(result).toBe(false);
+    const remaining = JSON.parse(await AsyncStorage.getItem('userInteractionLog'));
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].action).toBe('flaky_entry');
   });
 
   test('getLocalLogs returns stored logs', async () => {
