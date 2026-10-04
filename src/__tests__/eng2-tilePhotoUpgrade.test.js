@@ -50,3 +50,11 @@ test('non-tile URIs (e.g. picker cache when no documents folder) are kept as sto
   expect(photos.getTilePhoto('333')).toBe('file:///cache/ImagePicker/x.jpg');
   expect(photos.getTilePhoto('444')).toBe('content://media/9');
 });
+
+test('a stored "tiles/.." path never resolves to (and deletes) the documents folder', async () => {
+  await AsyncStorage.setItem(KEY, JSON.stringify({ 555: 'file:///containers/OLD-1111/Documents/tiles/..' }));
+  await photos.loadTilePhotos();
+  expect(photos.getTilePhoto('555')).not.toBe(`${NEW_DIR}..`);
+  await photos.removeTilePhoto('555');
+  expect(FileSystem.deleteAsync).not.toHaveBeenCalledWith(`${NEW_DIR}..`, expect.anything());
+});
