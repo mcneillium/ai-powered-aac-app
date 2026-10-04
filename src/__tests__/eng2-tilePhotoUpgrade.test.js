@@ -44,7 +44,7 @@ test('replacing an old absolute photo deletes the old file at its current locati
   expect(FileSystem.deleteAsync).toHaveBeenCalledWith(`${NEW_DIR}111-1700000000000.jpg`, { idempotent: true });
 });
 
-test('non-tile URIs (e.g. picker cache when no documents folder) are kept as stored', async () => {
+test('non-tile URIs (picker cache, content://) are kept as stored', async () => {
   await AsyncStorage.setItem(KEY, JSON.stringify({ 333: 'file:///cache/ImagePicker/x.jpg', 444: 'content://media/9' }));
   await photos.loadTilePhotos();
   expect(photos.getTilePhoto('333')).toBe('file:///cache/ImagePicker/x.jpg');

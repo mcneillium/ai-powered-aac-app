@@ -32,7 +32,7 @@ export default function ShowMessage({ visible, onClose, text, onSpeak }) {
         {/* A long message scrolls rather than being cut off behind the
             buttons (Android only shrinks text to fit with a line limit). */}
         <View style={[styles.body, flipped && { transform: [{ rotate: '180deg' }] }]}>
-          <ScrollView testID="show-message-scroll" contentContainerStyle={styles.scroll}>
+          <ScrollView testID="show-message-scroll" contentContainerStyle={styles.scroll} persistentScrollbar>
             <Text
               style={{ color: c.ink, fontSize: size, lineHeight: Math.round(size * 1.2), fontWeight: '700', textAlign: 'center' }}
               accessibilityRole="text"
