@@ -9,6 +9,7 @@
 // - Nothing here logs sentence content.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isAccountDeletionPaused, accountDataGeneration, trackAccountDataOperation } from '../accountDeletionBarrier';
 import { CORRUPT_SUFFIX } from '../../utils/safeStorage';
 import { PERSONAL_FORMAT, PERSONAL_VERSION } from './personalModel.js';
 
@@ -21,9 +22,10 @@ export function personalKey(profileId = DEFAULT_PROFILE_ID) {
 }
 
 async function backupCorrupt(key, raw) {
+  if (isAccountDeletionPaused()) return;
   console.warn(`Stored prediction data for ${key} is unreadable; keeping a backup copy.`);
   try {
-    await AsyncStorage.setItem(`${key}${CORRUPT_SUFFIX}`, raw);
+    await trackAccountDataOperation(AsyncStorage.setItem(`${key}${CORRUPT_SUFFIX}`, raw));
   } catch {
     // Best effort — nothing else we can do without storage
   }
@@ -37,7 +39,9 @@ async function backupCorrupt(key, raw) {
  */
 export async function loadPersonalData(profileId) {
   const key = personalKey(profileId);
+  const generation = accountDataGeneration();
   const raw = await AsyncStorage.getItem(key);
+  if (generation !== accountDataGeneration() || isAccountDeletionPaused()) return null;
   if (raw === null || raw === undefined || raw === '') return null;
   let data;
   try {
@@ -56,8 +60,9 @@ export async function loadPersonalData(profileId) {
 }
 
 export async function savePersonalData(profileId, data) {
+  if (isAccountDeletionPaused()) return false;
   try {
-    await AsyncStorage.setItem(personalKey(profileId), JSON.stringify(data));
+    await trackAccountDataOperation(AsyncStorage.setItem(personalKey(profileId), JSON.stringify(data)));
     return true;
   } catch {
     return false;

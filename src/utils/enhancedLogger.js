@@ -5,6 +5,7 @@ import packageJson from '../../package.json';
 import { ref, push, set, serverTimestamp } from 'firebase/database';
 import { db, auth as cloudAuth } from '../../firebaseConfig';
 import NetInfo from '@react-native-community/netinfo';
+import { isAccountDeletionPaused, accountDataGeneration, trackAccountDataOperation, registerAccountDeletionStopper } from '../services/accountDeletionBarrier';
 
 // Maximum number of logs to store locally before auto-sync
 const MAX_CACHED_LOGS = 50;
@@ -64,6 +65,12 @@ let logQueue = [];
 let isProcessingQueue = false;
 let isOnline = true;
 
+registerAccountDeletionStopper(() => { logQueue = []; });
+
+function canContinue(generation) {
+  return !isAccountDeletionPaused() && generation === accountDataGeneration();
+}
+
 // Initialize connectivity listener
 export function initLogger() {
   // Set up network state listener
@@ -97,10 +104,11 @@ export function initLogger() {
  * @param {string} level - The log level ('debug', 'info', 'warn', 'error')
  */
 export function setLogLevel(level) {
+  if (isAccountDeletionPaused()) return;
   const levelUpper = level.toUpperCase();
   if (LOG_LEVELS[levelUpper] !== undefined) {
     currentLogLevel = LOG_LEVELS[levelUpper];
-    AsyncStorage.setItem('logLevel', currentLogLevel.toString())
+    trackAccountDataOperation(AsyncStorage.setItem('logLevel', currentLogLevel.toString()))
       .catch(err => console.error('Error saving log level:', err));
   }
 }
@@ -108,7 +116,13 @@ export function setLogLevel(level) {
 /**
  * Process the log queue by writing to AsyncStorage
  */
-async function processLogQueue() {
+function processLogQueue() {
+  if (isAccountDeletionPaused()) return Promise.resolve();
+  return trackAccountDataOperation(runProcessLogQueue());
+}
+
+async function runProcessLogQueue() {
+  const generation = accountDataGeneration();
   if (isProcessingQueue || logQueue.length === 0) return;
   
   isProcessingQueue = true;
@@ -117,6 +131,7 @@ async function processLogQueue() {
   try {
     // Get current logs
     const storedLogsString = await AsyncStorage.getItem('userInteractionLog');
+    if (!canContinue(generation)) return;
     let storedLogs = storedLogsString ? JSON.parse(storedLogsString) : [];
 
     // Add queued logs
@@ -142,7 +157,7 @@ async function processLogQueue() {
   } catch (error) {
     console.error('Error processing log queue:', error);
     // Put the unwritten logs back at the front of the queue so they retry
-    logQueue = [...logsToAdd, ...logQueue];
+    if (canContinue(generation)) logQueue = [...logsToAdd, ...logQueue];
   } finally {
     isProcessingQueue = false;
   }
@@ -157,7 +172,13 @@ async function processLogQueue() {
  * @param {string} level - Log level (debug, info, warn, error)
  * @returns {Promise<Object>} The created log entry
  */
-export async function logEvent(action, metadata = {}, level = 'info') {
+export function logEvent(action, metadata = {}, level = 'info') {
+  if (isAccountDeletionPaused()) return Promise.resolve(null);
+  return trackAccountDataOperation(runLogEvent(action, metadata, level));
+}
+
+async function runLogEvent(action, metadata, level) {
+  const generation = accountDataGeneration();
   try {
     const levelUpper = level.toUpperCase();
     const levelValue = LOG_LEVELS[levelUpper] || LOG_LEVELS.INFO;
@@ -191,6 +212,7 @@ export async function logEvent(action, metadata = {}, level = 'info') {
       deviceInfo,
     };
     
+    if (!canContinue(generation)) return null;
     // Add to in-memory queue
     logQueue.push(logEntry);
     
@@ -258,10 +280,16 @@ async function getDeviceInfo() {
 /**
  * Sync locally stored logs to Firebase
  */
-export async function syncLogsToFirebase() {
+export function syncLogsToFirebase() {
+  if (isAccountDeletionPaused()) return Promise.resolve(false);
+  return trackAccountDataOperation(runSyncLogsToFirebase());
+}
+
+async function runSyncLogsToFirebase() {
+  const generation = accountDataGeneration();
   try {
     const auth = cloudAuth || { currentUser: null }; // null when Firebase is not configured
-    if (!auth.currentUser || auth.currentUser.isAnonymous) {
+    if (!db || !auth.currentUser || auth.currentUser.isAnonymous) {
       console.log('Not logged in, skipping sync');
       return false;
     }
@@ -280,6 +308,7 @@ export async function syncLogsToFirebase() {
       return true;
     }
     
+    if (!canContinue(generation)) return false;
     const storedLogs = JSON.parse(storedLogsString);
     if (storedLogs.length === 0) {
       return true;
@@ -342,7 +371,7 @@ export async function syncLogsToFirebase() {
     // landed — a summary claiming a sync that wrote nothing is worse than none.
     // `count` keeps its field name and type; it now reports entries actually
     // written rather than entries attempted.
-    if (syncedCount > 0) {
+    if (syncedCount > 0 && canContinue(generation)) {
       const syncLogRef = push(ref(db, `userLogs/${auth.currentUser.uid}`));
       await set(syncLogRef, {
         action: 'logs_synced',
@@ -395,7 +424,12 @@ export async function getLocalLogs(limit = 100, level = 'info') {
 /**
  * Clear local logs
  */
-export async function clearLocalLogs() {
+export function clearLocalLogs() {
+  if (isAccountDeletionPaused()) return Promise.resolve(false);
+  return trackAccountDataOperation(runClearLocalLogs());
+}
+
+async function runClearLocalLogs() {
   try {
     await AsyncStorage.setItem('userInteractionLog', JSON.stringify([]));
     return true;

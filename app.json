@@ -15,7 +15,8 @@
         }
       ],
       "expo-asset",
-      "./plugins/withFontScaleConfigChange"
+      "./plugins/withFontScaleConfigChange",
+      "./plugins/withReleaseSigningGuard"
     ],
     "assetBundlePatterns": [
       "assets/**/*"

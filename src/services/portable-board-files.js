@@ -3,6 +3,7 @@ import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import * as DocumentPicker from 'expo-document-picker';
 import { createPrivateExportFile } from './privateExportCache';
+import { isAccountDeletionPaused, accountDataGeneration, trackAccountDataOperation } from './accountDeletionBarrier';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../../firebaseConfig';
 import { corePages } from '../data/coreVocabulary';
@@ -16,6 +17,10 @@ let importGeneration = 0;
 let activeImport = null;
 const resetListeners = new Set();
 const exportGenerations = new WeakMap();
+const exportAccountGenerations = new WeakMap();
+function checkAccountGeneration(generation) {
+  if (isAccountDeletionPaused() || generation !== accountDataGeneration()) throw new Error('Export cancelled during account deletion.');
+}
 export function subscribePortableReset(listener) { resetListeners.add(listener); return () => resetListeners.delete(listener); }
 export async function cancelAndDrainPortableImport() {
   importGeneration += 1;
@@ -40,10 +45,17 @@ async function removeTemp(uri) {
   if (info?.exists && info.isDirectory === false) await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
 }
 
-export async function createPortableBoard({ includePhotos = false, columns = 3 } = {}) {
+export function createPortableBoard(options = {}) {
+  if (isAccountDeletionPaused()) return Promise.reject(new Error('Export cancelled during account deletion.'));
+  return trackAccountDataOperation(runCreatePortableBoard(options, accountDataGeneration()));
+}
+
+async function runCreatePortableBoard({ includePhotos = false, columns = 3 } = {}, accountGeneration) {
   const generation = importGeneration;
   await loadCustomVocab();
+  checkAccountGeneration(accountGeneration);
   await loadTilePhotos();
+  checkAccountGeneration(accountGeneration);
   if (getCustomVocab().length > MAX_ITEMS) throw new Error('This export supports up to 250 personal words.');
   checkGeneration(generation);
   const omittedPhotos = [];
@@ -51,6 +63,7 @@ export async function createPortableBoard({ includePhotos = false, columns = 3 }
   let totalPhotoLength = 0;
   for (const item of getCustomVocab()) {
     checkGeneration(generation);
+    checkAccountGeneration(accountGeneration);
     const entry = { word: item.word, category: item.category || 'misc' };
     const uri = includePhotos ? getTilePhoto(item.id) : null;
     if (uri) {
@@ -59,8 +72,10 @@ export async function createPortableBoard({ includePhotos = false, columns = 3 }
         const root = `${FileSystem.documentDirectory}tiles/`;
         if (!FileSystem.documentDirectory || !uri.startsWith(root) || !/^[A-Za-z0-9_.-]+$/.test(uri.slice(root.length)) || ['.', '..'].includes(uri.slice(root.length))) throw new Error('Unsupported photo location');
         const info = await FileSystem.getInfoAsync(uri);
+        checkAccountGeneration(accountGeneration);
         if (!info.exists || info.isDirectory || !Number.isFinite(info.size) || info.size > MAX_PHOTO_BASE64 * 0.75) throw new Error('Photo unavailable or too large');
         const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+        checkAccountGeneration(accountGeneration);
         const mime = base64.startsWith('iVBORw0KGgo') ? 'image/png' : 'image/jpeg';
         entry.photo = safePhoto({ mime, base64 });
         totalPhotoLength += base64.length;
@@ -70,23 +85,32 @@ export async function createPortableBoard({ includePhotos = false, columns = 3 }
     personalWords.push(entry);
   }
   checkGeneration(generation);
+  checkAccountGeneration(accountGeneration);
   const result = { board: { format: PORTABLE_FORMAT, version: 1, createdAt: new Date().toISOString(), columns,
     corePages: Object.values(corePages).map((page) => ({ label: page.label, buttons: page.buttons.map((button) => ({ label: button.label, category: button.category, emoji: symbolFor(button), ...(button.navigateTo ? { navigateTo: button.navigateTo } : {}) })) })), personalWords }, omittedPhotos };
   exportGenerations.set(result.board, generation);
+  exportAccountGenerations.set(result.board, accountGeneration);
   return result;
 }
 
-export async function sharePortableBoard(board, pdf = false) {
+export function sharePortableBoard(board, pdf = false) {
+  if (isAccountDeletionPaused()) return Promise.reject(new Error('Sharing cancelled during account deletion.'));
+  return trackAccountDataOperation(runSharePortableBoard(board, pdf));
+}
+
+async function runSharePortableBoard(board, pdf) {
+  const accountGeneration = exportAccountGenerations.get(board) ?? accountDataGeneration();
   const generation = exportGenerations.get(board) ?? importGeneration;
-  checkGeneration(generation);
+  const checkExportGeneration = () => { checkAccountGeneration(accountGeneration); checkGeneration(generation); };
+  checkExportGeneration();
   if (!(await Sharing.isAvailableAsync())) throw new Error('Sharing is unavailable on this device.');
-  checkGeneration(generation);
+  checkExportGeneration();
   let uri;
   if (pdf) {
     let printed;
     try {
       printed = (await Print.printToFileAsync({ html: printableBoardHTML(board) })).uri;
-      checkGeneration(generation);
+      checkExportGeneration();
       uri = await createPrivateExportFile('pdf', (destination) => FileSystem.copyAsync({ from: printed, to: destination }));
     } finally { await removeTemp(printed); }
   } else {
@@ -96,7 +120,7 @@ export async function sharePortableBoard(board, pdf = false) {
   }
   // A chooser closing is not acknowledgment that the receiver read the file.
   // Private export cache retains it for bounded expiry or explicit data deletion.
-  checkGeneration(generation);
+  checkExportGeneration();
   await Sharing.shareAsync(uri, { mimeType: pdf ? 'application/pdf' : 'application/json', UTI: pdf ? 'com.adobe.pdf' : 'public.json', dialogTitle: pdf ? 'Save or share printable board' : 'Save or share Voice vocabulary' });
 }
 

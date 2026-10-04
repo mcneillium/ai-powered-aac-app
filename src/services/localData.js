@@ -69,7 +69,8 @@ export async function deleteLocalPersonalData({ includeSettings = false } = {}) 
   await clearPrivateExports();
   // Every tile photo, not only those of words still in the list: a word
   // removed elsewhere can leave its photo behind.
-  await removeAllTilePhotos().catch(() => {});
+  // Account deletion must preserve authentication if files cannot be removed.
+  await removeAllTilePhotos({ strict: includeSettings });
   await resetLearning().catch(() => {});
   // Clear the usage profile in memory first, so a background flush cannot
   // write the old profile back after the keys are removed.
@@ -77,7 +78,8 @@ export async function deleteLocalPersonalData({ includeSettings = false } = {}) 
   const keys = includeSettings ? [...PERSONAL_KEYS, ...SETTINGS_KEYS] : PERSONAL_KEYS;
   // Also the backups safeStorage keeps of unreadable data: they hold the
   // same personal content.
-  await AsyncStorage.multiRemove([...keys, ...keys.map((k) => `${k}${CORRUPT_SUFFIX}`)]).catch(() => {});
+  // Propagate storage failures: callers must not claim deletion succeeded.
+  await AsyncStorage.multiRemove([...keys, ...keys.map((k) => `${k}${CORRUPT_SUFFIX}`)]);
   await Promise.all([
     loadFavourites({ reload: true }), loadSentenceHistory({ reload: true }),
     loadCustomVocab({ reload: true }), loadPronunciations({ reload: true }),

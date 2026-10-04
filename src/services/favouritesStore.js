@@ -4,6 +4,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeParse } from '../utils/safeStorage';
+import { isAccountDeletionPaused, accountDataGeneration, trackAccountDataOperation } from './accountDeletionBarrier';
 
 const STORAGE_KEY = '@aac_favourites';
 // Never silently drop a saved favourite: once full, new ones are refused and
@@ -12,14 +13,26 @@ export const MAX_FAVOURITES = 200;
 let favourites = [];
 let loaded = false;
 
-export async function loadFavourites({ reload = false } = {}) {
+export function loadFavourites(options = {}) {
+  // Only the deletion reload may read while paused; screen loads keep the
+  // existing memory and cannot start a late corrupt-data backup.
+  if (isAccountDeletionPaused() && !options.reload) return Promise.resolve(favourites);
+  return trackAccountDataOperation(runLoadFavourites(options));
+}
+
+async function runLoadFavourites({ reload = false } = {}) {
+  const generation = accountDataGeneration();
   if (loaded && !reload) return favourites;
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    favourites = await safeParse(STORAGE_KEY, raw, []);
+    if (generation !== accountDataGeneration()) return favourites;
+    const parsed = await safeParse(STORAGE_KEY, raw, []);
+    if (generation !== accountDataGeneration()) return favourites;
+    favourites = parsed;
     if (!Array.isArray(favourites)) favourites = [];
     loaded = true;
   } catch {
+    if (generation !== accountDataGeneration()) return favourites;
     favourites = [];
     loaded = true;
   }
@@ -31,6 +44,8 @@ export function getFavourites() {
 }
 
 export async function addFavourite(phrase) {
+  if (isAccountDeletionPaused()) return null;
+  const generation = accountDataGeneration();
   if (!phrase || typeof phrase !== 'string') return;
   const trimmed = phrase.trim();
   if (!trimmed) return;
@@ -48,15 +63,17 @@ export async function addFavourite(phrase) {
   favourites = [entry, ...favourites];
 
   await saveFavourites();
-  return entry;
+  return generation === accountDataGeneration() ? entry : null;
 }
 
 export async function removeFavourite(id) {
+  if (isAccountDeletionPaused()) return;
   favourites = favourites.filter(f => f.id !== id);
   await saveFavourites();
 }
 
 export async function reorderFavourites(newOrder) {
+  if (isAccountDeletionPaused()) return;
   favourites = newOrder;
   await saveFavourites();
 }
@@ -66,8 +83,9 @@ export function isFavourite(phrase) {
 }
 
 async function saveFavourites() {
+  if (isAccountDeletionPaused()) return;
   try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(favourites));
+    await trackAccountDataOperation(AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(favourites)));
   } catch (e) {
     console.warn('Failed to save favourites:', e);
   }

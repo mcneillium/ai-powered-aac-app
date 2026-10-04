@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isAccountDeletionPaused, accountDataGeneration, trackAccountDataOperation } from './accountDeletionBarrier';
 
 export const CONVERSATION_KEY = '@voice_conversation_drafts_v1';
 export const MAX_DRAFTS = 10;
@@ -12,7 +13,7 @@ const clearListeners = new Set();
 const serialise = task => {
   const result = sequence.then(task);
   sequence = result.catch(() => {});
-  return result;
+  return trackAccountDataOperation(result);
 };
 
 function validMessage(text) {
@@ -34,32 +35,43 @@ async function read() {
   return data.drafts;
 }
 
-export function listConversationDrafts() { return serialise(read); }
+export function listConversationDrafts() {
+  if (isAccountDeletionPaused()) return Promise.resolve([]);
+  const accountGeneration = accountDataGeneration();
+  return serialise(async () => {
+    const drafts = await read();
+    return !isAccountDeletionPaused() && accountGeneration === accountDataGeneration() ? drafts : [];
+  });
+}
 
 export function conversationGeneration() { return generation; }
 
 export function parkConversationDraft(text, expectedGeneration = generation) {
+  if (isAccountDeletionPaused()) return Promise.reject(new Error('Draft saving was cancelled during account deletion.'));
+  const accountGeneration = accountDataGeneration();
   const epoch = expectedGeneration;
   return serialise(async () => {
-    if (epoch !== generation) throw new Error('Draft saving was cancelled because personal data was deleted.');
+    if (isAccountDeletionPaused() || accountGeneration !== accountDataGeneration() || epoch !== generation) throw new Error('Draft saving was cancelled because personal data was deleted.');
     validMessage(text);
     const drafts = await read();
-    if (epoch !== generation) throw new Error('Draft saving was cancelled because personal data was deleted.');
+    if (isAccountDeletionPaused() || accountGeneration !== accountDataGeneration() || epoch !== generation) throw new Error('Draft saving was cancelled because personal data was deleted.');
     const duplicate = drafts.find(d => d.text === text);
     if (duplicate) return duplicate;
     if (drafts.length >= MAX_DRAFTS) throw new Error('All 10 draft spaces are full. Delete a saved draft first; your current message is still here.');
     const draft = { id: `${Date.now()}-${++serial}`, text, createdAt: Date.now() };
     await AsyncStorage.setItem(CONVERSATION_KEY, JSON.stringify({ version: 1, drafts: [draft, ...drafts] }));
-    if (epoch !== generation) throw new Error('Draft saving was cancelled because personal data was deleted.');
+    if (isAccountDeletionPaused() || accountGeneration !== accountDataGeneration() || epoch !== generation) throw new Error('Draft saving was cancelled because personal data was deleted.');
     return draft;
   });
 }
 
 export function deleteConversationDraft(id) {
+  if (isAccountDeletionPaused()) return Promise.resolve();
+  const accountGeneration = accountDataGeneration();
   const epoch = generation;
   return serialise(async () => {
     const drafts = await read();
-    if (epoch !== generation) return;
+    if (isAccountDeletionPaused() || accountGeneration !== accountDataGeneration() || epoch !== generation) return;
     await AsyncStorage.setItem(CONVERSATION_KEY, JSON.stringify({ version: 1, drafts: drafts.filter(d => d.id !== id) }));
   });
 }
@@ -77,11 +89,14 @@ export function subscribeConversationClear(fn) {
   return () => clearListeners.delete(fn);
 }
 
-export function queueWorkspaceReturn(text) { pendingReturn = validMessage(text); }
+export function queueWorkspaceReturn(text) {
+  if (isAccountDeletionPaused()) return;
+  pendingReturn = validMessage(text);
+}
 export function consumeWorkspaceReturn() {
   const text = pendingReturn;
   pendingReturn = null;
-  return text;
+  return isAccountDeletionPaused() ? null : text;
 }
 
 // Original, deliberately small English helper. These are alternatives, never

@@ -10,6 +10,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { safeParse } from '../utils/safeStorage';
+import { isAccountDeletionPaused, accountDataGeneration, trackAccountDataOperation } from './accountDeletionBarrier';
 
 const STORAGE_KEY = '@aac_pronunciations';
 const MAX_ENTRIES = 200;
@@ -34,13 +35,24 @@ function compile() {
     }));
 }
 
-export async function loadPronunciations({ reload = false } = {}) {
+export function loadPronunciations(options = {}) {
+  // Only the deletion reload may read while paused; screen loads keep the
+  // existing memory and cannot start a late corrupt-data backup.
+  if (isAccountDeletionPaused() && !options.reload) return Promise.resolve(entries);
+  return trackAccountDataOperation(runLoadPronunciations(options));
+}
+
+async function runLoadPronunciations({ reload = false } = {}) {
+  const generation = accountDataGeneration();
   if (loaded && !reload) return entries;
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    if (generation !== accountDataGeneration()) return entries;
     const parsed = await safeParse(STORAGE_KEY, raw, []);
+    if (generation !== accountDataGeneration()) return entries;
     entries = Array.isArray(parsed) ? parsed.filter(e => e && e.written && e.spoken) : [];
   } catch {
+    if (generation !== accountDataGeneration()) return entries;
     entries = [];
   }
   loaded = true;
@@ -57,6 +69,8 @@ export function getPronunciations() {
  * or the dictionary is full.
  */
 export async function setPronunciation(written, spoken) {
+  if (isAccountDeletionPaused()) return null;
+  const generation = accountDataGeneration();
   const w = typeof written === 'string' ? written.trim() : '';
   const s = typeof spoken === 'string' ? spoken.trim() : '';
   if (!w || !s) return null;
@@ -71,10 +85,11 @@ export async function setPronunciation(written, spoken) {
   }
   compile();
   await save();
-  return entries.find(e => e.written === w);
+  return generation === accountDataGeneration() ? entries.find(e => e.written === w) : null;
 }
 
 export async function removePronunciation(id) {
+  if (isAccountDeletionPaused()) return;
   entries = entries.filter(e => e.id !== id);
   compile();
   await save();
@@ -101,8 +116,9 @@ export function _resetPronunciationsForTests(list = []) {
 }
 
 async function save() {
+  if (isAccountDeletionPaused()) return;
   try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    await trackAccountDataOperation(AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(entries)));
   } catch (e) {
     console.warn('Failed to save pronunciations:', e);
   }

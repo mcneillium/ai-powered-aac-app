@@ -1,113 +1,103 @@
-# Data Safety Declaration Draft
+# Data Safety working draft
 
-For the Google Play Data Safety section.
+Reviewed 2026-10-04 against the release-readiness branch, starting at
+`8a04b4c8181883970b629b1935e96281fe5a8284`. This is a source-level inventory,
+not a submitted declaration. Recheck the final binary, its configuration and
+deployed services before completing Play Console. See `current-release-gates.md`.
 
-**Updated 2026-08-02** to accurately reflect what the app actually
-transmits. The previous draft claimed communication content and photos
-never left the device; that was not true of the shipped code and would
-have been a policy violation. Cloud AI transmission is disclosed below
-and is user-controllable in Settings ("Online suggestions").
+This replaces the August draft: local-only learning was incorrectly marked
+collected; account IDs and synced diagnostics were omitted; online suggestions
+were incorrectly described as enabled by default; retention, encryption at
+rest and complete deletion were asserted without operational evidence.
 
-## Data Collection Summary
+Google Play defines collection as transmission off the device. Local-only
+processing is outside that definition. Optional/ephemeral transmissions and
+SDK behaviour still require review in the form. Service-provider and
+user-initiated transfers can qualify for sharing exceptions; confirm the
+applicable relationship before selecting answers. [Official guidance][1]
 
-| Data Type | Collected | Shared | Purpose |
-|-----------|-----------|--------|---------|
-| Email address | Optional | No | Account creation and authentication |
-| Name | Optional | No | User profile display |
-| User interactions | Yes (local) | No | On-device AI personalisation |
-| App activity (word usage) | Yes (local) | No | Improve word predictions |
-| Sentence context (words in the current sentence, recent phrases) | Yes, when "Online suggestions" is enabled | Processed by Google Vertex AI on our behalf | Generate AI phrase suggestions |
-| Photos (user-initiated only) | Yes, when the user takes/picks a photo in Camera | Processed by Google Vertex AI and Hugging Face on our behalf | Image description, OCR, and phrase generation |
-| Crash logs | No | No | — |
-| Device identifiers | No | No | — |
-| Location | No | No | — |
-| Financial info | No | No | — |
+## Data flows
 
-## Detailed Responses
+| Feature / data | Local use | Off-device path | Declaration work |
+|---|---|---|---|
+| Boards, drafts, favourites, spoken history | On-device stores | No routine sync found; history can enter optional AI requests below | Local use alone is not collection |
+| Personal prediction/profile | Optional local words, pairs and counts | No learned-model upload found | Do not mark local learning collected solely because it is saved |
+| Account registration | Optional email/password account; name/role | Firebase Auth; `users/{uid}` stores email, name, role, creation timestamp | Email, name, UID and authentication handling; account management/functionality |
+| Settings | AsyncStorage primary | Signed-in `userSettings/{uid}` | Preferences/app activity; final serialized fields. AI/learning consent must remain device-only |
+| Custom vocabulary/requests | Labels, categories, IDs, timestamps, tombstones | Real-account `customVocab/{uid}`, `vocabRequests/{uid}` | User-created content; imported labels can sync after confirmation |
+| Diagnostics/activity | Bounded local queue | Signed-in `userLogs/{uid}`, `userSync/{uid}` | Activity/diagnostics and IDs; functionality/troubleshooting |
+| Online phrase suggestions | Local predictions remain available | Current words, up to three recent history texts, time-of-day label to Cloud Functions then Google Vertex AI | Communication content; optional functionality/personalisation |
+| Photo description/OCR | Selected camera/gallery preview | Base64 to Cloud Functions; description uses Hugging Face captioning and Vertex AI; OCR uses Vertex AI | Photos and content within them; optional functionality |
+| Tile photos/photo scenes | Private files, scene labels/points/phrases | No automatic cloud photo sync found | Separate from online Camera feature |
+| ARASAAC | Native downloaded board pictures work offline | Fixed image URLs to `static.arasaac.org`; explicit category/search text to `api.arasaac.org` and image requests | Search text may be personal; provider sees network metadata. Do not say nothing is sent |
+| Feedback | Offline queue | Text, optional name/email, role, timestamp at `feedback/{uid}` | User content/contact info/UID; optional developer communications |
+| JSON/PDF export | Private temporary cache | OS sharing to user-selected destination; labels/phrases and optional photos | Review user-initiated sharing exception; external copies remain |
 
-### Is any data collected or shared?
-Yes — the app collects data to provide its core functionality, and sends
-limited data to AI processing services when the user uses AI features.
+Accounts are optional for communication. Cloud-disabled APKs cannot verify
+cloud paths. Guests can explicitly choose network features; guest does not
+mean no networking. Earlier versions automatically created anonymous Firebase
+sessions at startup. The release candidate must create one only when needed
+for an explicitly chosen online feature.
 
-### Data collected
+## Disclosures to retain
 
-**1. Personal info — Email address**
-- Collected: Optional (only if user creates an account)
-- Purpose: App functionality (authentication)
-- Encrypted in transit: Yes (Firebase Auth uses HTTPS)
-- User can request deletion: Yes (in-app account deletion removes auth account and synced data)
+- Online phrases default **off** on new installs. Test saved-choice migration
+  and prevent remote settings from enabling consent on another device.
+  Requests carry Firebase ID tokens: omitting name/email from the generated
+  prompt does not make the request anonymous. Typed content can identify users.
+- Photo upload is a separate choice from online phrases. Camera permission
+  is not upload consent. Turning phrase suggestions off does not disable a
+  separately selected photo-processing feature.
+- Diagnostic fields include timestamps, level, session ID, account IDs,
+  counts, errors, platform and app version. The field whitelist does not
+  redact arbitrary text in `action`/`error`. Current source callers log login
+  events and login error codes, not sentence content; legacy queued records
+  still need review before making a claim about every uploaded record.
+- Vocabulary sync uploads meaningful personal labels. Photos are separate
+  from vocabulary sync, but can be intentionally included in shared exports.
 
-**2. Personal info — Name**
-- Collected: Optional (during signup)
-- Purpose: App functionality (profile display)
-- Encrypted in transit: Yes
-- User can request deletion: Yes
+## Retention, security and deletion
 
-**3. App activity — In-app interactions (local learning)**
-- Collected: Yes
-- Purpose: App functionality and personalisation
-- Storage: On-device only (AsyncStorage)
-- Learned patterns are NOT transmitted to any server
-- User can delete this data: Yes (Settings → Reset AI Data)
+`functions/index.js` shows no deliberate database persistence of AI images
+or prompts. This does not prove provider retention or Cloud Logging behaviour.
+Confirm deployed Vertex AI/Hugging Face configuration and processor terms
+before selecting ephemeral processing or promising no retention.
 
-**4. Communication context — AI suggestions (optional, on by default, user-controllable)**
-- When "Online suggestions" is enabled in Settings, the words in the
-  user's current sentence and up to 3 recently spoken phrases are sent
-  over HTTPS to our Cloud Functions backend, which forwards them to
-  Google Vertex AI (Gemini) to generate phrase suggestions.
-- No name, email, or account identifier is included in the AI prompt.
-  Requests are authenticated with a Firebase token for abuse prevention.
-- This content is used only to generate the suggestion response and is
-  not stored by the app's backend.
-- Turning off "Online suggestions" keeps all sentence content on-device.
+Source defines daily pruning of `userLogs` entries older than 30 days. Its
+deployment/success is unverified; it does not cover feedback, profile data,
+provider records or all server logs. Do not promise universal 30-day retention.
 
-**5. Photos — Camera features (explicit user action only)**
-- When the user takes or selects a photo in the Camera screen, the image
-  is sent over HTTPS to our Cloud Functions backend for processing by
-  Google Vertex AI (scene description / OCR) and Hugging Face
-  (captioning).
-- Photos are processed transiently to produce the response and are not
-  stored by the app's backend.
-- The camera is never accessed without an explicit user action.
+Service URLs use HTTPS; backend checks Firebase tokens and applies best-effort
+per-instance limits. Database rules restrict account paths to their owning
+UID; deployment/negative-access tests remain necessary. AsyncStorage is not
+an app-level encrypted vault. OS encryption/backup depends on device/build.
 
-**6. Feedback (optional)**
-- If the user submits feedback, the text (plus optional name/email they
-  type) is stored in Firebase under their user id.
+Local reset targets messages, words/photos, scenes, drafts, exports,
+pronunciations and learning. Learning reset is narrower. Account deletion
+must remove Auth and every database path, including feedback, and report
+partial failures honestly. Test delayed save/import/sync operations cannot
+recreate data. A signed-in local reset can be followed by vocabulary syncing
+back from the account; it is not cloud deletion. External files and OS
+backups are separate.
 
-### Data NOT collected
-- Precise or approximate location
-- Financial or payment information
-- Health or fitness data
-- Audio recordings
-- Files and documents
-- Calendar events
-- Contacts
-- Device identifiers (AAID, IMEI)
-- Browsing or search history
+Account creation requires an in-app deletion path and a working external
+request page identifying the app/developer and permitting requests without
+reinstalling. State actual completion expectations and retention exceptions.
+[Account deletion guidance][2]
 
-### Data shared with third parties
-Image and sentence-context data is processed by Google (Vertex AI) and
-Hugging Face acting as data processors for the AI features described
-above. No data is sold, and no data is shared for advertising or
-analytics purposes.
+## Before final submission
 
-### Data handling
-- Learned communication patterns (word frequencies, bigrams) stay on-device
-- Guest usage stays entirely local: settings, vocabulary, and logs are not synced for guests
-- Cloud sync of settings/vocabulary requires an account and only covers settings, custom vocabulary, and diagnostic logs (never sentence content)
-- Diagnostic logs synced for signed-in users contain event names only (no message content, no email addresses) and are auto-deleted after 30 days
-- Users can disable AI personalisation and online suggestions independently in Settings
-- Users can reset all learned data in Settings
-- Firebase Authentication data is handled by Google Firebase (see Firebase privacy policy)
+1. Record final binary configuration, SDKs, permissions and observed network
+   destinations using synthetic fixtures.
+2. Confirm categories, purposes, optionality, ephemeral status, sharing
+   exceptions and provider retention for each flow.
+3. Publish/verify accurate privacy and external deletion pages. A configured
+   URL is not evidence of a working page.
+4. Complete deletion failure/race checks and provider deletion process.
+5. Declare actual age groups. Child/Adult presentation and edit lock do not
+   establish age or parental consent. Review camera/authentication handling
+   and API/SDK eligibility for the chosen audience. [Families policy][3]
 
-### Security
-- Data encrypted in transit (HTTPS/TLS)
-- Local data stored via AsyncStorage (device-encrypted storage on Android)
-- AI endpoints require authentication and are rate-limited
-- Firebase Realtime Database uses per-user security rules (least privilege)
-
-### Data deletion
-- Users can reset AI personalisation data from Settings
-- In-app account deletion removes the auth account, all cloud-synced data (settings, vocabulary, logs, sync state), and local user data
-- Uninstalling the app removes all local data
-- Server-side logs are pruned automatically after 30 days
+[1]: https://support.google.com/googleplay/android-developer/answer/10787469?hl=en
+[2]: https://support.google.com/googleplay/android-developer/answer/13327111?hl=en
+[3]: https://support.google.com/googleplay/android-developer/answer/9893335?hl=en

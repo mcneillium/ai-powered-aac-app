@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, View, Text, TextInput, Button, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity, Image } from 'react-native';
+import { ScrollView, View, Text, TextInput, Button, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity, Image, Alert } from 'react-native';
 import { speak, buildSpeechOptions } from '../services/speechService';
 import { StatusBar } from 'expo-status-bar';
 import { searchPictograms } from '../services/arasaacService';
@@ -31,56 +31,49 @@ export default function EasySentenceBuilderScreen() {
   const [selectedCategory, setSelectedCategory] = useState('Everyday');
   const [wordSearch, setWordSearch] = useState('');
   const [suggestions, setSuggestions] = useState([]);
-  const [categoryImages, setCategoryImages] = useState({});
+  const [onlineQuery, setOnlineQuery] = useState(null);
 
   const categories = Object.keys(OFFLINE_CATEGORIES);
   const palette = getPalette(settings.theme, settings.boardLayout);
-  const [offlineMode, setOfflineMode] = useState(false);
+  const [offlineMode, setOfflineMode] = useState(true);
   // Learning follows the same explicit opt-in as the board.
   const aiEnabled = settings.personalLearning === true && settings.aiPersonalisationEnabled !== false;
 
+  // The local board is immediately usable. Typed words are sent to ARASAAC
+  // only after an explicit, informed request, never while the user is typing.
   useEffect(() => {
     let cancelled = false;
+    if (!onlineQuery) { setOfflineMode(true); setLoadingPictures(false); return undefined; }
     (async () => {
-      const reps = {};
-      for (let cat of categories) {
-        try {
-          const data = await searchPictograms('en', cat);
-          if (data?.length) reps[cat] = data[0];
-        } catch { /* offline — category renders as a text chip */ }
-      }
-      if (!cancelled) setCategoryImages(reps);
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Debounced, cancellable pictogram search: one in-flight request wins,
-  // stale responses are dropped so results always match the current input.
-  useEffect(() => {
-    let cancelled = false;
-    const timer = setTimeout(async () => {
       setLoadingPictures(true);
       try {
-        const pics = wordSearch ? await searchPictograms('en', wordSearch) : await searchPictograms('en', selectedCategory);
+        const pics = await searchPictograms('en', onlineQuery.term);
         if (cancelled) return;
-        if (wordSearch) setSearchResults(pics || []);
+        if (onlineQuery.search) setSearchResults(pics || []);
         else setCategoryPictures(pics || []);
-        setOfflineMode(false);
+        setOfflineMode(!Array.isArray(pics));
       } catch (e) {
         if (cancelled) return;
         // Fall back to offline word list — no disruptive alert
         setOfflineMode(true);
-        if (wordSearch) setSearchResults([]);
+        if (onlineQuery.search) setSearchResults([]);
         else setCategoryPictures([]);
-        if (wordSearch && aiEnabled) recordFailedSearch(wordSearch).catch(() => {});
+        if (onlineQuery.search && aiEnabled) recordFailedSearch(onlineQuery.term).catch(() => {});
       } finally {
         if (!cancelled) setLoadingPictures(false);
       }
-    }, wordSearch ? 300 : 0);
-    return () => { cancelled = true; clearTimeout(timer); };
+    })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategory, wordSearch]);
+  }, [onlineQuery]);
+
+  const requestPictures = () => {
+    const term = wordSearch.trim() || selectedCategory;
+    Alert.alert('Search pictures online?', `Sends “${term}” to ARASAAC to find pictures. Your local words remain available without this search.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Search online', onPress: () => setOnlineQuery({ term, search: !!wordSearch.trim() }) },
+    ]);
+  };
 
   // Same on-device engine as the board (synchronous, offline).
   useEffect(() => {
@@ -122,32 +115,12 @@ export default function EasySentenceBuilderScreen() {
 
   const renderCategory = ({ item }) => {
     const isSel = selectedCategory === item;
-    if (offlineMode) {
-      return (
-        <TouchableOpacity style={[styles.categoryChip, { backgroundColor: isSel ? palette.primary : palette.chipBg }]} onPress={() => { setWordSearch(''); setSelectedCategory(item); }} accessibilityRole="button" accessibilityState={{ selected: isSel }}>
-          <Text style={[styles.categoryChipText, { color: isSel ? palette.buttonText : palette.text }]}>{item}</Text>
-        </TouchableOpacity>
-      );
-    }
-    const rep = categoryImages[item];
-    const id = rep?.id ?? rep?._id;
-    const uri = id ? `https://static.arasaac.org/pictograms/${id}/${id}_500.png` : null;
+    const symbols = { Everyday: '🏠', Food: '🍽️', People: '👪', Actions: '🏃', Feelings: '🙂', Things: '🧸', Places: '📍' };
     return (
-      <TouchableOpacity
-        style={[styles.categoryCard, isSel && [styles.categorySelected, { borderColor: palette.primary }]]}
-        onPress={() => { setWordSearch(''); setSelectedCategory(item); }}
-        accessibilityRole="button"
-        accessibilityLabel={`${item} category`}
-        accessibilityState={{ selected: isSel }}
-      >
-        {uri ? (
-          <Image source={{ uri }} style={styles.categoryImage} accessibilityElementsHidden />
-        ) : (
-          <View style={[styles.categoryImage, styles.categoryImageFallback, { backgroundColor: palette.chipBg }]}>
-            <Text style={[styles.categoryFallbackText, { color: palette.text }]}>{item[0]}</Text>
-          </View>
-        )}
-        <Text style={[styles.categoryLabel, { color: palette.text }]}>{item}</Text>
+      <TouchableOpacity style={[styles.categoryChip, { backgroundColor: isSel ? palette.primary : palette.chipBg }]}
+        onPress={() => { setWordSearch(''); setSelectedCategory(item); setOnlineQuery(null); }}
+        accessibilityRole="button" accessibilityLabel={`${item} category`} accessibilityState={{ selected: isSel }}>
+        <Text style={[styles.categoryChipText, { color: isSel ? palette.buttonText : palette.text }]}>{symbols[item]} {item}</Text>
       </TouchableOpacity>
     );
   };
@@ -159,10 +132,11 @@ export default function EasySentenceBuilderScreen() {
       <View style={styles.speakButtonInline}><Button title="Speak" onPress={speakSentence} color={palette.primary}/></View>
       <Text style={[styles.label, { color: palette.text }]}>Categories</Text>
       <FlatList data={categories} horizontal keyExtractor={i => i} showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 12 }} contentContainerStyle={{ paddingVertical: 4 }} renderItem={renderCategory} />
-      <TextInput style={[styles.input, { borderColor: palette.inputBorder, color: palette.text }]} placeholder="Search any English word" placeholderTextColor={palette.textSecondary} value={wordSearch} onChangeText={setWordSearch}/>
+      <TextInput style={[styles.input, { borderColor: palette.inputBorder, color: palette.text }]} placeholder="Search local words" placeholderTextColor={palette.textSecondary} value={wordSearch} onChangeText={(value) => { setWordSearch(value); setOnlineQuery(null); }} accessibilityLabel="Search local words"/>
+      <Button title="Find pictures online" onPress={requestPictures} color={palette.primary} />
       {loadingPictures ? <ActivityIndicator/> : offlineMode ? (
         <View style={styles.offlineGrid}>
-          {(OFFLINE_CATEGORIES[selectedCategory] || []).map(word => (
+          {(wordSearch.trim() ? [...new Set(Object.values(OFFLINE_CATEGORIES).flat())].filter(word => word.toLowerCase().includes(wordSearch.trim().toLowerCase())) : OFFLINE_CATEGORIES[selectedCategory] || []).map(word => (
             <TouchableOpacity key={word} style={[styles.offlineWord, { backgroundColor: palette.chipBg, borderColor: palette.border }]} onPress={() => addWord(word)} accessibilityRole="button" accessibilityLabel={`Add ${word}`}>
               <Text style={[styles.offlineWordText, { color: palette.text }]}>{word}</Text>
             </TouchableOpacity>
@@ -200,8 +174,8 @@ const styles = StyleSheet.create({
   picImage: { width: 80, height: 80, borderRadius: 8 },
   emptyText: { textAlign: 'center', fontSize: 16 },
   offlineGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
-  offlineWord: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.sm, borderWidth: 1 },
+  offlineWord: { minHeight: 48, justifyContent: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.sm, borderWidth: 1 },
   offlineWordText: { fontSize: 15, fontWeight: '500' },
-  categoryChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.pill, marginRight: spacing.sm },
+  categoryChip: { minHeight: 48, justifyContent: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.pill, marginRight: spacing.sm },
   categoryChipText: { fontSize: 14, fontWeight: '600' },
 });

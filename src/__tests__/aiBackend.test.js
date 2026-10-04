@@ -1,6 +1,7 @@
 // Tests for the shared authenticated AI backend client.
 
 const mockGetIdToken = jest.fn();
+jest.mock('firebase/auth', () => ({ signInAnonymously: jest.fn() }));
 jest.mock('../../firebaseConfig', () => ({
   auth: {
     get currentUser() {
@@ -29,15 +30,10 @@ describe('callAIBackend', () => {
     expect(options.method).toBe('POST');
   });
 
-  test('still sends the request without a token when auth fails', async () => {
+  test('does not send personal content when authentication fails', async () => {
     mockGetIdToken.mockRejectedValue(new Error('no auth'));
-    fetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ ok: 1 }) });
-
-    const result = await callAIBackend(ENDPOINTS.caption, { image: 'x' }, 5000, 'test');
-
-    expect(result).toEqual({ ok: 1 });
-    const [, options] = fetch.mock.calls[0];
-    expect(options.headers.Authorization).toBeUndefined();
+    expect(await callAIBackend(ENDPOINTS.caption, { image: 'synthetic' }, 5000, 'test')).toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   test('returns null on non-2xx responses', async () => {

@@ -3,6 +3,7 @@
 // launch/export), or until the user deletes their personal data. Shared copies
 // outside Voice remain under the user's/recipient's control.
 import * as FileSystem from 'expo-file-system/legacy';
+import { isAccountDeletionPaused, accountDataGeneration, trackAccountDataOperation } from './accountDeletionBarrier';
 const directory = () => FileSystem.cacheDirectory ? `${FileSystem.cacheDirectory}voice-exports/` : null;
 const SAFE_NAME = /^export-[0-9]+-[a-z0-9]+\.(json|pdf)$/;
 let queue = Promise.resolve();
@@ -10,7 +11,7 @@ let generation = 0;
 const enqueue = (operation) => {
   const task = queue.catch(() => {}).then(operation);
   queue = task.catch(() => {});
-  return task;
+  return trackAccountDataOperation(task);
 };
 async function cleanExpired() {
   const dir = directory();
@@ -28,18 +29,25 @@ async function cleanExpired() {
 }
 export const cleanupExpiredExports = () => enqueue(cleanExpired);
 export function createPrivateExportFile(extension, writer) {
-  if (!['json', 'pdf'].includes(extension)) return Promise.reject(new Error('Unsupported export format.'));
+  if (isAccountDeletionPaused()) return Promise.reject(new Error('Export cancelled during account deletion.'));
+  const accountGeneration = accountDataGeneration();
   const started = generation;
+  const checkGeneration = () => {
+    if (isAccountDeletionPaused() || accountGeneration !== accountDataGeneration() || started !== generation) throw new Error('Export cancelled after deletion.');
+  };
+  if (!['json', 'pdf'].includes(extension)) return Promise.reject(new Error('Unsupported export format.'));
   return enqueue(async () => {
-    if (started !== generation) throw new Error('Export cancelled after deletion.');
+    checkGeneration();
     const dir = directory();
     if (!dir) throw new Error('Device storage is unavailable.');
     await cleanExpired();
+    checkGeneration();
     await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+    checkGeneration();
     const uri = `${dir}export-${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
     try {
       await writer(uri);
-      if (started !== generation) throw new Error('Export cancelled after deletion.');
+      checkGeneration();
       return uri;
     } catch (error) {
       await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});

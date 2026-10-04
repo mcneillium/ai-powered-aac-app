@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isAccountDeletionPaused, accountDataGeneration, trackAccountDataOperation } from './accountDeletionBarrier';
 
 export const SCENES_KEY = '@voice_communication_scenes_v1';
 export const MAX_PACK_CHARS = 1900000;
@@ -29,27 +30,37 @@ let epoch = 0;
 const deletionListeners = new Set();
 export const getScenesGeneration = () => epoch;
 export function subscribeScenesDeletion(listener) { deletionListeners.add(listener); return () => deletionListeners.delete(listener); }
-export async function loadScenes() {
+export function loadScenes() {
+  if (isAccountDeletionPaused()) return Promise.resolve([]);
+  return trackAccountDataOperation(readScenes());
+}
+async function readScenes() {
+  const accountGeneration = accountDataGeneration();
   await queue;
+  if (isAccountDeletionPaused() || accountGeneration !== accountDataGeneration()) return [];
   const raw = await AsyncStorage.getItem(SCENES_KEY);
+  if (isAccountDeletionPaused() || accountGeneration !== accountDataGeneration()) return [];
   return raw ? parseScenePack(raw).scenes : [];
 }
 export function saveScenes(scenes, expectedGeneration = epoch) {
+  if (isAccountDeletionPaused()) return Promise.reject(new Error('Scene save cancelled during account deletion.'));
+  const accountGeneration = accountDataGeneration();
   const raw = JSON.stringify(makeScenePack(scenes));
   const started = expectedGeneration;
-  const operation = queue.catch(() => {}).then(() => {
-    if (started !== epoch) throw new Error('Scene save cancelled after deletion.');
-    return AsyncStorage.setItem(SCENES_KEY, raw);
+  const operation = queue.catch(() => {}).then(async () => {
+    if (isAccountDeletionPaused() || accountGeneration !== accountDataGeneration() || started !== epoch) throw new Error('Scene save cancelled after deletion.');
+    await AsyncStorage.setItem(SCENES_KEY, raw);
+    if (isAccountDeletionPaused() || accountGeneration !== accountDataGeneration() || started !== epoch) throw new Error('Scene save cancelled after deletion.');
   });
   queue = operation.catch(() => {});
-  return operation;
+  return trackAccountDataOperation(operation);
 }
 export function clearCommunicationScenes() {
   epoch += 1;
   deletionListeners.forEach((listener) => { try { listener(epoch); } catch { /* A subscriber must not block deletion. */ } });
   const operation = queue.catch(() => {}).then(() => AsyncStorage.removeItem(SCENES_KEY));
   queue = operation.catch(() => {});
-  return operation;
+  return trackAccountDataOperation(operation);
 }
 // Text companion for printing through another app; no claim of OBF compatibility.
 export function scenePrintText(scenes) {

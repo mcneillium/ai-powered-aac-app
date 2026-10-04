@@ -49,7 +49,7 @@ export default function MeScreen() {
         <Text style={[type.title, { color: c.ink }]}>{account ? (account.email || 'Signed in') : 'Using Voice without an account'}</Text>
         <Text style={[type.body, { color: c.inkSoft, marginTop: 4, marginBottom: space.sm }]}>
           {account
-            ? 'Settings (including your learning and online-suggestion choices) and your own words sync to your account. Photos and learning stay on this phone, apart from the phone\'s own backup if it is turned on.'
+            ? 'Presentation settings and your own words sync to your account. Learning and online-suggestion choices apply only on this device. Photos and learning stay on this phone, apart from the phone\'s own backup if it is turned on.'
             : 'Everything works on this phone. An account is only needed to sync between devices.'}
         </Text>
         {!cloud ? (

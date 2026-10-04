@@ -4,6 +4,8 @@
 // the backend rejects unauthenticated calls to protect the AI budget.
 
 import { auth } from '../../firebaseConfig';
+import { signInAnonymously } from 'firebase/auth';
+import { isAccountDeletionPaused } from './accountDeletionBarrier';
 
 const FUNCTIONS_BASE =
   process.env.EXPO_PUBLIC_FUNCTIONS_BASE_URL ||
@@ -16,9 +18,16 @@ export const ENDPOINTS = {
   ocrToAAC: `${FUNCTIONS_BASE}/ocrToAACPhrases`,
 };
 
+let guestSignIn = null;
 async function getIdToken() {
   try {
-    return (await auth?.currentUser?.getIdToken()) || null;
+    if (isAccountDeletionPaused()) return null;
+    let user = auth?.currentUser;
+    if (auth && !user) {
+      if (!guestSignIn) guestSignIn = signInAnonymously(auth).finally(() => { guestSignIn = null; });
+      user = (await guestSignIn)?.user || auth.currentUser;
+    }
+    return (await user?.getIdToken()) || null;
   } catch {
     return null;
   }
@@ -34,6 +43,9 @@ export async function callAIBackend(endpoint, body, timeoutMs = 10000, label = '
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const token = await getIdToken();
+    // The backend requires authentication. A failed guest sign-in must not
+    // send personal sentences/photos in a request that it will reject.
+    if (!token || isAccountDeletionPaused()) return null;
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -32,23 +32,6 @@ export default function CombinedImageScreen() {
 
   const palette = getPalette(settings.theme, settings.boardLayout);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        await requestPerm();
-        // No media-library permission is requested: launchImageLibraryAsync
-        // uses the system picker, which needs none (expo-image-picker 17
-        // checks no permission for it on Android). Asking would have shown a
-        // storage prompt on Android 12 and older for nothing; the storage
-        // permissions are now blocked in app.json.
-        // Camera denial is handled at the point of use (openCamera).
-      } catch (e) {
-        console.warn('[Camera] permission request failed:', e.message);
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const speakPhrase = (text) => {
     speak(text, buildSpeechOptions(settings));
   };
@@ -57,7 +40,7 @@ export default function CombinedImageScreen() {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.5 });
       if (!res.canceled) {
-        handleImage(res.assets[0].uri);
+        confirmImageHelp(res.assets[0].uri);
       }
     } catch (e) {
       console.warn('[Camera] image pick failed:', e.message);
@@ -70,7 +53,7 @@ export default function CombinedImageScreen() {
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.5 });
       setOpenCam(false);
-      handleImage(photo.uri);
+      confirmImageHelp(photo.uri);
     } catch (e) {
       console.warn('[Camera] takePicture failed:', e.message);
       setOpenCam(false);
@@ -98,6 +81,16 @@ export default function CombinedImageScreen() {
       return;
     }
     setOpenCam(true);
+  };
+
+  const confirmImageHelp = (uri) => {
+    setSelected({ uri, name: 'Photo selected' });
+    setAacPhrases(null);
+    setOcrResult(null);
+    Alert.alert('Use online image help?', 'Sends this photo to Voice’s online service, Google Vertex AI and/or Hugging Face to describe it or read its text. You can keep the photo on screen without sending it.', [
+      { text: 'Keep on screen', style: 'cancel' },
+      { text: 'Send photo', onPress: () => handleImage(uri) },
+    ]);
   };
 
   const handleImage = async (uri) => {
@@ -158,10 +151,8 @@ export default function CombinedImageScreen() {
 
     if (summary.length > 0) {
       setSelected({ uri, name: summary[0] });
-      speakPhrase(summary[0]);
     } else if (caption) {
       setSelected({ uri, name: caption });
-      speakPhrase(caption);
     } else if (hasAny) {
       setSelected({ uri, name: 'Here is what you can say about this:' });
     } else {

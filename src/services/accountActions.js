@@ -8,6 +8,9 @@ import { signOut, deleteUser } from 'firebase/auth';
 import { ref, remove } from 'firebase/database';
 import { auth as cloudAuth, db as cloudDb } from '../../firebaseConfig';
 import { deleteLocalPersonalData } from './localData';
+import { beginAccountDeletion } from './accountDeletionBarrier';
+
+let deletionInProgress = false;
 
 export async function logOut() {
   try {
@@ -27,33 +30,28 @@ export function confirmDeleteAccount() {
         text: 'Delete Account',
         style: 'destructive',
         onPress: async () => {
+          if (deletionInProgress) return;
+          deletionInProgress = true;
           try {
             const currentUser = cloudAuth?.currentUser;
             if (!currentUser) return;
             const uid = currentUser.uid;
 
-            // Delete all user data from Firebase
-            try {
-              const db = cloudDb;
-              await Promise.all([
-                remove(ref(db, `users/${uid}`)),
-                remove(ref(db, `userSettings/${uid}`)),
-                remove(ref(db, `userLogs/${uid}`)),
-                remove(ref(db, `userSync/${uid}`)),
-                remove(ref(db, `customVocab/${uid}`)),
-                remove(ref(db, `vocabRequests/${uid}`)),
-              ]);
-            } catch (dbErr) {
-              console.warn('Could not remove some user data:', dbErr);
+            await beginAccountDeletion();
+            if (!cloudDb) throw new Error('Account data is unavailable.');
+            // Wait for every removal even if one fails. Keep Auth available
+            // for an authenticated retry instead of leaving orphaned data.
+            const results = await Promise.allSettled([
+              'users', 'userSettings', 'userLogs', 'userSync',
+              'customVocab', 'vocabRequests', 'feedback',
+            ].map(path => Promise.resolve().then(() => remove(ref(cloudDb, `${path}/${uid}`)))));
+            if (results.some(result => result.status === 'rejected')) {
+              throw new Error('Account data removal was incomplete.');
             }
 
             // Clear all personal data on this device, including Voice 2
             // stores (learned prediction data, tile photos) and settings.
-            try {
-              await deleteLocalPersonalData({ includeSettings: true });
-            } catch (localErr) {
-              console.warn('Could not clear some local data:', localErr);
-            }
+            await deleteLocalPersonalData({ includeSettings: true });
 
             // Delete auth account
             await deleteUser(currentUser);
@@ -62,11 +60,13 @@ export function confirmDeleteAccount() {
             if (error.code === 'auth/requires-recent-login') {
               Alert.alert(
                 'Re-authentication Required',
-                'For security, please log out and log back in, then try deleting again.'
+                'Some data may already have been removed. For security, please log out and log back in, then try deleting again.'
               );
             } else {
-              Alert.alert('Error', 'Could not delete account. Please try again.');
+              Alert.alert('Deletion Incomplete', 'Your account has not been deleted. Some data may already have been removed. Please try deleting again. Account sync is paused until you log out and log back in.');
             }
+          } finally {
+            deletionInProgress = false;
           }
         },
       },

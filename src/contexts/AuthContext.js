@@ -3,9 +3,10 @@
 // Role is read from Realtime Database at /users/{uid}/role on auth change.
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 import { ref, get } from 'firebase/database';
 import { auth, db } from '../../firebaseConfig';
+import { resumeAccountDataSync } from '../services/accountDeletionBarrier';
 
 const AuthContext = createContext();
 
@@ -21,9 +22,14 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return undefined;
     }
+    let previousUid;
     const unsubscribe = onAuthStateChanged(
       auth,
       async (u) => {
+        // The initial observation must not invalidate concurrent local settings
+        // loads. Only an actual session transition resumes a paused deletion.
+        if (previousUid !== undefined && previousUid !== (u?.uid || null)) resumeAccountDataSync();
+        previousUid = u?.uid || null;
         setUser(u);
         if (u) {
           if (u.isAnonymous) {
@@ -39,11 +45,8 @@ export function AuthProvider({ children }) {
           }
         } else {
           setRole(null);
-          // Guests get an anonymous Firebase session so the AI Cloud Function
-          // endpoints (which require an ID token) still work without an
-          // account. Fails quietly offline or if the provider is disabled —
-          // the app remains fully usable, only cloud AI features are gated.
-          signInAnonymously(auth).catch(() => {});
+          // A local guest needs no Firebase identity. Explicit cloud feature
+          // requests obtain their guest token at the point of use instead.
         }
         setLoading(false);
       },

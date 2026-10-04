@@ -10,30 +10,39 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { useNetwork } from '../contexts/NetworkContext';
 import { getPalette } from '../theme';
+import { isAccountDeletionPaused, accountDataGeneration, trackAccountDataOperation } from '../services/accountDeletionBarrier';
 
 const FEEDBACK_QUEUE_KEY = '@aac_feedback_queue';
 
 async function sendEntry(entry) {
   // Without cloud services, feedback stays queued on the device.
   const uid = cloudAuth?.currentUser?.uid;
-  if (!uid || !cloudDb) throw new Error('Not signed in');
+  if (isAccountDeletionPaused() || !uid || !cloudDb) throw new Error('Not signed in');
   await push(ref(cloudDb, `feedback/${uid}`), entry);
 }
 
 // Send any feedback saved while offline. Entries that fail stay queued.
-async function flushFeedbackQueue() {
+function flushFeedbackQueue() {
+  if (isAccountDeletionPaused()) return Promise.resolve();
+  return trackAccountDataOperation(runFlushFeedbackQueue());
+}
+
+async function runFlushFeedbackQueue() {
+  const generation = accountDataGeneration();
   const stored = await AsyncStorage.getItem(FEEDBACK_QUEUE_KEY);
   const queue = stored ? JSON.parse(stored) : [];
   if (queue.length === 0) return;
 
   const remaining = [];
   for (const entry of queue) {
+    if (isAccountDeletionPaused() || generation !== accountDataGeneration()) return;
     try {
       await sendEntry(entry);
     } catch {
       remaining.push(entry);
     }
   }
+  if (isAccountDeletionPaused() || generation !== accountDataGeneration()) return;
   await AsyncStorage.setItem(FEEDBACK_QUEUE_KEY, JSON.stringify(remaining));
 }
 
@@ -62,7 +71,17 @@ export default function FeedbackScreen() {
     );
   }
 
-  const submitFeedback = async () => {
+  const submitFeedback = () => {
+    if (isAccountDeletionPaused()) {
+      Alert.alert('Account Sync Paused', 'Please finish deleting your account, or log out and log back in, before submitting feedback.');
+      return Promise.resolve();
+    }
+    return trackAccountDataOperation(runSubmitFeedback());
+  };
+
+  const runSubmitFeedback = async () => {
+    const generation = accountDataGeneration();
+    const canContinue = () => !isAccountDeletionPaused() && generation === accountDataGeneration();
     if (!feedback.trim()) {
       return Alert.alert('Validation', 'Feedback cannot be empty');
     }
@@ -84,6 +103,7 @@ export default function FeedbackScreen() {
         // Queue for later sync
         const stored = await AsyncStorage.getItem(FEEDBACK_QUEUE_KEY);
         const queue = stored ? JSON.parse(stored) : [];
+        if (!canContinue()) return;
         queue.push(entry);
         await AsyncStorage.setItem(FEEDBACK_QUEUE_KEY, JSON.stringify(queue));
         Alert.alert('Saved Locally', 'Your feedback will be sent when you reconnect.');
@@ -91,9 +111,11 @@ export default function FeedbackScreen() {
       setFeedback('');
     } catch (e) {
       // Fallback to local queue on any error
+      if (!canContinue()) return;
       try {
         const stored = await AsyncStorage.getItem(FEEDBACK_QUEUE_KEY);
         const queue = stored ? JSON.parse(stored) : [];
+        if (!canContinue()) return;
         queue.push(entry);
         await AsyncStorage.setItem(FEEDBACK_QUEUE_KEY, JSON.stringify(queue));
         Alert.alert('Saved Locally', 'Your feedback will be sent when you reconnect.');

@@ -3,7 +3,9 @@
 
 // aiBackend reads the Firebase auth instance for ID tokens; stub it so the
 // suite doesn't initialise the real Firebase SDK.
-jest.mock('../../firebaseConfig', () => ({ auth: { currentUser: null } }));
+jest.mock('../../firebaseConfig', () => ({ auth: { currentUser: { getIdToken: jest.fn(async () => 'synthetic-token') } } }));
+
+jest.mock('firebase/auth', () => ({ signInAnonymously: jest.fn() }));
 
 import { getAACPhraseSuggestions, getImageAACPhrases } from '../services/vertexAISuggestions';
 
