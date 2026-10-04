@@ -26,8 +26,11 @@ jest.mock('firebase/database', () => ({
   serverTimestamp: jest.fn(() => 'SERVER_TIMESTAMP'),
 }));
 
+// The logger reads the signed-in user from firebaseConfig (null when cloud is
+// not configured), so the sync tests need a signed-in, non-anonymous user here.
 jest.mock('../../firebaseConfig', () => ({
   db: {},
+  auth: { currentUser: { uid: 'test-user', isAnonymous: false } },
 }));
 
 jest.mock('@react-native-community/netinfo', () => ({
