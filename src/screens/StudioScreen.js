@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { deleteLearnedData } from '../services/localData';
 import { useSettings } from '../contexts/SettingsContext';
 import { MODE_DESCRIPTIONS } from '../contexts/experience';
 import { usePaper } from '../design/usePaper';
@@ -26,7 +27,7 @@ import {
 } from '../services/customVocabStore';
 import { saveTilePhoto, removeTilePhoto, getTilePhoto } from '../services/tilePhotoStore';
 import { searchVocabulary } from '../data/coreVocabulary';
-import { getLearningStats, resetLearning, setLearningEnabled } from '../services/suggestionEngine';
+import { getLearningStats, setLearningEnabled } from '../services/suggestionEngine';
 
 const CATEGORIES = [
   { value: 'noun', label: 'Thing' },
@@ -126,7 +127,7 @@ export default function StudioScreen() {
   const confirmReset = () => {
     Alert.alert('Delete what Voice has learned?', 'Suggestions go back to the starting set. Your words, favourites and history are not affected.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await resetLearning(); setStats(getLearningStats()); } },
+      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteLearnedData(); setStats(getLearningStats()); } },
     ]);
   };
 

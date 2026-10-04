@@ -11,7 +11,8 @@ import { loadSentenceHistory } from './sentenceHistoryStore';
 import { loadCustomVocab } from './customVocabStore';
 import { loadPronunciations } from './pronunciationStore';
 import { loadTilePhotos, removeAllTilePhotos } from './tilePhotoStore';
-import { loadAIProfile } from './aiProfileStore';
+import { loadAIProfile, resetAIProfile } from './aiProfileStore';
+import { CORRUPT_SUFFIX } from '../utils/safeStorage';
 import { DRAFT_KEY } from './sentenceDraft';
 
 /** Messages, words and what was learned from them. */
@@ -41,13 +42,24 @@ export const SETTINGS_KEYS = ['@aac_settings', 'currentSessionId', 'lastActivity
  * unless includeSettings is true. Stores are reloaded so open screens see
  * the empty state.
  */
+/**
+ * "Delete what Voice has learned": the prediction engine's personal layer
+ * and the older usage profile (word counts, pairs, phrases) that Insights
+ * reads. Words, favourites and history are not touched.
+ */
+export async function deleteLearnedData() {
+  await Promise.all([resetLearning(), resetAIProfile()].map((p) => Promise.resolve(p).catch(() => {})));
+}
+
 export async function deleteLocalPersonalData({ includeSettings = false } = {}) {
   // Every tile photo, not only those of words still in the list: a word
   // removed elsewhere can leave its photo behind.
   await removeAllTilePhotos().catch(() => {});
   await resetLearning().catch(() => {});
   const keys = includeSettings ? [...PERSONAL_KEYS, ...SETTINGS_KEYS] : PERSONAL_KEYS;
-  await AsyncStorage.multiRemove(keys).catch(() => {});
+  // Also the backups safeStorage keeps of unreadable data: they hold the
+  // same personal content.
+  await AsyncStorage.multiRemove([...keys, ...keys.map((k) => `${k}${CORRUPT_SUFFIX}`)]).catch(() => {});
   await Promise.all([
     loadFavourites({ reload: true }), loadSentenceHistory({ reload: true }),
     loadCustomVocab({ reload: true }), loadPronunciations({ reload: true }),

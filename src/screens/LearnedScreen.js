@@ -7,13 +7,14 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { ScrollView, Text, View, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { deleteLearnedData } from '../services/localData';
 import { useSettings } from '../contexts/SettingsContext';
 import { usePaper } from '../design/usePaper';
 import { Card, ListRow, ActionButton, EmptyState } from '../design/components';
 import { space, type, touch } from '../design/tokens';
 import {
   getLearnedWords, forgetLearnedWord, getDismissedSuggestions, undismissSuggestion,
-  getLearningStats, resetLearning, subscribePrediction,
+  getLearningStats, subscribePrediction,
 } from '../services/suggestionEngine';
 import { BOS } from '../services/prediction/tokenize';
 
@@ -41,7 +42,7 @@ export default function LearnedScreen() {
       'Suggestions go back to the built-in ones. Your words, messages and settings are not touched. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: async () => { await resetLearning(); refresh(); } },
+        { text: 'Delete', style: 'destructive', onPress: async () => { await deleteLearnedData(); refresh(); } },
       ]
     );
   };

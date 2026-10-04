@@ -162,6 +162,10 @@ export function SettingsProvider({ children }) {
         const stored = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
         const parsed = await safeParse(SETTINGS_STORAGE_KEY, stored, null);
         const hasStored = !!(parsed && typeof parsed === 'object');
+        // Settings that exist but cannot be read (backed up by safeParse)
+        // belong to an existing user: never treat them as a new install or
+        // re-decide their learning choice.
+        const unreadable = stored != null && !hasStored;
         // Built in a local copy: a render while this is still reading (for
         // example the signed-in user arriving) resets latestSettings to the
         // rendered defaults, and those were then saved over the user's
@@ -172,7 +176,7 @@ export function SettingsProvider({ children }) {
         }
         // Existing installs keep the familiar board until they opt in.
         const launched = await AsyncStorage.getItem('hasLaunched').catch(() => null);
-        const migration = migrateExperience(hasStored ? parsed : null, hasStored || launched === 'true');
+        const migration = migrateExperience(hasStored ? parsed : null, hasStored || unreadable || launched === 'true');
         if (migration) {
           loadedSettings = {
             ...loadedSettings,
@@ -186,7 +190,7 @@ export function SettingsProvider({ children }) {
         const legacyRaw = await AsyncStorage.getItem(LEGACY_PROFILE_KEY).catch(() => null);
         let legacy = null;
         try { legacy = legacyRaw ? JSON.parse(legacyRaw) : null; } catch { legacy = null; }
-        const learning = migrateLearning(hasStored ? parsed : null, hasLegacyLearning(legacy));
+        const learning = unreadable ? null : migrateLearning(hasStored ? parsed : null, hasLegacyLearning(legacy));
         if (learning) {
           loadedSettings = { ...loadedSettings, ...learning };
           AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(loadedSettings)).catch(() => {});
