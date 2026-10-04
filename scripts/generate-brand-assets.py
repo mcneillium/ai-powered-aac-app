@@ -27,8 +27,8 @@ def render(source, destination, width, height, opaque=False):
     with Image.open(destination) as original:
         image = original.convert('RGB' if opaque else 'RGBA')
     metadata = PngImagePlugin.PngInfo()
-    metadata.add_text('Description', 'Voice Flow identity. Speech-bubble geometry adapted from Lucide message-circle; custom V and composition for Voice.')
-    metadata.add_text('Copyright', (BRAND / 'licenses' / 'LUCIDE-LICENSE.txt').read_text())
+    metadata.add_text('Description', 'Voice Wave identity. Rounded waveform adapted from Lucide audio-lines; soft Nunito 600 outlined lettering.')
+    metadata.add_text('Copyright', (BRAND / 'licenses' / 'LUCIDE-LICENSE.txt').read_text() + '\n' + (BRAND / 'licenses' / 'NUNITO-OFL.txt').read_text())
     image.save(destination, pnginfo=metadata)
     print(destination.relative_to(ROOT))
 

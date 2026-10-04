@@ -14,8 +14,8 @@ const CREDITS = [
   {
     id: 'voice-brand',
     title: 'Voice identity',
-    body: 'Voice’s speech-bubble logo adapts Lucide’s open-source message-circle SVG, with a custom V, colours and composition. The wordmark uses outlined DejaVu Sans Bold lettering. Their full notices are available below.',
-    link: { label: 'Lucide icon source', url: 'https://github.com/lucide-icons/lucide/blob/95f5ecacad69025777c76d9458e6dec9a17fafff/icons/message-circle.svg' },
+    body: 'Voice’s rounded waveform adapts Lucide’s open-source audio-lines SVG. The softer wordmark uses outlined Nunito lettering. Their full notices are available below.',
+    link: { label: 'Lucide icon source', url: 'https://github.com/lucide-icons/lucide/blob/27c0a136cdced32c9e2ba1e969a27dbca42a9d3f/icons/audio-lines.svg' },
   },
   {
     id: 'arasaac',

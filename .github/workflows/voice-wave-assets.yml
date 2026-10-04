@@ -1,0 +1,107 @@
+name: Render Voice waveform assets
+
+on:
+  push:
+    branches: [codex/voice-brand-refresh]
+    paths:
+      - scripts/create-wave-masters.py
+      - scripts/generate-brand-assets.py
+      - assets/branding/licenses/NUNITO-OFL.txt
+      - .github/workflows/voice-wave-assets.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: voice-wave-assets
+  cancel-in-progress: false
+
+jobs:
+  render:
+    if: github.ref == 'refs/heads/codex/voice-brand-refresh' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/voice-brand-refresh
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install artwork tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq inkscape
+          python -m pip install Pillow==11.3.0 fonttools==4.60.1
+      - name: Fetch pinned build-time font and create outlines
+        run: |
+          curl --fail --location --retry 2 'https://raw.githubusercontent.com/google/fonts/604936664fd62c14271209b51f98e7f495dd1a3e/ofl/nunito/Nunito%5Bwght%5D.ttf' --output "$RUNNER_TEMP/nunito.ttf"
+          python scripts/create-wave-masters.py "$RUNNER_TEMP/nunito.ttf"
+          python scripts/generate-brand-assets.py
+      - name: Validate artwork
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import xml.etree.ElementTree as ET
+          import json, math
+          config = json.loads(Path('app.json').read_text())['expo']
+          paths = [config['icon'], config['splash']['image'], config['web']['favicon']]
+          paths += [config['android']['adaptiveIcon'][k] for k in ('foregroundImage', 'backgroundImage', 'monochromeImage')]
+          assert all(Path(p).is_file() for p in paths)
+          for p in Path('assets/branding').rglob('*.svg'):
+              tags = {e.tag.split('}')[-1] for e in ET.parse(p).iter()}
+              assert not tags & {'script', 'image', 'text', 'foreignObject'}, p
+          for filename in ['assets/adaptive-icon.png', 'assets/adaptive-icon-monochrome.png']:
+              image = Image.open(filename).convert('RGBA')
+              assert image.size == (1024, 1024)
+              radius = max(math.hypot(index % 1024 - 511.5, index // 1024 - 511.5) for index, rgba in enumerate(image.getdata()) if rgba[3])
+              assert radius < 1024 * 66 / 108 / 2, (filename, radius)
+              print(filename, 'safe-circle radius:', round(radius, 2))
+          for filename, size in [('assets/icon.png', (1024,1024)), ('assets/branding/logo/icon-512.png', (512,512)), ('assets/favicon.png', (48,48)), ('assets/branding/google-play/feature-graphic/feature-graphic-1024x500.png', (1024,500))]:
+              image = Image.open(filename)
+              assert image.size == size and image.mode == 'RGB', filename
+              assert 'Nunito' in image.info['Copyright'] and 'Lucide' in image.info['Copyright']
+          print('SVG closure, dimensions, opacity, metadata and adaptive safety passed.')
+          PY
+      - name: Check app integration
+        run: |
+          npm ci --legacy-peer-deps
+          npm run lint
+          npm test -- --runInBand
+          npx expo config --type public > "$RUNNER_TEMP/voice-public-config.txt"
+          npx expo export --platform android --output-dir "$RUNNER_TEMP/voice-android-export"
+      - name: Commit only rendered artwork to the draft branch
+        run: |
+          git diff --check
+          python - <<'PY'
+          import subprocess
+          paths = subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines()
+          allowed = {'assets/icon.png', 'assets/favicon.png', 'assets/splash-icon.png', 'assets/adaptive-icon.png', 'assets/adaptive-icon-background.png', 'assets/adaptive-icon-monochrome.png'}
+          for path in paths:
+              if path not in allowed and not path.startswith(('assets/branding/logo/', 'assets/branding/splash/', 'assets/branding/google-play/feature-graphic/')):
+                  raise SystemExit('Unexpected generated change: ' + path)
+          PY
+          git add -- assets/icon.png assets/favicon.png assets/splash-icon.png assets/adaptive-icon.png assets/adaptive-icon-background.png assets/adaptive-icon-monochrome.png assets/branding/logo assets/branding/splash assets/branding/google-play/feature-graphic
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Render Voice waveform identity with soft Nunito lettering'
+            git push origin HEAD:codex/voice-brand-refresh
+          fi
+          git rev-parse HEAD > "$RUNNER_TEMP/voice-wave-source.txt"
+      - name: Upload revised brand assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: Voice-Wave-Brand-Kit
+          path: |
+            assets/branding/logo/
+            assets/branding/splash/
+            assets/branding/google-play/feature-graphic/
+            assets/branding/licenses/
+            assets/branding/sources/
+            assets/branding/BRAND-GUIDE.md
+          retention-days: 30
