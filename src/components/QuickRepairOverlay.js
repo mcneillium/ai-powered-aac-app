@@ -80,7 +80,7 @@ export default function QuickRepairOverlay() {
   }, []);
   const [scanFocusId, setScanFocusId] = useState(null);
   const { settings } = useSettings();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
   const insets = useSafeAreaInsets();
   // Tab bar height = 60 + insets.bottom. FAB sits 20px above that.
   const fabBottom = 60 + insets.bottom + 20;

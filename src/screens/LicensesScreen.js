@@ -17,12 +17,11 @@ const CREDITS = [
     link: { label: 'ARASAAC terms of use', url: 'https://arasaac.org/terms-of-use' },
   },
   {
-    id: 'childes',
-    title: 'Word prediction vocabulary',
-    // Provenance is inferred (CHILDES transcription codes in the vocabulary
-    // file), not yet confirmed — see docs/legal/licensing-review.md.
-    body: 'The on-device word prediction vocabulary appears to be derived from child-language transcripts in the CHILDES database (TalkBank); its exact source is being confirmed. CHILDES data is shared under the Creative Commons BY-NC-SA 3.0 licence. MacWhinney, B. (2000). The CHILDES Project: Tools for analyzing talk. 3rd Edition. Mahwah, NJ: Lawrence Erlbaum Associates.',
-    link: { label: 'TalkBank data rules', url: 'https://talkbank.org/0share/rules.html' },
+    id: 'prediction',
+    title: 'Word prediction',
+    // Since Voice 2 the app ships no third-party corpus or model for
+    // prediction (the earlier TensorFlow model is no longer included).
+    body: 'Word suggestions come from an on-device model built from everyday sentences written for Voice, released with the app under the 0BSD licence. If you turn on learning, it also learns from messages you speak, on this device only.',
   },
   {
     id: 'icons',
@@ -45,7 +44,7 @@ function licenceTextsFor(pkg) {
 
 export default function LicensesScreen() {
   const { settings } = useSettings();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
   const [open, setOpen] = useState(null);
   // Icon fonts first (separate works with their own notices), then packages.
   const data = useMemo(

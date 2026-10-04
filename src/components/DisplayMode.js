@@ -23,7 +23,7 @@ const { width: SCREEN_W } = Dimensions.get('window');
 
 export default function DisplayMode({ visible, onClose, text, mode = 'display' }) {
   const { settings } = useSettings();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
 
   if (!visible) return null;
 

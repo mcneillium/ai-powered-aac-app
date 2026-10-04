@@ -18,7 +18,7 @@ import { t } from '../i18n/strings';
 
 export default function WordFinder({ visible, onClose, onAddWord, onShowPage, onNoResults }) {
   const { settings } = useSettings();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
   const [query, setQuery] = useState('');
 
   useEffect(() => {

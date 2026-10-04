@@ -12,7 +12,7 @@ import { getPalette, radii, spacing } from '../theme';
 
 export default function CloudUnavailableNotice({ feature = 'Accounts and sync' }) {
   const { settings } = useSettings();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
   if (isFirebaseAvailable()) return null;
 
   return (

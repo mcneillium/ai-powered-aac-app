@@ -32,6 +32,7 @@ export const contextPacks = {
     label: 'School',
     icon: 'school-outline',
     color: '#4CAF50',
+    audience: 'child',
     phrases: [
       { id: 's1',  label: "I don't understand", category: 'repair' },
       { id: 's2',  label: 'Can you repeat that?', category: 'repair' },
@@ -147,6 +148,81 @@ export const contextPacks = {
       { id: 'r12', label: "I'm OK now", category: 'social' },
     ],
   },
+  university: {
+    id: 'university',
+    label: 'University',
+    icon: 'library-outline',
+    color: '#3949AB',
+    audience: 'adult',
+    phrases: [
+      { id: 'u1',  label: 'Can I have the slides after the lecture?', category: 'request' },
+      { id: 'u2',  label: 'I use this app to communicate', category: 'social' },
+      { id: 'u3',  label: 'Please give me a moment to type my answer', category: 'repair' },
+      { id: 'u4',  label: 'I have a question', category: 'social' },
+      { id: 'u5',  label: 'Can you email me that?', category: 'request' },
+      { id: 'u6',  label: 'I need extra time for this', category: 'request' },
+      { id: 'u7',  label: 'Can we work on this together?', category: 'request' },
+      { id: 'u8',  label: 'I agree', category: 'social' },
+      { id: 'u9',  label: 'I see it differently', category: 'social' },
+      { id: 'u10', label: 'Where is the room?', category: 'request' },
+    ],
+  },
+  work: {
+    id: 'work',
+    label: 'Work',
+    icon: 'briefcase-outline',
+    color: '#00695C',
+    audience: 'adult',
+    phrases: [
+      { id: 'w1',  label: 'Good morning', category: 'social' },
+      { id: 'w2',  label: 'I will finish this today', category: 'social' },
+      { id: 'w3',  label: 'Can you send me the details?', category: 'request' },
+      { id: 'w4',  label: 'I need a few minutes to reply', category: 'repair' },
+      { id: 'w5',  label: 'Can we talk about this later?', category: 'request' },
+      { id: 'w6',  label: 'I have finished', category: 'social' },
+      { id: 'w7',  label: "I don't agree", category: 'social' },
+      { id: 'w8',  label: 'Can you put that in writing?', category: 'request' },
+      { id: 'w9',  label: 'I am taking a break', category: 'regulation' },
+      { id: 'w10', label: 'Thanks for waiting', category: 'social' },
+    ],
+  },
+  appointments: {
+    id: 'appointments',
+    label: 'Appointments',
+    icon: 'calendar-outline',
+    color: '#AD1457',
+    audience: 'adult',
+    phrases: [
+      { id: 'a1',  label: 'I have an appointment', category: 'social' },
+      { id: 'a2',  label: 'Please speak to me, not my companion', category: 'repair' },
+      { id: 'a3',  label: 'Please give me time to answer', category: 'repair' },
+      { id: 'a4',  label: 'It hurts here', category: 'urgent' },
+      { id: 'a5',  label: 'It started a few days ago', category: 'social' },
+      { id: 'a6',  label: 'Can you explain that again?', category: 'repair' },
+      { id: 'a7',  label: 'Can you write it down?', category: 'request' },
+      { id: 'a8',  label: 'I am worried about this', category: 'feeling' },
+      { id: 'a9',  label: 'I do not consent to that', category: 'urgent' },
+      { id: 'a10', label: 'What happens next?', category: 'request' },
+    ],
+  },
+  social: {
+    id: 'social',
+    label: 'Social',
+    icon: 'people-outline',
+    color: '#6A1B9A',
+    phrases: [
+      { id: 'so1',  label: 'Hi, how are you?', category: 'social' },
+      { id: 'so2',  label: 'I use this to talk', category: 'social' },
+      { id: 'so3',  label: 'That is funny', category: 'social' },
+      { id: 'so4',  label: 'Tell me more', category: 'social' },
+      { id: 'so5',  label: 'What have you been doing?', category: 'social' },
+      { id: 'so6',  label: 'I would like to join in', category: 'request' },
+      { id: 'so7',  label: 'Can you wait for me to finish?', category: 'repair' },
+      { id: 'so8',  label: 'See you soon', category: 'social' },
+      { id: 'so9',  label: 'I had a great time', category: 'feeling' },
+      { id: 'so10', label: 'I need some quiet', category: 'regulation' },
+    ],
+  },
   emergency: {
     id: 'emergency',
     label: 'Emergency',
@@ -175,6 +251,16 @@ export function getContextPack(id) {
 
 export function getContextPackIds() {
   return Object.keys(contextPacks);
+}
+
+/**
+ * Packs in display order for a mode. Every pack is available in both modes;
+ * packs written for the other audience are listed after the rest.
+ */
+export function getContextPacksForMode(mode) {
+  const all = Object.values(contextPacks);
+  const other = mode === 'child' ? 'adult' : 'child';
+  return [...all.filter(p => p.audience !== other), ...all.filter(p => p.audience === other)];
 }
 
 export function getAllContextPacks() {

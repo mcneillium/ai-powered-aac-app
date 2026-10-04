@@ -3,12 +3,11 @@ import { ScrollView, View, Text, TextInput, Button, StyleSheet, ActivityIndicato
 import { speak, buildSpeechOptions } from '../services/speechService';
 import { StatusBar } from 'expo-status-bar';
 import { searchPictograms } from '../services/arasaacService';
-import { getAISuggestions } from '../services/getAISuggestions';
+import { suggestNext } from '../services/suggestionEngine';
 import { updateLastActivity } from '../utils/syncStatus';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, spacing, radii } from '../theme';
-import { useOnDevicePrediction } from '../hooks/useOnDevicePrediction';
-import { recordWordSelection, recordSentenceSpoken, recordSuggestionsShown, recordFailedSearch } from '../services/aiProfileStore';
+import { recordSentenceSpoken, recordFailedSearch } from '../services/aiProfileStore';
 import { addSentenceToHistory } from '../services/sentenceHistoryStore';
 import { corePages } from '../data/coreVocabulary';
 
@@ -33,12 +32,12 @@ export default function EasySentenceBuilderScreen() {
   const [wordSearch, setWordSearch] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [categoryImages, setCategoryImages] = useState({});
-  const { predictNext, recordTap } = useOnDevicePrediction();
 
   const categories = Object.keys(OFFLINE_CATEGORIES);
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
   const [offlineMode, setOfflineMode] = useState(false);
-  const aiEnabled = settings.aiPersonalisationEnabled !== false;
+  // Learning follows the same explicit opt-in as the board.
+  const aiEnabled = settings.personalLearning === true && settings.aiPersonalisationEnabled !== false;
 
   useEffect(() => {
     let cancelled = false;
@@ -83,38 +82,16 @@ export default function EasySentenceBuilderScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory, wordSearch]);
 
+  // Same on-device engine as the board (synchronous, offline).
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      let local = [];
-      try {
-        local = await predictNext(sentenceWords, 5);
-      } catch { /* on-device model unavailable — fall through to remote */ }
-      let next = local;
-      if (local.length === 0) {
-        try {
-          next = (await getAISuggestions(sentenceWords.join(' '))) || [];
-        } catch {
-          next = [];
-        }
-      }
-      if (cancelled) return;
-      setSuggestions(next.filter(s => typeof s === 'string' && s.length > 0));
-      if (aiEnabled && local.length > 0) recordSuggestionsShown(local.length).catch(() => {});
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setSuggestions(suggestNext(sentenceWords, { k: 5 }).map(x => x.word));
   }, [sentenceWords]);
 
-  const addWord = async (word, wasSuggestion = false) => {
+  const addWord = async (word) => {
     setSentenceWords(prev => [...prev, word]);
     try {
       await updateLastActivity();
-      if (aiEnabled) {
-        await recordTap(sentenceWords, word);
-        // AI Profile: record word selection for personalized learning
-        await recordWordSelection(word, sentenceWords, wasSuggestion);
-      }
+      // Taps are not used for learning (only spoken messages on the board).
     } catch (e) {
       console.warn('Prediction training error:', e.message);
     }

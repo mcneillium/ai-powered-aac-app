@@ -1,0 +1,55 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Voice 2 directions</title>
+<style>
+body{margin:0;padding:24px;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#ddd;display:flex;gap:28px;align-items:flex-start}
+.col{display:flex;flex-direction:column;gap:10px;align-items:center}
+.cap{font:600 15px system-ui;color:#222}.sub{font:13px system-ui;color:#444;max-width:360px;text-align:center}
+.ph{width:360px;height:740px;border-radius:28px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 8px 30px rgba(0,0,0,.18)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:10px 12px;flex:1}
+/* A: Paper & Ink */
+.A{background:#F5F2EC;color:#151A2D}
+.A .top{padding:16px 16px 8px}
+.A .stage{background:#fff;border-radius:22px;padding:14px 16px;border:1px solid #E2DCD2}
+.A .msg{font:600 26px system-ui;letter-spacing:-.3px;min-height:64px}
+.A .row{display:flex;gap:8px;margin-top:10px}
+.A .speak{flex:1;background:#2643D9;color:#fff;border-radius:16px;height:52px;display:flex;align-items:center;justify-content:center;font:700 17px system-ui;gap:8px}
+.A .ib{width:52px;height:52px;border-radius:16px;background:#EEEAE3;display:flex;align-items:center;justify-content:center;font:600 12px system-ui;color:#151A2D}
+.A .pred{display:flex;gap:8px;padding:8px 16px;height:48px;align-items:center}
+.A .chip{padding:9px 14px;border-radius:999px;border:1.5px dashed #9AA0B8;font:600 15px system-ui;background:transparent}
+.A .t{background:#fff;border-radius:16px;border:1px solid #E2DCD2;display:flex;flex-direction:column;align-items:center;justify-content:center;font:600 15px system-ui;height:78px;position:relative;overflow:hidden}
+.A .t::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--c)}
+.A .sym{width:30px;height:30px;border-radius:9px;background:var(--c);opacity:.55;margin-bottom:6px}
+.A .nav{display:flex;gap:8px;padding:6px 16px}.A .pill{padding:10px 14px;border-radius:999px;background:#E9E4DB;font:600 14px system-ui}
+/* B: Soft Shapes */
+.B{background:#FFF8EE;color:#2A1E3F}
+.B .stage{margin:16px;background:#FFE7C7;border-radius:30px;padding:18px}
+.B .msg{font:800 26px ui-rounded,system-ui;min-height:64px}
+.B .row{display:flex;gap:10px;margin-top:8px}
+.B .speak{flex:1;background:#FF6A3D;color:#fff;border-radius:999px;height:56px;display:flex;align-items:center;justify-content:center;font:800 18px system-ui}
+.B .ib{width:56px;height:56px;border-radius:999px;background:#fff;display:flex;align-items:center;justify-content:center;font:700 12px system-ui}
+.B .pred{display:flex;gap:8px;padding:0 16px;height:48px;align-items:center}
+.B .chip{padding:10px 16px;border-radius:999px;background:#EDE3FF;font:700 15px system-ui}
+.B .t{background:var(--c);border-radius:26px;display:flex;flex-direction:column;align-items:center;justify-content:center;font:800 15px ui-rounded,system-ui;height:80px}
+.B .sym{width:34px;height:34px;border-radius:50%;background:#fff;opacity:.85;margin-bottom:4px}
+.B .nav{display:none}
+/* C: Night Signal */
+.C{background:#0E1116;color:#EEF1F6}
+.C .stage{margin:14px;border-radius:14px;padding:14px;background:linear-gradient(#161B24,#12161E);border:1px solid #232A36}
+.C .msg{font:500 26px system-ui;min-height:64px}
+.C .row{display:flex;gap:6px;margin-top:8px}
+.C .speak{flex:1;background:#2EE6A6;color:#04140E;border-radius:10px;height:50px;display:flex;align-items:center;justify-content:center;font:700 16px system-ui}
+.C .ib{width:50px;height:50px;border-radius:10px;background:#1B212B;border:1px solid #2A3240;display:flex;align-items:center;justify-content:center;font:600 11px system-ui}
+.C .pred{display:flex;gap:6px;padding:0 14px;height:46px;align-items:center}
+.C .chip{padding:8px 12px;border-radius:8px;background:#1B212B;font:600 15px system-ui;border:1px solid #2EE6A6}
+.C .t{background:#161B24;border:1px solid #232A36;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font:600 15px system-ui;height:76px}
+.C .sym{width:10px;height:10px;border-radius:50%;background:var(--c);margin-bottom:8px}
+.C .nav{display:none}
+</style></head><body>
+<script>
+const words=[['I want','#7BA7F7'],['I need','#7BA7F7'],['I feel','#7BA7F7'],['Can I','#7BA7F7'],['I','#F3C94A'],['you','#F3C94A'],['want','#5DBB7A'],['go','#5DBB7A'],['like','#5DBB7A'],['need','#5DBB7A'],['help','#5DBB7A'],['stop','#E5655B'],['more','#6FA8DC'],['done','#6FA8DC'],['yes','#E58FB6'],['no','#E5655B'],['People','#F3C94A'],['Food','#F2A35E'],['Places','#F2A35E'],['Feelings','#E58FB6']];
+const softB={"#7BA7F7":"#DCE7FF","#F3C94A":"#FFF0B8","#5DBB7A":"#D4F2DC","#E5655B":"#FFD9D4","#6FA8DC":"#D7ECFA","#E58FB6":"#FFE0EE","#F2A35E":"#FFE3C8"};
+function phone(cls,cap,sub){const g=words.map(([w,c])=>`<div class="t" style="--c:${cls==='B'?softB[c]:c}"><div class="sym"></div>${w}</div>`).join('');
+document.write(`<div class="col"><div class="cap">${cap}</div><div class="ph ${cls}"><div class="top"><div class="stage"><div class="msg">I want more juice</div><div class="row"><div class="speak">▶ Speak</div><div class="ib">⌫</div><div class="ib">Clear</div><div class="ib">Undo</div></div></div></div><div class="pred"><span class="chip">please</span><span class="chip">now</span><span class="chip">water</span></div><div class="nav"><span class="pill">Home</span><span class="pill">Phrases</span><span class="pill">Explain</span><span class="pill">Find</span></div><div class="grid">${g}</div></div><div class="sub">${sub}</div></div>`);}
+phone('A','A · Paper & Ink','Warm paper neutrals, ink text, one indigo signal colour for Speak. Category colour as a tile edge + symbol well, dashed-outline predictions read as suggestions.');
+phone('B','B · Soft Shapes','Rounded, saturated-pastel filled tiles, coral Speak pill. Friendly and bright; risks feeling juvenile for adults.');
+phone('C','C · Night Signal','Dark-first, mono tiles with category dots, mint signal colour. Sleek but low category salience; light mode weaker.');
+</script></body></html>

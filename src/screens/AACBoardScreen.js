@@ -11,7 +11,7 @@
 // 7. Favourites: Users can pin frequently-used phrases
 // 8. Persistent history: Sentence history survives app restarts
 
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
@@ -19,542 +19,82 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
-  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useIsFocused, useFocusEffect } from '@react-navigation/native';
-import { useSettings } from '../contexts/SettingsContext';
-import { getPalette } from '../theme';
-import { speak, stop, buildSpeechOptions, subscribeSpeechStatus } from '../services/speechService';
-import { getHomePage, getPage } from '../data/coreVocabulary';
-import { getAISuggestions } from '../services/getAISuggestions';
-import { useOnDevicePrediction } from '../hooks/useOnDevicePrediction';
-import { useScrollToTopOnChange } from '../hooks/useScrollToTopOnChange';
-import { suggestionChipFit, stripHeight } from '../utils/suggestionChipFit';
-import { saveSentenceDraft, takeSentenceDraftAfterFontChange } from '../services/sentenceDraft';
 import { t } from '../i18n/strings';
-import {
-  recordWordSelection,
-  recordSentenceSpoken,
-  recordSuggestionsShown,
-  getBigramPredictions,
-  getTopWords,
-  scoreWithExplanation,
-  recordSourceShown,
-  recordFailedSearch,
-} from '../services/aiProfileStore';
-import {
-  loadSentenceHistory,
-  getSentenceHistory,
-  addSentenceToHistory,
-  incrementSpeakCount,
-} from '../services/sentenceHistoryStore';
-import {
-  loadFavourites,
-  getFavourites,
-  addFavourite,
-  removeFavourite,
-  isFavourite,
-} from '../services/favouritesStore';
-import { getAACPhraseSuggestions } from '../services/vertexAISuggestions';
 import DisplayMode from '../components/DisplayMode';
 import VoicePresetPicker from '../components/VoicePresetPicker';
 import WordFinder from '../components/WordFinder';
 import MoreActionsMenu from '../components/MoreActionsMenu';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { openQuickPhrases, setQuickPhrasesButtonHidden } from '../components/QuickRepairOverlay';
+import { openQuickPhrases } from '../components/QuickRepairOverlay';
 import {
-  setScanItems, setScanMode, setScanSpeed, getScanState,
-  onScanChange, onScanSelect, startScan, stopScan,
-  advanceScan, selectCurrent, cleanup as cleanupScan,
+  getScanState, advanceScan, selectCurrent,
 } from '../services/switchScanService';
+import { useBoardController } from './useBoardController';
+import { stripHeight } from '../utils/suggestionChipFit';
 
+// The familiar ("Classic") board layout. Behaviour lives in
+// useBoardController; this file is presentation only.
 export default function AACBoardScreen() {
-  const { settings } = useSettings();
-  const palette = getPalette(settings.theme);
-  const navigation = useNavigation();
-  const { predictNext: personalPredict, recordTap } = useOnDevicePrediction();
-
-  const [sentenceWords, setSentenceWords] = useState([]);
-  const [currentPageId, setCurrentPageId] = useState('home');
-  const [pageHistory, setPageHistory] = useState([]);
-  const [suggestions, setSuggestions] = useState([]);
-  const [showHistory, setShowHistory] = useState(false);
-  const [showFavourites, setShowFavourites] = useState(false);
-  const [history, setHistory] = useState([]);
-  const [favourites, setFavourites] = useState([]);
-  const [voicePreset, setVoicePreset] = useState('normal');
-  const [displayMode, setDisplayMode] = useState(null); // null | 'display' | 'listener'
-  const [lastSpoken, setLastSpoken] = useState('');
-  const [scanActive, setScanActive] = useState(false);
-  const [scanFocusIndex, setScanFocusIndex] = useState(-1);
-  // Previous sentence, kept so Clear / Delete / replacing the sentence from
-  // history can be undone. Cleared once the user adds a new word.
-  const [undoWords, setUndoWords] = useState(null);
-  const [showFinder, setShowFinder] = useState(false);
-  const [showMore, setShowMore] = useState(false);
-  const insets = useSafeAreaInsets();
-  const [speechProblem, setSpeechProblem] = useState(null); // null | 'unavailable' | 'failed'
-  const sentenceBarRef = useRef(null);
-  const sentenceScrollRef = useRef(null);
-  const gridRef = useRef(null);
-
-  // The board has its own Quick Phrases button in the action row; hide the
-  // floating one here so it never sits on top of a vocabulary button.
-  useFocusEffect(useCallback(() => {
-    setQuickPhrasesButtonHidden(true);
-    return () => setQuickPhrasesButtonHidden(false);
-  }, []));
-
-  // Memoized: getPage builds a fresh object per call, and a new identity on
-  // every render would reset the switch-scanning item list (and scan position).
-  // isFocused is a dependency so custom-vocab edits made on other screens are
-  // picked up when the user returns to the board.
-  const isFocused = useIsFocused();
-  const currentPage = useMemo(
-    () => getPage(currentPageId) || getHomePage(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [currentPageId, isFocused]
-  );
-  // Every page opens with its first row in the same place.
-  useScrollToTopOnChange(gridRef, currentPageId);
-  const aiEnabled = settings.aiPersonalisationEnabled !== false;
-  const cloudEnabled = settings.cloudSuggestionsEnabled !== false;
-  const predictionEnabled = settings.predictionEnabled !== false;
-  const speakWordsOnTap = settings.speakWordsOnTap !== false;
-  const textScale = settings.textScale || 1;
-  const { fontScale } = useWindowDimensions();
-  const chipFit = suggestionChipFit({ textScale, fontScale });
-  // Opt-in layout for small screens. Never switched on automatically, so
-  // existing users' button positions only change if they choose it.
-  const compact = settings.compactLayout === true;
-
-  // One set of speech options for every utterance on this screen, so the
-  // user's voice, speed and pitch (plus the chosen voice style) always apply.
-  const speechOptions = useMemo(
-    () => buildSpeechOptions(settings, voicePreset),
-    [settings, voicePreset]
-  );
-  const say = useCallback((text) => speak(text, speechOptions), [speechOptions]);
-
-  // Tell the user (once, non-blocking) when speech could not be produced.
-  // The message itself stays on screen, so communication can continue by
-  // showing it (Show on screen button).
-  useEffect(() => {
-    let timer = null;
-    const unsubscribe = subscribeSpeechStatus(({ error }) => {
-      if (!error) {
-        // Speech started (or a late start recovered): drop any old notice.
-        clearTimeout(timer);
-        setSpeechProblem(null);
-        return;
-      }
-      setSpeechProblem(error);
-      clearTimeout(timer);
-      timer = setTimeout(() => setSpeechProblem(null), 8000);
-    });
-    return () => { unsubscribe(); clearTimeout(timer); };
-  }, []);
-
-  // Load persistent data on mount
-  useEffect(() => {
-    loadSentenceHistory().then(setHistory);
-    loadFavourites().then(setFavourites);
-  }, []);
-
-  // Changing the system font size reloads the app in place (Android); bring
-  // back the sentence and page the user had, then keep the draft current.
-  const [draftReady, setDraftReady] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    takeSentenceDraftAfterFontChange()
-      .then((draft) => {
-        if (!alive || !draft) return;
-        setSentenceWords((prev) => (prev.length > 0 ? prev : draft.words));
-        if (draft.pageId !== 'home' && getPage(draft.pageId)) setCurrentPageId(draft.pageId);
-      })
-      .finally(() => { if (alive) setDraftReady(true); });
-    return () => { alive = false; };
-  }, []);
-  useEffect(() => {
-    if (draftReady) saveSentenceDraft(sentenceWords, currentPageId);
-  }, [draftReady, sentenceWords, currentPageId]);
-
-  // ── Switch scanning ──
-  // Scan order: vocab grid first (main communication), then suggestions, then actions last.
-  // This puts the most-used items at the start of the scan cycle.
-  const scanItemList = useRef([]);
-
-  // Use refs for action callbacks to avoid stale closures in scan select handler.
-  // The callbacks are declared with `const` further down, so the refs start
-  // empty and are populated by the effects below (which run after render).
-  const speakRef = useRef(null);
-  const backspaceRef = useRef(null);
-  const clearRef = useRef(null);
-  const undoRef = useRef(null);
-  const buttonPressRef = useRef(null);
-  const suggestionPressRef = useRef(null);
-
-  useEffect(() => {
-    // Rebuild scan items: vocab → suggestions → actions
-    const vocabItems = currentPage.buttons.map(b => ({
-      type: 'vocab', id: b.id, button: b, label: b.label,
-    }));
-    const suggItems = suggestions.map((s, i) => ({
-      type: 'suggestion', id: `sug-${i}`, word: typeof s === 'string' ? s : s.word, label: typeof s === 'string' ? s : s.word,
-    }));
-    const actionItems = [
-      { type: 'action', id: 'speak', label: 'Speak' },
-      { type: 'action', id: 'backspace', label: 'Delete' },
-      { type: 'action', id: 'clear', label: 'Clear' },
-      { type: 'action', id: 'undo', label: 'Undo' },
-    ];
-    scanItemList.current = [...vocabItems, ...suggItems, ...actionItems];
-    if (scanActive) {
-      setScanItems(scanItemList.current);
-    }
-  }, [currentPage, suggestions, scanActive]);
-
-  // Register scan callbacks once — use refs to avoid stale closures
-  useEffect(() => {
-    onScanChange(({ currentIndex, isRunning }) => {
-      setScanFocusIndex(isRunning ? currentIndex : -1);
-    });
-    onScanSelect(({ item }) => {
-      if (!item) return;
-      if (item.type === 'action') {
-        if (item.id === 'speak') speakRef.current?.();
-        else if (item.id === 'backspace') backspaceRef.current?.();
-        else if (item.id === 'clear') clearRef.current?.();
-        else if (item.id === 'undo') undoRef.current?.();
-      } else if (item.type === 'vocab') {
-        buttonPressRef.current?.(item.button);
-      } else if (item.type === 'suggestion') {
-        suggestionPressRef.current?.(item.word);
-      }
-    });
-    return () => { cleanupScan(); };
-  }, []);
-
-  // Initialize scan service from persisted settings
-  useEffect(() => {
-    if (settings.scanMode) setScanMode(settings.scanMode);
-    if (settings.scanSpeed) setScanSpeed(settings.scanSpeed);
-  }, [settings.scanMode, settings.scanSpeed]);
-
-  const { updateSettings } = useSettings();
-
-  const toggleScan = useCallback(() => {
-    if (scanActive) {
-      stopScan();
-      setScanActive(false);
-    } else {
-      setScanMode(settings.scanMode || 'auto');
-      setScanSpeed(settings.scanSpeed || 1500);
-      setScanItems(scanItemList.current);
-      startScan();
-      setScanActive(true);
-    }
-  }, [scanActive, settings.scanMode, settings.scanSpeed]);
-
-  const changeScanMode = useCallback((newMode) => {
-    setScanMode(newMode);
-    updateSettings({ scanMode: newMode });
-    if (scanActive) {
-      stopScan();
-      setScanItems(scanItemList.current);
-      startScan();
-    }
-  }, [scanActive, updateSettings]);
-
-  const changeScanSpeed = useCallback((delta) => {
-    const state = getScanState();
-    const newSpeed = Math.max(500, Math.min(5000, state.scanSpeed + delta));
-    setScanSpeed(newSpeed);
-    updateSettings({ scanSpeed: newSpeed });
-    if (scanActive) {
-      stopScan();
-      setScanItems(scanItemList.current);
-      startScan();
-    }
-  }, [scanActive, updateSettings]);
-
-  const isScanFocused = useCallback((type, id) => {
-    if (!scanActive || scanFocusIndex < 0) return false;
-    const focused = scanItemList.current[scanFocusIndex];
-    return focused && focused.type === type && focused.id === id;
-  }, [scanActive, scanFocusIndex]);
-
-  const scanRingStyle = useMemo(
-    () => ({ borderColor: palette.focusRing, borderWidth: 4 }),
-    [palette.focusRing]
-  );
-
-  // Fetch AI suggestions when sentence changes
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!predictionEnabled) {
-        setSuggestions([]);
-        return;
-      }
-      if (sentenceWords.length === 0) {
-        if (aiEnabled) {
-          const top = getTopWords(6);
-          if (!cancelled) setSuggestions(top.length > 0 ? top.map(w => ({ word: w, reason: 'used often' })) : []);
-        } else {
-          setSuggestions([]);
-        }
-        return;
-      }
-
-      // Layer 1: Bigram predictions (instant, local, personalised by usage history)
-      const lastWord = sentenceWords[sentenceWords.length - 1];
-      const bigramResults = aiEnabled ? getBigramPredictions(lastWord, 4) : [];
-      if (bigramResults.length > 0 && !cancelled) {
-        if (aiEnabled) recordSourceShown('bigram', bigramResults.length);
-        const scored = scoreWithExplanation(bigramResults);
-        setSuggestions(scored.map(s => ({ word: s.word, reason: s.reason })));
-      }
-
-      // Layer 2: On-device personalized model (adapts to this user's patterns during session)
-      let personalResults = [];
-      try {
-        personalResults = await personalPredict(sentenceWords, 4);
-        if (!cancelled && personalResults.length > 0) {
-          // Merge personal predictions with bigram results, label as 'learned'
-          const combined = [...new Set([...bigramResults, ...personalResults])];
-          const scored = scoreWithExplanation(combined);
-          // Override reason for words that came only from the personalized model
-          const bigramSet = new Set(bigramResults);
-          const labeled = scored.map(s => ({
-            word: s.word,
-            reason: !bigramSet.has(s.word) && personalResults.includes(s.word) ? 'learned' : s.reason,
-          }));
-          setSuggestions(labeled.slice(0, 6));
-        }
-      } catch {
-        // Personalized model is optional — bigram results still showing
-      }
-
-      // Layer 3: Static neural model (async, pre-trained, not personalized)
-      try {
-        const text = sentenceWords.join(' ');
-        const aiResults = await getAISuggestions(text);
-        if (!cancelled && aiResults.length > 0) {
-          if (aiEnabled) recordSourceShown('neural', aiResults.length);
-          const allLocal = [...new Set([...bigramResults, ...personalResults, ...aiResults])].slice(0, 6);
-          const scored = aiEnabled ? scoreWithExplanation(allLocal) : allLocal.map(w => ({ word: w, score: 0, reason: 'suggested' }));
-          setSuggestions(scored.map(s => ({ word: s.word, reason: s.reason })));
-          if (aiEnabled) recordSuggestionsShown(scored.length).catch(() => {});
-        }
-      } catch {
-        // Bigram + personal results are already showing
-      }
-
-      // Also try Vertex AI for richer phrase suggestions (async, non-blocking).
-      // Gated on the "Online suggestions" privacy setting — this is the only
-      // suggestion path that sends sentence content off-device.
-      if (aiEnabled && cloudEnabled && sentenceWords.length >= 2) {
-        try {
-          const recentTexts = getSentenceHistory().slice(0, 3).map(h => h.text);
-          const vertexPhrases = await getAACPhraseSuggestions(sentenceWords, recentTexts);
-          if (!cancelled && vertexPhrases.length > 0) {
-            if (aiEnabled) recordSourceShown('vertex', vertexPhrases.length);
-            setSuggestions(prev => {
-              const existingWords = prev.map(s => typeof s === 'string' ? s : s.word);
-              const newPhrases = vertexPhrases
-                .filter(p => !existingWords.includes(p))
-                .map(p => ({ word: p, reason: 'AI suggested' }));
-              return [...prev, ...newPhrases].slice(0, 8);
-            });
-          }
-        } catch {
-          // Vertex AI is optional
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sentenceWords, aiEnabled, cloudEnabled, predictionEnabled]);
-
-  const navigateToPage = useCallback((pageId) => {
-    setPageHistory(prev => [...prev, currentPageId]);
-    setCurrentPageId(pageId);
-  }, [currentPageId]);
-
-  const goBack = useCallback(() => {
-    if (pageHistory.length > 0) {
-      const prev = pageHistory[pageHistory.length - 1];
-      setPageHistory(h => h.slice(0, -1));
-      setCurrentPageId(prev);
-    }
-  }, [pageHistory]);
-
-  const goHome = useCallback(() => {
-    setPageHistory([]);
-    setCurrentPageId('home');
-  }, []);
-
-  // Replace the whole sentence while remembering the old one for Undo.
-  const replaceSentence = useCallback((words) => {
-    setSentenceWords(prev => {
-      setUndoWords(prev.length > 0 ? prev : null);
-      return words;
-    });
-  }, []);
-
-  const addWords = useCallback((words) => {
-    setUndoWords(null);
-    setSentenceWords(prev => [...prev, ...words]);
-  }, []);
-
-  const addWord = useCallback((label, wasSuggestion = false) => {
-    setUndoWords(null);
-    setSentenceWords(prev => {
-      const next = [...prev, label];
-      if (aiEnabled) {
-        recordWordSelection(label, prev, wasSuggestion).catch(() => {});
-        // Feed the on-device model: prev words → selected word
-        // This runs async, never blocks speech, and silently fails if model isn't loaded
-        recordTap(prev, label).catch(() => {});
-      }
-      return next;
-    });
-    if (speakWordsOnTap) say(label);
-  }, [aiEnabled, recordTap, say, speakWordsOnTap]);
-
-  const handleButtonPress = useCallback((button) => {
-    if (button.navigateTo) {
-      navigateToPage(button.navigateTo);
-    } else if (button.multiWord) {
-      // Sentence starters: add all words at once, speak the phrase
-      addWords(button.label.split(' '));
-      if (speakWordsOnTap) say(button.label);
-    } else {
-      addWord(button.label);
-    }
-  }, [navigateToPage, addWord, addWords, say, speakWordsOnTap]);
-
-  // Suggestions are only ever added on an explicit tap — never automatically.
-  const handleSuggestionPress = useCallback((word) => {
-    // If suggestion is a multi-word phrase, add all words
-    const words = word.split(' ');
-    if (words.length > 1) {
-      addWords(words);
-      if (speakWordsOnTap) say(word);
-    } else {
-      addWord(word, true);
-    }
-  }, [addWord, addWords, say, speakWordsOnTap]);
-
-  const speakSentence = useCallback(async () => {
-    const text = sentenceWords.join(' ');
-    if (text.trim()) {
-      say(text);
-      setLastSpoken(text);
-      if (aiEnabled) recordSentenceSpoken(sentenceWords).catch(() => {});
-
-      await addSentenceToHistory(text);
-      setHistory([...getSentenceHistory()]);
-    }
-  }, [sentenceWords, aiEnabled, say]);
-
-  const removeLastWord = useCallback(() => {
-    setSentenceWords(prev => {
-      if (prev.length > 0) setUndoWords(prev);
-      return prev.slice(0, -1);
-    });
-  }, []);
-
-  const clearSentence = useCallback(() => {
-    replaceSentence([]);
-    stop();
-  }, [replaceSentence]);
-
-  const undo = useCallback(() => {
-    if (!undoWords) return;
-    setSentenceWords(undoWords);
-    setUndoWords(null);
-  }, [undoWords]);
-
-  // Keep the scan-select refs pointing at the latest callbacks.
-  useEffect(() => { speakRef.current = speakSentence; }, [speakSentence]);
-  useEffect(() => { backspaceRef.current = removeLastWord; }, [removeLastWord]);
-  useEffect(() => { clearRef.current = clearSentence; }, [clearSentence]);
-  useEffect(() => { undoRef.current = undo; }, [undo]);
-  useEffect(() => { buttonPressRef.current = handleButtonPress; }, [handleButtonPress]);
-  useEffect(() => { suggestionPressRef.current = handleSuggestionPress; }, [handleSuggestionPress]);
-
-  const repeatFromHistory = useCallback((text) => {
-    replaceSentence(text.split(' '));
-    say(text);
-    setLastSpoken(text);
-    incrementSpeakCount(text)
-      .then(() => setHistory([...getSentenceHistory()]))
-      .catch(() => {});
-    setShowHistory(false);
-  }, [replaceSentence, say]);
-
-  const handleToggleFavourite = useCallback(async () => {
-    const text = sentenceWords.join(' ').trim();
-    if (!text) return;
-
-    if (isFavourite(text)) {
-      const fav = getFavourites().find(f => f.phrase === text);
-      if (fav) await removeFavourite(fav.id);
-    } else {
-      const added = await addFavourite(text);
-      if (!added) Alert.alert(t('favourites'), t('favouritesFull'));
-    }
-    setFavourites([...getFavourites()]);
-  }, [sentenceWords]);
-
-  const confirmRemoveFavourite = useCallback((fav) => {
-    Alert.alert(t('removeFavourite'), `"${fav.phrase}"`, [
-      { text: t('cancel'), style: 'cancel' },
-      {
-        text: t('removeFavourite'),
-        style: 'destructive',
-        onPress: async () => {
-          await removeFavourite(fav.id);
-          setFavourites([...getFavourites()]);
-        },
-      },
-    ]);
-  }, []);
-
-  const speakFavourite = useCallback((phrase) => {
-    replaceSentence(phrase.split(' '));
-    say(phrase);
-    setLastSpoken(phrase);
-    addSentenceToHistory(phrase)
-      .then(() => setHistory([...getSentenceHistory()]))
-      .catch(() => {});
-    setShowFavourites(false);
-  }, [replaceSentence, say]);
-
-  // Find-a-word: add the word exactly as a board tap would.
-  const handleFinderAdd = useCallback((button) => {
-    setShowFinder(false);
-    handleButtonPress(button);
-  }, [handleButtonPress]);
-
-  const handleFinderShowPage = useCallback((pageId) => {
-    setShowFinder(false);
-    if (pageId === 'home') goHome();
-    else if (pageId !== currentPageId) navigateToPage(pageId);
-  }, [goHome, navigateToPage, currentPageId]);
-
-  const handleFinderNoResults = useCallback((term) => {
-    // Helps caregivers spot missing vocabulary (stays on-device).
-    if (aiEnabled) recordFailedSearch(term).catch(() => {});
-  }, [aiEnabled]);
-
-  const numColumns = settings.gridSize || 4;
-  const currentSentenceText = sentenceWords.join(' ').trim();
-  const isCurrentFavourite = currentSentenceText ? isFavourite(currentSentenceText) : false;
+  const {
+    settings,
+    palette,
+    navigation,
+    sentenceWords,
+    currentPageId,
+    pageHistory,
+    suggestions,
+    showHistory,
+    setShowHistory,
+    showFavourites,
+    setShowFavourites,
+    history,
+    favourites,
+    voicePreset,
+    setVoicePreset,
+    displayMode,
+    setDisplayMode,
+    lastSpoken,
+    scanActive,
+    scanFocusIndex,
+    undoWords,
+    showFinder,
+    setShowFinder,
+    showMore,
+    setShowMore,
+    insets,
+    speechProblem,
+    sentenceBarRef,
+    sentenceScrollRef,
+    gridRef,
+    currentPage,
+    predictionEnabled,
+    textScale,
+    chipFit,
+    compact,
+    toggleScan,
+    changeScanMode,
+    changeScanSpeed,
+    isScanFocused,
+    scanRingStyle,
+    goBack,
+    goHome,
+    handleButtonPress,
+    handleSuggestionPress,
+    speakSentence,
+    removeLastWord,
+    clearSentence,
+    undo,
+    repeatFromHistory,
+    handleToggleFavourite,
+    confirmRemoveFavourite,
+    speakFavourite,
+    handleFinderAdd,
+    handleFinderShowPage,
+    handleFinderNoResults,
+    numColumns,
+    isCurrentFavourite,
+  } = useBoardController();
 
   const renderButton = useCallback(({ item }) => {
     const isNavButton = !!item.navigateTo;

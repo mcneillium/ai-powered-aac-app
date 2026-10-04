@@ -3,7 +3,7 @@
 // Usage: SERIAL=... RUN=name node fontscale-compare.js 1.3,2.0,1.0
 // Compare layout after a live font change with a fresh start at the same scale.
 const d = require('./drv');
-const KEYS = [/^Communicate$/, /^Sentence: /, /^Speak sentence:/, /^Delete last word$/, /^Suggestion: /, /^Say I want\./, /^Say like\./, /^Go to home page$/, /^Find a word/];
+const KEYS = [/^Communicate$/, /^(Sentence|Message): /, /^Speak (sentence|message):/, /^Delete last word$/, /^Suggestion: /, /^Say I want\./, /^Say like\./, /^Go to home page$/, /^Find a word/];
 const snap = (nodes) => Object.fromEntries(KEYS.map((k) => {
   const n = nodes.find((x) => k.test(x.label)); return [k.source, n ? n.bounds : null];
 }));
@@ -20,8 +20,8 @@ async function build() {
   for (const s of scales) {
     d.sh(`settings put system font_scale ${s}`); await d.sleep(4500);
     const live = await d.dump(`live-${s}`); d.screenshot(`live-${s}`);
-    const sent = live.find((x) => /^Sentence/.test(x.label));
-    d.check(`L1 sentence kept on live change to ${s}`, sent && sent.label === 'Sentence: I want I need', sent ? sent.label : 'none');
+    const sent = live.find((x) => /^(Sentence|Message)/.test(x.label));
+    d.check(`L1 sentence kept on live change to ${s}`, sent && /^(Sentence|Message): I want I need$/.test(sent.label), sent ? sent.label : 'none');
     const liveSnap = snap(live);
     // fresh start at the same scale, same sentence
     d.forceStop(); d.launch(); await d.sleep(6500); await build();

@@ -30,7 +30,7 @@ const CATEGORIES = [
 export default function VocabManagerScreen() {
   const { settings } = useSettings();
   const { user, role } = useAuth();
-  const palette = getPalette(settings.theme);
+  const palette = getPalette(settings.theme, settings.boardLayout);
   const [requests, setRequests] = useState({});
   const [vocab, setVocab] = useState([]);
   const [newWord, setNewWord] = useState('');
