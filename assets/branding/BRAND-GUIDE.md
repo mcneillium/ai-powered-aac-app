@@ -1,14 +1,17 @@
 # Voice — Wave identity
 
 Updated 2026-10-04 following the owner's preference for the sound-wave idea
-and softer lettering. A balanced seven-bar waveform replaces the speech-bubble
+and softer lettering. A seven-bar waveform with a gently asymmetric rhythm replaces the speech-bubble
 concept. Nunito 600 provides a rounded, lighter wordmark; secondary lettering
 uses Nunito 450. All lettering is outlined in the SVG masters.
 
 ## Palette
 
 Ink #14233F; Blue #2B65EF; Iris #6576FF; Mint #79E8C5; Paper #F5F7FC.
-The waveform uses blue/iris with a small mint accent at its tallest endpoint.
+On light backgrounds the waveform uses blue/iris with a small mint endpoint.
+On dark backgrounds it uses brighter periwinkle (#8AB4FF to #B6AEFF) to
+improve separation from ink. The wordmark gap is optically balanced; the
+preview app icons use the same artwork scale as their actual exports.
 Artwork colours do not change the AAC control palette or category colours.
 
 ## Masters and PNG exports
@@ -49,7 +52,7 @@ https://github.com/google/fonts/blob/604936664fd62c14271209b51f98e7f495dd1a3e/of
 Waveform starting geometry:
 https://github.com/lucide-icons/lucide/blob/27c0a136cdced32c9e2ba1e969a27dbca42a9d3f/icons/audio-lines.svg
 The unchanged source is retained in assets/branding/sources/lucide-audio-lines.svg.
-Modifications: centred seven-bar symmetry, revised amplitudes, gradient and
+Modifications: seven-bar rhythm, revised amplitudes, gradient and
 mint endpoint; custom Voice composition and layout.
 
 Lucide ISC and Nunito SIL OFL 1.1 notices are retained under
