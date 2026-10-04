@@ -28,6 +28,7 @@ import { getContextPack } from '../data/contextPacks';
 import { dismissSuggestion } from '../services/suggestionEngine';
 import { t } from '../i18n/strings';
 import WordFinder from '../components/WordFinder';
+import ScanControls from '../components/ScanControls';
 import { VisualMessage, VisualListRow as ListRow, VisualSuggestionChip as SuggestionChip } from '../components/studio/VisualMessage';
 import ExplainSheet from '../components/studio/ExplainSheet';
 import PhrasesSheet from '../components/studio/PhrasesSheet';
@@ -44,6 +45,8 @@ const TILE_HEIGHT = 104;
 
 export default function StudioBoardScreen() {
   const [modelling, setModelling] = useState(false);
+  const [scanHeight, setScanHeight] = useState(0);
+  const [composerHeight, setComposerHeight] = useState(0);
   const [sheet, setSheet] = useState(null); // 'explain' | 'phrases' | 'saved' | 'show' | 'mode' | 'more'
   // Tool row is part of the in-app scanning cycle (after Undo).
   const openRef = useRef(null);
@@ -112,6 +115,8 @@ export default function StudioBoardScreen() {
   const message = sentenceWords.join(' ');
   const symbolStyle = settings.symbolStyle || 'mixed';
   const controlsBottom = settings.controlsPosition === 'bottom' && !wide;
+  // The strip belongs over the grid, never over bottom-positioned speech tools.
+  const scanBottom = space.sm + (controlsBottom ? composerHeight : 0);
   const context = settings.activeContext ? getContextPack(settings.activeContext) : null;
 
   // ── Grid geometry ──
@@ -296,7 +301,7 @@ export default function StudioBoardScreen() {
         {currentPage.label}
       </Text>
       {scanActive && (
-        <ActionButton icon="stop-circle-outline" label="Stop scan" a11yLabel={t('stopScanning')} onPress={toggleScan} size={touch.min} lines={1} />
+        <ActionButton icon="stop-circle-outline" a11yLabel={t('stopScanning')} onPress={toggleScan} size={touch.min} />
       )}
     </View>
   );
@@ -309,7 +314,7 @@ export default function StudioBoardScreen() {
       numColumns={columns}
       key={`grid-${columns}`}
       renderItem={renderTile}
-      contentContainerStyle={{ paddingHorizontal: space.sm, paddingBottom: scanActive ? 120 : space.lg }}
+      contentContainerStyle={{ paddingHorizontal: space.sm, paddingBottom: scanActive ? Math.max(120, scanHeight + space.sm + space.lg) : space.lg }}
       extraData={`${b.scanFocusIndex}-${symbolStyle}-${symbolTick}`}
       removeClippedSubviews={false}
       style={{ flex: 1 }}
@@ -317,7 +322,7 @@ export default function StudioBoardScreen() {
   );
 
   const composer = (
-    <View style={{ paddingHorizontal: space.md }}>
+    <View onLayout={e => setComposerHeight(Math.ceil(e.nativeEvent.layout.height))} style={{ paddingHorizontal: space.md }}>
       {stage}
       {tools}
       {suggestionRow}
@@ -360,7 +365,7 @@ export default function StudioBoardScreen() {
 
       {/* Speech notice: overlays (never moves the grid), taps pass through. */}
       {speechProblem && (
-        <View pointerEvents="none" style={[styles.notice, { backgroundColor: c.ink, bottom: space.lg + (scanActive ? 84 : 0), borderRadius: r.control }]} accessibilityRole="alert" accessibilityLiveRegion="assertive">
+        <View pointerEvents="none" style={[styles.notice, { backgroundColor: c.ink, bottom: space.lg + (scanActive ? scanBottom + Math.max(76, scanHeight) : 0), borderRadius: r.control }]} accessibilityRole="alert" accessibilityLiveRegion="assertive">
           <Ionicons name="volume-mute-outline" size={20} color={c.paper} />
           <Text style={[type.body, { color: c.paper, flex: 1, marginLeft: space.sm, fontWeight: '600' }]}>
             {speechProblem === 'unavailable' ? t('speechUnavailable') : t('speechFailed')}
@@ -370,16 +375,10 @@ export default function StudioBoardScreen() {
 
       {/* Scanning strip overlays the bottom so words do not move. */}
       {scanActive && (
-        <View style={[styles.scanStrip, { backgroundColor: c.card, borderColor: c.focus, borderRadius: r.control }]}>
-          <ActionButton label={t('stopScanning')} onPress={toggleScan} size={touch.min} />
-          {getScanState().scanMode === 'step' ? (
-            <>
-              <ActionButton label={t('scanNext')} onPress={advanceScan} size={touch.min} flex={1} />
-              <ActionButton label={t('scanSelect')} onPress={selectCurrent} variant="signal" size={touch.min} flex={1} />
-            </>
-          ) : (
-            <ActionButton label={t('scanSelect')} onPress={selectCurrent} variant="signal" size={touch.min} flex={1} />
-          )}
+        <View onLayout={e => setScanHeight(Math.ceil(e.nativeEvent.layout.height))}
+          style={[styles.scanStrip, { backgroundColor: c.card, borderColor: c.focus, borderRadius: r.control, bottom: scanBottom }]}>
+          <ScanControls mode={getScanState().scanMode} onStop={toggleScan} onNext={advanceScan} onSelect={selectCurrent}
+            textScale={p.scale} colors={{ stopBg: c.sunk, stopFg: c.ink, quietBg: c.sunk, quietFg: c.ink, selectBg: c.signal, selectFg: c.onSignal }} />
         </View>
       )}
 

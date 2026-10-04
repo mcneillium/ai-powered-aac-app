@@ -236,7 +236,7 @@ export function ActionButton({
         {icon && <Ionicons name={icon} size={label ? 22 : 24} color={fg} />}
         {/* Two lines rather than an ellipsis: a cut-off label hides what the
             control does (e.g. "Save this message as a favou…"). */}
-        {label ? <Text style={[type.label, { color: fg, fontSize: 16, marginLeft: icon ? 8 : 0, flexShrink: 1, textAlign: 'center' }]} numberOfLines={lines} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.5}>{label}</Text> : null}
+        {label ? <Text style={[type.label, { color: fg, fontSize: 16, marginLeft: icon ? 8 : 0, flexShrink: 1, textAlign: 'center' }]} numberOfLines={lines} adjustsFontSizeToFit={Platform.OS === 'ios'} minimumFontScale={0.8} maxFontSizeMultiplier={1.5}>{label}</Text> : null}
       </Animated.View>
     </Pressable>
   );

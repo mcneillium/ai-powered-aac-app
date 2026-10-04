@@ -11,7 +11,7 @@
 // 7. Favourites: Users can pin frequently-used phrases
 // 8. Persistent history: Sentence history survives app restarts
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -19,10 +19,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { t } from '../i18n/strings';
 import DisplayMode from '../components/DisplayMode';
+import ClassicTileLabel, { classicLabelWidth } from '../components/ClassicTileLabel';
+import ScanControls from '../components/ScanControls';
 import VoicePresetPicker from '../components/VoicePresetPicker';
 import WordFinder from '../components/WordFinder';
 import MoreActionsMenu from '../components/MoreActionsMenu';
@@ -96,6 +99,10 @@ export default function AACBoardScreen() {
     isCurrentFavourite,
   } = useBoardController();
 
+  const [scanHeight, setScanHeight] = useState(0);
+  const { width: windowWidth } = useWindowDimensions();
+  const labelWidth = classicLabelWidth(windowWidth, numColumns);
+
   const renderButton = useCallback(({ item }) => {
     const isNavButton = !!item.navigateTo;
     const buttonColor = settings.theme === 'highContrast' ? palette.cardBg : item.color;
@@ -129,16 +136,15 @@ export default function AACBoardScreen() {
         {item.icon && (
           <Ionicons name={item.icon} size={Math.round(20 * textScale)} color={buttonTextColor} style={styles.buttonIcon} />
         )}
-        <Text
-          style={[styles.buttonLabel, { color: buttonTextColor, fontSize: labelSize }]}
-          numberOfLines={2}
-          adjustsFontSizeToFit
-        >
-          {item.label}
-        </Text>
+        <ClassicTileLabel
+          label={item.label}
+          size={labelSize}
+          width={labelWidth}
+          style={[styles.buttonLabel, { color: buttonTextColor }]}
+        />
       </TouchableOpacity>
     );
-  }, [handleButtonPress, numColumns, palette, settings.theme, isScanFocused, textScale, scanRingStyle]);
+  }, [handleButtonPress, numColumns, palette, settings.theme, isScanFocused, textScale, scanRingStyle, labelWidth]);
 
   const hasWords = sentenceWords.length > 0;
   const sentenceLineHeight = Math.round(26 * textScale);
@@ -542,7 +548,7 @@ export default function AACBoardScreen() {
             {currentPage.label}
           </Text>
           {iconButton({ onPress: () => setShowFinder(true), icon: 'search', label: t('findWordLabel') })}
-          {settings.showScanControls !== false && iconButton({
+          {showScanBar && iconButton({
             onPress: toggleScan, icon: scanActive ? 'stop' : 'scan-outline',
             label: scanActive ? t('stopScanning') : t('startScanning'), active: scanActive,
           })}
@@ -598,7 +604,7 @@ export default function AACBoardScreen() {
             styles.speechNotice,
             // Sit above the tab bar and above the compact scanning strip so
             // neither is covered.
-            { backgroundColor: palette.text, bottom: 60 + insets.bottom + (compact && scanActive ? 76 : 12) },
+            { backgroundColor: palette.text, bottom: 60 + insets.bottom + (compact && scanActive ? Math.max(76, scanHeight + 12) : 12) },
           ]}
           accessibilityLiveRegion="assertive"
           accessibilityRole="alert"
@@ -614,29 +620,10 @@ export default function AACBoardScreen() {
           instead of inserting a row, so words do not move when scanning
           starts. Scan mode and speed are set in Settings. */}
       {compact && scanActive && (
-        <View style={[styles.scanStrip, { backgroundColor: palette.surface, borderColor: palette.focusRing, bottom: 60 + insets.bottom }]}>
-          <TouchableOpacity
-            onPress={toggleScan}
-            style={[styles.scanOptionBtn, { backgroundColor: palette.focusRing }]}
-            accessibilityRole="button"
-            accessibilityLabel={t('stopScanning')}
-          >
-            <Text style={[styles.scanOptionText, { color: '#000' }]}>{t('stopScanning')}</Text>
-          </TouchableOpacity>
-          {getScanState().scanMode === 'step' ? (
-            <>
-              <TouchableOpacity onPress={advanceScan} style={[styles.scanOptionBtn, { backgroundColor: palette.info }]}
-                accessibilityRole="button" accessibilityLabel={t('scanNext')}>
-                <Text style={[styles.scanOptionText, { color: palette.buttonText }]}>{t('scanNext')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={selectCurrent} style={[styles.scanOptionBtn, { backgroundColor: palette.primary }]}
-                accessibilityRole="button" accessibilityLabel={t('scanSelect')}>
-                <Text style={[styles.scanOptionText, { color: palette.buttonText }]}>{t('scanSelect')}</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <Text style={[styles.scanHintText, { color: palette.text }]}>{t('scanningSelectHint')}</Text>
-          )}
+        <View onLayout={e => setScanHeight(Math.ceil(e.nativeEvent.layout.height))}
+          style={[styles.scanStrip, { backgroundColor: palette.surface, borderColor: palette.focusRing, bottom: 60 + insets.bottom }]}>
+          <ScanControls mode={getScanState().scanMode} onStop={toggleScan} onNext={advanceScan} onSelect={selectCurrent}
+            textScale={textScale} colors={{ stopBg: palette.focusRing, stopFg: '#000', quietBg: palette.info, quietFg: palette.buttonText, selectBg: palette.primary, selectFg: palette.buttonText }} />
         </View>
       )}
 
@@ -655,7 +642,7 @@ export default function AACBoardScreen() {
         keyExtractor={(item) => item.id}
         numColumns={numColumns}
         key={`grid-${numColumns}`}
-        contentContainerStyle={[styles.grid, compact && scanActive && { paddingBottom: 150 }]}
+        contentContainerStyle={[styles.grid, compact && scanActive && { paddingBottom: Math.max(150, scanHeight + 60 + insets.bottom + 16) }]}
         renderItem={renderButton}
         extraData={scanFocusIndex}
         removeClippedSubviews={false}
@@ -715,7 +702,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 8, padding: 6,
     borderRadius: 12, borderWidth: 2,
   },
-  scanHintText: { flex: 1, fontSize: 13, fontWeight: '600' },
   speechNotice: {
     position: 'absolute', left: 12, right: 12, zIndex: 20,
     flexDirection: 'row', alignItems: 'center', gap: 8,
