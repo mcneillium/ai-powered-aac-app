@@ -22,7 +22,7 @@ const usesText = (u) => (u >= 10 ? 'used a lot' : u >= 3 ? 'used often' : 'used 
 
 export default function LearnedScreen() {
   const { c } = usePaper();
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
   const learningOn = settings.personalLearning === true;
   const [words, setWords] = useState([]);
   const [dismissed, setDismissed] = useState([]);
@@ -42,7 +42,7 @@ export default function LearnedScreen() {
       'Suggestions go back to the built-in ones. Your words, messages and settings are not touched. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: async () => { await deleteLearnedData(); refresh(); } },
+        { text: 'Delete', style: 'destructive', onPress: async () => { await deleteLearnedData(); updateSettings({ learningCarriedOver: false }); refresh(); } },
       ]
     );
   };

@@ -61,6 +61,18 @@ test('a second Clear on an empty message keeps Undo (accidental double tap)', as
   b.r.unmount();
 });
 
+test('Clear stops speech, even when the message is already empty', async () => {
+  const speech = require('../services/speechService');
+  const b = await mount();
+  speech.stop.mockClear();
+  await act(async () => { b.get().clearSentence(); });
+  expect(speech.stop).toHaveBeenCalledTimes(1);
+  await act(async () => { b.get().addWords(['plim']); });
+  await act(async () => { b.get().clearSentence(); });
+  expect(speech.stop).toHaveBeenCalledTimes(2);
+  b.r.unmount();
+});
+
 test('Undo after Clear restores the message, and a new word ends Undo', async () => {
   const b = await mount();
   await act(async () => { b.get().addWords(['blip', 'go']); });

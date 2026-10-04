@@ -121,6 +121,9 @@ export default function StudioBoardScreen() {
   const paneWidth = wide ? Math.min(420, width * 0.4) : 0;
   const gridWidth = width - paneWidth;
   const columns = wide ? Math.max(baseColumns, Math.floor(gridWidth / 150)) : baseColumns;
+  // Each tile's width (grid padding space.sm, tile margin 4 on each side),
+  // so labels are fitted on the first render and do not jump on page open.
+  const tileWidth = Math.max(0, Math.floor((gridWidth - 2 * space.sm) / columns) - 8);
   const tileHeight = Math.round(TILE_HEIGHT * Math.min(scale, 1.5));
 
   const renderTile = useCallback(({ item }) => {
@@ -129,6 +132,7 @@ export default function StudioBoardScreen() {
       <Tile
         button={item}
         height={tileHeight}
+        width={tileWidth}
         symbolStyle={symbolStyle}
         symbolSource={symbolStyle === 'text' ? null : symbolSourceFor(item)}
         emoji={symbolStyle === 'text' ? null : symbolFor(item)}
@@ -139,7 +143,7 @@ export default function StudioBoardScreen() {
       />
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tileHeight, symbolStyle, isScanFocused, handleButtonPress, symbolTick]);
+  }, [tileHeight, tileWidth, symbolStyle, isScanFocused, handleButtonPress, symbolTick]);
 
   // Long press on a suggestion offers to stop suggesting it here.
   const [chipMenu, setChipMenu] = useState(null);
@@ -287,7 +291,7 @@ export default function StudioBoardScreen() {
         {currentPage.label}
       </Text>
       {scanActive && (
-        <ActionButton icon="stop-circle-outline" label="Stop scan" a11yLabel={t('stopScanning')} onPress={toggleScan} size={touch.min} />
+        <ActionButton icon="stop-circle-outline" label="Stop scan" a11yLabel={t('stopScanning')} onPress={toggleScan} size={touch.min} lines={1} />
       )}
     </View>
   );

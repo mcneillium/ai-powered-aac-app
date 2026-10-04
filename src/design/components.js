@@ -7,7 +7,7 @@
 
 import React, { useRef, useState } from 'react';
 import {
-  View, Text, Pressable, Animated, StyleSheet, Modal, Image, ScrollView, Switch,
+  View, Text, Pressable, Animated, StyleSheet, Modal, Image, ScrollView, Switch, useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,9 +41,14 @@ export function tileCategory(button) {
  */
 export function Tile({
   button, onPress, symbolSource, emoji = null, symbolStyle = 'mixed', focused = false,
-  height, accessibilityLabel, accessibilityHint, testID,
+  height, accessibilityLabel, accessibilityHint, testID, width = 0,
 }) {
   const p = usePaper();
+  // The system font size (Android "Font size", iOS Dynamic Type) is applied
+  // here rather than by the platform, so the label can be fitted at the size
+  // it will actually render (capped at 2x).
+  const { fontScale: sysScale = 1 } = useWindowDimensions();
+  const fontScale = Math.min(2, Math.max(1, sysScale || 1));
   const { c, r, mode, theme, scale: textScale } = p;
   const press = usePressScale(p.reduceMotion);
   const cat = getCategoryColors(theme, tileCategory(button));
@@ -53,8 +58,10 @@ export function Tile({
   // A picture that fails to load (offline, missing file) falls back to the
   // built-in picture, or to the label alone, instead of a blank gap.
   const [failedUri, setFailedUri] = useState(null);
-  // Tile width, measured once laid out, so the label can be fitted to it.
-  const [tileWidth, setTileWidth] = useState(0);
+  // Tile width: given by the grid (so the label is fitted on the first
+  // render and does not jump), otherwise measured once laid out.
+  const [measuredWidth, setTileWidth] = useState(0);
+  const tileWidth = measuredWidth || width;
   const imageOk = !!symbolSource && !(symbolSource.uri && symbolSource.uri === failedUri);
   const showImage = symbolStyle !== 'text' && imageOk;
   const showEmoji = symbolStyle !== 'text' && !showImage && !!emoji;
@@ -65,7 +72,7 @@ export function Tile({
   // Fit the label so no word is broken or cut off: the user's size when it
   // fits, otherwise the largest size that does (never below 12).
   // Width budget: 6 px padding and up to 4 px focus border on each side.
-  const wantedSize = Math.round((child ? 17 : 15) * textScale);
+  const wantedSize = Math.round((child ? 17 : 15) * textScale * fontScale);
   const labelWidth = tileWidth ? tileWidth - 20 : 0;
   const labelSize = fitLabelSize(button.label, wantedSize, labelWidth);
   const labelLine = Math.round(labelSize * 1.25);
@@ -90,7 +97,7 @@ export function Tile({
       style={styles.tileOuter}
       onLayout={(e) => {
         const w = Math.round(e.nativeEvent.layout.width);
-        if (w !== tileWidth) setTileWidth(w);
+        if (w !== measuredWidth) setTileWidth(w);
       }}
     >
       {({ pressed }) => (
@@ -139,6 +146,7 @@ export function Tile({
             numberOfLines={2}
             adjustsFontSizeToFit
             minimumFontScale={0.8}
+            maxFontSizeMultiplier={1}
           >
             {button.label}
           </Text>
@@ -159,7 +167,7 @@ export function Tile({
  */
 export function ActionButton({
   icon, label, a11yLabel, onPress, variant = 'quiet', disabled = false,
-  focused = false, size = touch.action, flex, style, testID, hint,
+  focused = false, size = touch.action, flex, style, testID, hint, lines = 2,
 }) {
   const p = usePaper();
   const { c, r } = p;
@@ -195,7 +203,7 @@ export function ActionButton({
         {icon && <Ionicons name={icon} size={label ? 22 : 24} color={fg} />}
         {/* Two lines rather than an ellipsis: a cut-off label hides what the
             control does (e.g. "Save this message as a favou…"). */}
-        {label ? <Text style={[type.label, { color: fg, fontSize: 16, marginLeft: icon ? 8 : 0, flexShrink: 1, textAlign: 'center' }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.5}>{label}</Text> : null}
+        {label ? <Text style={[type.label, { color: fg, fontSize: 16, marginLeft: icon ? 8 : 0, flexShrink: 1, textAlign: 'center' }]} numberOfLines={lines} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.5}>{label}</Text> : null}
       </Animated.View>
     </Pressable>
   );

@@ -15,6 +15,11 @@ import { colorSchemes } from '../design/tokens';
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 let mockTheme = 'light';
+let mockFontScale = 1;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: 390, height: 844, scale: 3, fontScale: mockFontScale }),
+}));
 jest.mock('../design/usePaper', () => {
   const { getScheme, shape } = jest.requireActual('../design/tokens');
   return {
@@ -62,7 +67,29 @@ function renderTile(props) {
 }
 
 describe('Tile', () => {
-  afterEach(() => { mockTheme = 'light'; });
+  afterEach(() => { mockTheme = 'light'; mockFontScale = 1; });
+
+  const labelOf = (r) => r.root.findAllByType(Text).find((t) => t.props.children === 'bathroom');
+
+  test('label is fitted on the first render when the grid gives the width', () => {
+    const r = renderTile({ symbolStyle: 'text', width: 86 });
+    const s = flat(labelOf(r).props.style).fontSize;
+    expect(s).toBeLessThan(23);
+    expect(linesAt('bathroom', s, 66)).toBe(1);
+  });
+
+  test('system font size is included when fitting (and not applied twice)', () => {
+    mockFontScale = 1.3;
+    const r = renderTile({ symbolStyle: 'text', width: 200 });
+    const t = labelOf(r);
+    // 15 x 1.5 x 1.3 = 29: fits in 180 px, so used as is.
+    expect(flat(t.props.style).fontSize).toBe(29);
+    expect(t.props.maxFontSizeMultiplier).toBe(1);
+    act(() => { r.update(<Tile button={{ id: 'bathroom', label: 'bathroom', category: 'noun' }} height={156} symbolStyle="text" width={86} />); });
+    const s = flat(labelOf(r).props.style).fontSize;
+    // Rendered size (no platform multiplier) still fits on one line.
+    expect(linesAt('bathroom', s, 66)).toBe(1);
+  });
 
   test('label shrinks to the measured tile width', () => {
     const r = renderTile({ symbolStyle: 'text' });

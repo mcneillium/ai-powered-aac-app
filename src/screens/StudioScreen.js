@@ -127,7 +127,7 @@ export default function StudioScreen() {
   const confirmReset = () => {
     Alert.alert('Delete what Voice has learned?', 'Suggestions go back to the starting set. Your words, favourites and history are not affected.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteLearnedData(); setStats(getLearningStats()); } },
+      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteLearnedData(); updateSettings({ learningCarriedOver: false }); setStats(getLearningStats()); } },
     ]);
   };
 
@@ -244,7 +244,7 @@ export default function StudioScreen() {
         <Card title="Learning">
           <SwitchRow
             label="Learn from my messages"
-            description={settings.learningCarriedOver ? "On because it was on in your earlier version of Voice; phrases you had said twice or more were kept. Turn it off here at any time. When on, Voice counts the words you use together in messages you speak, on this phone, to improve suggestions." : "Off until you turn it on. When on, Voice counts which words you use together in messages you speak, on this phone, to improve suggestions. If you sign in, this choice applies on your other devices too."}
+            description={settings.learningCarriedOver && settings.personalLearning === true ? "On because it was on in your earlier version of Voice; phrases you used repeatedly were kept. Turn it off here at any time. When on, Voice counts the words you use together in messages you speak, on this phone, to improve suggestions." : "Off until you turn it on. When on, Voice counts which words you use together in messages you speak, on this phone, to improve suggestions. If you sign in, this choice applies on your other devices too."}
             value={settings.personalLearning === true}
             onValueChange={toggleLearning}
           />
