@@ -5,9 +5,9 @@
 // - shows a visible focus ring when scanning focuses it,
 // - gives press feedback that respects reduced motion.
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
-  View, Text, Pressable, Animated, StyleSheet, Modal, Image, ScrollView, Switch, useWindowDimensions,
+  View, Text, Pressable, Animated, StyleSheet, Modal, Image, ScrollView, Switch, useWindowDimensions, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -84,12 +84,14 @@ export function Tile({
   // side without the stripe) before it is hyphenated.
   const wantedSize = Math.round((child ? 17 : 15) * textScale * fontScale);
   const iconSize = Math.round(20 * textScale);
-  const fit = fitTileLabel(button.label, wantedSize, {
+  const symbolNeed = wantSymbol ? 20 + space.xs : wantIcon ? iconSize + 2 : 0;
+  // Memoised: tiles re-render on every switch-scan step.
+  const fit = useMemo(() => fitTileLabel(button.label, wantedSize, {
     width: tileWidth ? tileWidth - 20 : 0,
     height: height ? height - 20 : Infinity,
-    symbol: wantSymbol ? 20 + space.xs : wantIcon ? iconSize + 2 : 0,
+    symbol: symbolNeed,
     pad: WIDE_PAD,
-  });
+  }), [button.label, wantedSize, tileWidth, height, symbolNeed]);
   const labelSize = fit.size;
   const labelLine = fit.lineHeight;
   const showSymbol = wantSymbol && fit.symbol;
@@ -169,8 +171,10 @@ export function Tile({
             style={[type.tile, { color: c.ink, fontSize: labelSize, lineHeight: labelLine, textAlign: 'center' }]}
             numberOfLines={tileWidth ? fit.lines : 2}
             // Safety net if the estimate is short of the real width: shrink,
-            // but never below 12 px.
-            adjustsFontSizeToFit
+            // but never below 12 px. iOS only: Android (Fabric) ignores
+            // minimumFontScale and would shrink to 4 px, so there the
+            // computed fit is used as is.
+            adjustsFontSizeToFit={Platform.OS === 'ios'}
             minimumFontScale={Math.min(1, 12 / labelSize)}
             maxFontSizeMultiplier={1}
             android_hyphenationFrequency="none"

@@ -245,7 +245,8 @@ export function fitTileLabel(label, size, { width, height = Infinity, symbol = 0
       for (let s = size; s >= lo; s -= 1) {
         const lines = hyphen ? hyphenateLabel(text, s, w, { good }) : wordLines(text, s, w);
         if (lines && lines.length <= most && lines.length * lineHeightFor(s) <= h) {
-          const hyphenated = hyphen && lines.some((l) => l.endsWith('-') && !text.includes(l));
+          // Hyphenated if the lines are not just the label's words re-joined.
+          const hyphenated = hyphen && lines.join(' ') !== text.trim().split(/\s+/).join(' ');
           return {
             size: s, lines: lines.length, lineHeight: lineHeightFor(s), text: hyphenated ? lines.join('\n') : text,
             hyphenated, wide, symbol: keep, fits: true,
