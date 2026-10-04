@@ -15,6 +15,7 @@ import { usePaper } from './usePaper';
 import { getCategoryColors, space, type, touch, motion } from './tokens';
 import { fitLabelSize, fitTileLabel } from './fitLabel';
 import { getScanState, advanceScan, selectCurrent } from '../services/switchScanService';
+import { closeUnlessTyping } from '../services/keyboardBack';
 
 /** Press feedback: a quick scale-down (skipped with reduced motion). */
 function usePressScale(reduceMotion) {
@@ -279,7 +280,7 @@ export function Sheet({ visible, onClose, title, subtitle, children, scroll = tr
   const insets = useSafeAreaInsets();
   const Body = scroll ? ScrollView : View;
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={closeUnlessTyping(onClose)} statusBarTranslucent>
       <View style={[styles.scrim, { backgroundColor: c.scrim }]}>
         <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
         <View

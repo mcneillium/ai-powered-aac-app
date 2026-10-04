@@ -24,6 +24,7 @@ import {
   getScanState, advanceScan, selectCurrent,
   saveScanContext, restoreScanContext,
 } from '../services/switchScanService';
+import { closeUnlessTyping } from '../services/keyboardBack';
 
 // Tile colours keep white text at WCAG AA (4.5:1) or better.
 const REPAIR_PHRASES = [
@@ -163,7 +164,7 @@ export default function QuickRepairOverlay() {
         visible={visible}
         transparent
         animationType="fade"
-        onRequestClose={() => setVisible(false)}
+        onRequestClose={closeUnlessTyping(() => setVisible(false))}
         accessibilityViewIsModal
       >
         <View style={[styles.overlay, { backgroundColor: palette.overlay }]}>
