@@ -66,7 +66,7 @@ def lockup(x=0, y=0, scale=1, light=False):
 
 def write_svg(path, width, height, body, title):
     path.parent.mkdir(parents=True, exist_ok=True)
-    definitions = '<defs><linearGradient id="voice-blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#2B65EF"/><stop offset="1" stop-color="#6576FF"/></linearGradient><linearGradient id="voice-ink" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#14233F"/><stop offset="1" stop-color="#253D64"/></linearGradient></defs>'
+    definitions = '<defs><linearGradient id="voice-blue" gradientUnits="userSpaceOnUse" x1="0" y1="12" x2="24" y2="12"><stop stop-color="#2B65EF"/><stop offset="1" stop-color="#6576FF"/></linearGradient><linearGradient id="voice-ink" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#14233F"/><stop offset="1" stop-color="#253D64"/></linearGradient></defs>'
     notice = f'Voice Wave identity. Rounded waveform adapted from Lucide audio-lines; Nunito 600 wordmark / 450 secondary lettering, outlined. Lucide source: https://github.com/lucide-icons/lucide/blob/{ICON_REVISION}/icons/audio-lines.svg. Font source: https://github.com/google/fonts/blob/{FONT_REVISION}/ofl/nunito/Nunito%5Bwght%5D.ttf.\n{lucide}\n{nunito}'
     path.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-labelledby="title"><title id="title">{escape(title)}</title><metadata>{escape(notice)}</metadata>{definitions}{body}</svg>\n')
 
