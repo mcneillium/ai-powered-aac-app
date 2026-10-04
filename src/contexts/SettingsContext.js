@@ -162,19 +162,24 @@ export function SettingsProvider({ children }) {
         const stored = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
         const parsed = await safeParse(SETTINGS_STORAGE_KEY, stored, null);
         const hasStored = !!(parsed && typeof parsed === 'object');
+        // Built in a local copy: a render while this is still reading (for
+        // example the signed-in user arriving) resets latestSettings to the
+        // rendered defaults, and those were then saved over the user's
+        // settings.
+        let loadedSettings = { ...defaultSettings };
         if (hasStored) {
-          latestSettings.current = { ...latestSettings.current, ...parsed };
+          loadedSettings = { ...loadedSettings, ...parsed };
         }
         // Existing installs keep the familiar board until they opt in.
         const launched = await AsyncStorage.getItem('hasLaunched').catch(() => null);
         const migration = migrateExperience(hasStored ? parsed : null, hasStored || launched === 'true');
         if (migration) {
-          latestSettings.current = {
-            ...latestSettings.current,
+          loadedSettings = {
+            ...loadedSettings,
             ...migration,
             boardLayoutSource: migration.boardLayout === 'studio' ? 'new-install' : 'existing-install',
           };
-          AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(latestSettings.current)).catch(() => {});
+          AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(loadedSettings)).catch(() => {});
         }
         // Someone who was already learning in an earlier version keeps
         // learning, with what was learned carried over (once).
@@ -183,11 +188,12 @@ export function SettingsProvider({ children }) {
         try { legacy = legacyRaw ? JSON.parse(legacyRaw) : null; } catch { legacy = null; }
         const learning = migrateLearning(hasStored ? parsed : null, hasLegacyLearning(legacy));
         if (learning) {
-          latestSettings.current = { ...latestSettings.current, ...learning };
-          AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(latestSettings.current)).catch(() => {});
+          loadedSettings = { ...loadedSettings, ...learning };
+          AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(loadedSettings)).catch(() => {});
           if (learning.personalLearning) importLegacyLearning(legacy).catch(() => {});
         }
-        setSettings(latestSettings.current);
+        latestSettings.current = loadedSettings;
+        setSettings(loadedSettings);
       } catch (e) {
         console.warn('Failed to load local settings:', e);
       }

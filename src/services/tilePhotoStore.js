@@ -57,3 +57,17 @@ export async function removeTilePhoto(itemId) {
   await AsyncStorage.setItem(KEY, JSON.stringify(photos)).catch(() => {});
   if (Platform.OS !== 'web') FileSystem.deleteAsync(old, { idempotent: true }).catch(() => {});
 }
+
+/**
+ * Remove every tile photo on this device, including photos of words that
+ * were removed elsewhere (another screen or another device) and so are no
+ * longer in the word list. Used by "Delete my data".
+ */
+export async function removeAllTilePhotos() {
+  photos = {};
+  await AsyncStorage.removeItem(KEY).catch(() => {});
+  if (Platform.OS !== 'web' && DIR) {
+    // Every photo is copied into DIR (saveTilePhoto), so this removes them all.
+    await FileSystem.deleteAsync(DIR, { idempotent: true }).catch(() => {});
+  }
+}

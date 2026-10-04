@@ -10,7 +10,7 @@ import { loadFavourites } from './favouritesStore';
 import { loadSentenceHistory } from './sentenceHistoryStore';
 import { loadCustomVocab } from './customVocabStore';
 import { loadPronunciations } from './pronunciationStore';
-import { loadTilePhotos, getTilePhoto, removeTilePhoto } from './tilePhotoStore';
+import { loadTilePhotos, removeAllTilePhotos } from './tilePhotoStore';
 import { loadAIProfile } from './aiProfileStore';
 import { DRAFT_KEY } from './sentenceDraft';
 
@@ -42,16 +42,12 @@ export const SETTINGS_KEYS = ['@aac_settings', 'currentSessionId', 'lastActivity
  * the empty state.
  */
 export async function deleteLocalPersonalData({ includeSettings = false } = {}) {
-  // Photos first: their file names live in the photo store.
-  const custom = await loadCustomVocab({ reload: true }).catch(() => []);
-  await loadTilePhotos().catch(() => {});
-  for (const item of custom || []) {
-    if (getTilePhoto(item.id)) await removeTilePhoto(item.id).catch(() => {});
-  }
+  // Every tile photo, not only those of words still in the list: a word
+  // removed elsewhere can leave its photo behind.
+  await removeAllTilePhotos().catch(() => {});
   await resetLearning().catch(() => {});
   const keys = includeSettings ? [...PERSONAL_KEYS, ...SETTINGS_KEYS] : PERSONAL_KEYS;
   await AsyncStorage.multiRemove(keys).catch(() => {});
-  await AsyncStorage.removeItem('@voice_tile_photos_v1').catch(() => {});
   await Promise.all([
     loadFavourites({ reload: true }), loadSentenceHistory({ reload: true }),
     loadCustomVocab({ reload: true }), loadPronunciations({ reload: true }),
