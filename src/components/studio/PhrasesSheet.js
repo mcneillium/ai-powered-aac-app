@@ -7,7 +7,8 @@
 import React from 'react';
 import { Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Sheet, ListRow } from '../../design/components';
+import { Sheet } from '../../design/components';
+import { VisualListRow as ListRow } from './VisualMessage';
 import { usePaper } from '../../design/usePaper';
 import { space, type, touch } from '../../design/tokens';
 import { getContextPacksForMode, getContextPack } from '../../data/contextPacks';

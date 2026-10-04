@@ -544,6 +544,19 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       )}
 
+      <Text style={[styles.sectionTitle, { color: palette.text, borderBottomColor: palette.border }]}>Communication tools</Text>
+      {[
+        ['CommunicationTools', 'My scenes and communication tools'],
+        ['ConversationWorkspace', 'My messages'],
+        ['PortableBoard', 'Export or print my board'],
+        ['PredictionDiagnostics', 'How suggestions learn'],
+      ].map(([route, label]) => (
+        <TouchableOpacity key={route} style={[styles.linkRow, { minHeight: 48, justifyContent: 'center' }]}
+          onPress={() => navigation.navigate(route)} accessibilityRole="button" accessibilityLabel={label}>
+          <Text style={[styles.linkText, { color: palette.primary }]}>{label}</Text>
+        </TouchableOpacity>
+      ))}
+
       {/* Send Feedback */}
       <TouchableOpacity
         style={[styles.testButton, { backgroundColor: palette.info, marginTop: 24 }]}

@@ -24,15 +24,19 @@ export default function MeScreen() {
   const confirmDeleteLocal = () => {
     Alert.alert(
       'Delete my words and messages?',
-      'Removes from this phone: spoken history, favourites, your own words and their photos, pronunciations and everything Voice has learned. Your settings stay. If you are signed in, your own words are kept in your account and sync back to this phone.',
+      'Removes from this phone: spoken history, favourites, your own words and their photos, photo scenes, saved message drafts, temporary exports, pronunciations and everything Voice has learned. Your settings stay. If you are signed in, your own words are kept in your account and sync back to this phone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            await deleteLocalPersonalData();
-            Alert.alert('Deleted', account ? 'Your messages and learning were removed from this phone. Your own words sync back from your account.' : 'Your words and messages were removed from this phone.');
+            try {
+              await deleteLocalPersonalData();
+              Alert.alert('Deleted', account ? 'Your messages and learning were removed from this phone. Your own words sync back from your account.' : 'Your words and messages were removed from this phone.');
+            } catch {
+              Alert.alert('Deletion incomplete', 'Some personal data could not be removed. Please try again.');
+            }
           },
         },
       ]
@@ -58,6 +62,13 @@ export default function MeScreen() {
         ) : (
           <ListRow icon="log-in-outline" text="Sign in or create an account" onPress={() => navigation.navigate('Login')} />
         )}
+      </Card>
+
+      <Card title="Communication tools">
+        <ListRow icon="images-outline" text="My scenes and communication tools" meta="Pictures, repair phrases and portable cards" onPress={() => navigation.navigate('CommunicationTools')} />
+        <ListRow icon="chatbubbles-outline" text="My messages" meta="Save a thought, try word forms and return to it" onPress={() => navigation.navigate('ConversationWorkspace')} />
+        <ListRow icon="print-outline" text="Export or print my board" meta="Portable words, photos and a paper backup" onPress={() => navigation.navigate('PortableBoard')} />
+        <ListRow icon="sparkles-outline" text="How suggestions learn" meta="See your learning status and try a private demo" onPress={() => navigation.navigate('PredictionDiagnostics')} />
       </Card>
 
       <Card title="Your data">

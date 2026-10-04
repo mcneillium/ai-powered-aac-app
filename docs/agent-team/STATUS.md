@@ -205,3 +205,24 @@ Owner: link a GitHub user in Expo (or turn off that integration); install the AP
   - arm64-v8a: SHA-256 `66d7102e5a2b4cc7b5f8048339a70e3fddea2159aee8379da79959841dce62af`, 30,964,674 bytes (`native-ui-evidence/Voice2Test-cdf9cd9-arm64.apk`).
   - arm64-v8a + x86_64: SHA-256 `f6b0f306f65f44dc0dc75a845e961716216f1b4766b2c84cc405a77c210d42e3`, 38,535,035 bytes (`native-ui-evidence/Voice2Test-cdf9cd9.apk`).
   - These supersede the `f74dd96` APKs.
+
+## 2026-10-04 — visual communication expansion
+
+Branch `codex/voice-visual-communication`, based on PR #11 head `ae665d696911efc9e97f21adbf6bd28ac5473276`. Initial worktree clean. PR #11 remains the stack base; this work does not merge or release earlier PRs.
+
+Implemented picture-supported Studio messages/predictions/phrases/saved choices, offline related-word finder, honest local-learning diagnostics with isolated synthetic demo, photo scenes/repair/scales/drawing, parked message workspace and optional English forms, portable vocabulary/scene JSON and PDFs. Details and limits: `docs/features/visual-communication.md`. Device checks added as section I. Existing board positions, optional learning and explicit speech control retained.
+
+Independent code/privacy review found and resolved: receiver export-file lifetime, delayed import/deletion races, mounted-screen stale scene/preview resurrection, unsafe picker-directory cleanup, scene edit-lock/in-app scanning, native-stack unsaved exit, and return navigation duplicating the App tree. Final static reviewer found no remaining blockers; this is not native/accessibility certification.
+
+Validation (cloud source checkout, no physical/emulator claim):
+- `npx jest --runInBand --no-coverage`: 66 suites, 879 tests pass. Added tests use synthetic data only.
+- `npm run lint`: exit 0, no errors, existing 15 warnings.
+- `npx expo config --type public`: exit 0.
+- `npx expo export --platform android`: exit 0.
+- Dependency notices regenerated for SDK-matched expo-sharing, expo-document-picker and expo-print; notices gate passes.
+- `git diff --check`: pass.
+- Independent static/code/privacy review: no remaining blocking findings.
+
+No live Firebase changes, merges, releases, phone installs or CI subscriptions. Java exists but Android SDK/adb/Gradle are unavailable here, so no APK was built or tested and no copy to the Windows OneDrive folder can be claimed. New native modules require a new APK, not merely a JS update. Keep the existing test signing identity when available; save extracted builds/checksums/notes to `C:\Users\McNei\OneDrive\AAC\Builds\YYYY-MM-DD_<commit>\` and only update `Latest` after verification.
+
+Remaining gates: section I native checks, Samsung large-font/speech/back navigation, TalkBack and switch usability, native file sharing/PDF/photo picker, iOS testing, and user/partner evaluation of picture comprehension and communication benefit. Synthetic adaptation is not a market or clinical benchmark. Vocabulary export is Voice-specific, not OBF/full account backup. No general multilingual model, eye-gaze or voice-cloning feature is claimed.

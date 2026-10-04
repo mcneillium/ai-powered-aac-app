@@ -14,6 +14,10 @@ import { loadTilePhotos, removeAllTilePhotos } from './tilePhotoStore';
 import { loadAIProfile, resetAIProfile } from './aiProfileStore';
 import { CORRUPT_SUFFIX } from '../utils/safeStorage';
 import { DRAFT_KEY } from './sentenceDraft';
+import { SCENES_KEY, clearCommunicationScenes } from './communication-scenes';
+import { clearPrivateExports } from './privateExportCache';
+import { CONVERSATION_KEY, clearConversationWorkspace } from './conversation-workspace';
+import { cancelAndDrainPortableImport } from './portable-board-files';
 
 /** Messages, words and what was learned from them. */
 export const PERSONAL_KEYS = [
@@ -30,6 +34,8 @@ export const PERSONAL_KEYS = [
   'wordFrequencyModel',
   'savedEmotion',
   DRAFT_KEY,
+  SCENES_KEY,
+  CONVERSATION_KEY,
   personalKey(DEFAULT_PROFILE_ID),
 ];
 
@@ -57,6 +63,10 @@ export async function deleteLearnedData() {
 }
 
 export async function deleteLocalPersonalData({ includeSettings = false } = {}) {
+  await cancelAndDrainPortableImport();
+  await clearConversationWorkspace();
+  await clearCommunicationScenes();
+  await clearPrivateExports();
   // Every tile photo, not only those of words still in the list: a word
   // removed elsewhere can leave its photo behind.
   await removeAllTilePhotos().catch(() => {});

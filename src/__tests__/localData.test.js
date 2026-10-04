@@ -45,3 +45,17 @@ test('account deletion also removes settings', async () => {
 test('the learned-prediction key is in the list', () => {
   expect(PERSONAL_KEYS).toContain(personalKey('default'));
 });
+
+test('deletes photo scenes and parked drafts together with existing personal stores', async () => {
+  const scenes = require('../services/communication-scenes');
+  const workspace = require('../services/conversation-workspace');
+  await scenes.saveScenes([{ id: 'test-scene', name: 'Test kitchen', photo: 'data:image/jpeg;base64,YQ==', points: [] }]);
+  await workspace.parkConversationDraft('Synthetic parked message');
+  workspace.queueWorkspaceReturn('Synthetic return message');
+  await deleteLocalPersonalData();
+  expect(await scenes.loadScenes()).toEqual([]);
+  expect(await workspace.listConversationDrafts()).toEqual([]);
+  expect(workspace.consumeWorkspaceReturn()).toBeNull();
+  expect(PERSONAL_KEYS).toContain(scenes.SCENES_KEY);
+  expect(PERSONAL_KEYS).toContain(workspace.CONVERSATION_KEY);
+});

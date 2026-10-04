@@ -3,7 +3,8 @@
 
 import React, { useState } from 'react';
 import { View } from 'react-native';
-import { Sheet, Segmented, ListRow, EmptyState, ActionButton } from '../../design/components';
+import { Sheet, Segmented, EmptyState, ActionButton } from '../../design/components';
+import { VisualListRow as ListRow } from './VisualMessage';
 import { usePaper } from '../../design/usePaper';
 import { space, touch } from '../../design/tokens';
 import { t } from '../../i18n/strings';
