@@ -33,6 +33,9 @@ export function tileCategory(button) {
   return button.category || 'misc';
 }
 
+// Extra label width a tile may take from its right-hand padding (6 -> 2 px).
+const WIDE_PAD = 4;
+
 /**
  * A vocabulary tile.
  * symbolStyle: 'symbols' (large picture), 'mixed' (small picture + label),
@@ -68,20 +71,24 @@ export function Tile({
   const showEmoji = symbolStyle !== 'text' && !showImage && !!emoji;
   const wantSymbol = showImage || showEmoji;
   const wantIcon = !wantSymbol && !!button.icon;
-  // Fit the label so no word is broken, cut off or clipped by the tile:
-  // the user's size when it fits, otherwise the largest size that does
-  // (never below 12; 11 and the side padding only for a word that is wider
-  // than the tile at 12). The picture shrinks first (to 20 px) and is
-  // dropped only if even the smallest label does not fit beside it.
-  // Width and height budgets: 6 px padding and up to 4 px focus border on
-  // each side.
+  // Fit the label so no word is broken anywhere but at a visible hyphen,
+  // cut off or clipped by the tile: the user's size when it fits, otherwise
+  // the largest size that does, never below 12 px. A word wider than the
+  // tile at 12 px wraps with a hyphen ("bath-" / "room"). The label always
+  // keeps the side padding, so it never runs over the category stripe
+  // (5 px, inside the border) or the focus border. The picture shrinks
+  // first (to 20 px) and is dropped only if the label does not fit beside
+  // it. Width and height budgets: 6 px padding and up to 4 px focus border
+  // on each side (the same in every focus state, so focus never reflows);
+  // a word slightly too wide may use 4 px of the right-hand padding (the
+  // side without the stripe) before it is hyphenated.
   const wantedSize = Math.round((child ? 17 : 15) * textScale * fontScale);
   const iconSize = Math.round(20 * textScale);
   const fit = fitTileLabel(button.label, wantedSize, {
     width: tileWidth ? tileWidth - 20 : 0,
     height: height ? height - 20 : Infinity,
     symbol: wantSymbol ? 20 + space.xs : wantIcon ? iconSize + 2 : 0,
-    pad: 12,
+    pad: WIDE_PAD,
   });
   const labelSize = fit.size;
   const labelLine = fit.lineHeight;
@@ -105,7 +112,8 @@ export function Tile({
       onPressIn={press.onPressIn}
       onPressOut={press.onPressOut}
       accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
+      // The name is the plain label, never the hyphenated text drawn below.
+      accessibilityLabel={accessibilityLabel || button.label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ selected: focused }}
       style={styles.tileOuter}
@@ -120,8 +128,8 @@ export function Tile({
             styles.tile,
             {
               height,
-              // A word wider than the tile at 12 px may use the side padding.
-              ...(fit.wide ? { paddingHorizontal: 0 } : null),
+              // Never the left padding: that keeps the label off the stripe.
+              ...(fit.wide ? { paddingRight: 6 - WIDE_PAD } : null),
               backgroundColor: bg,
               borderRadius: r.tile,
               borderColor: focused ? c.focus : hc ? c.line : child ? 'transparent' : c.line,
@@ -159,12 +167,17 @@ export function Tile({
           )}
           <Text
             style={[type.tile, { color: c.ink, fontSize: labelSize, lineHeight: labelLine, textAlign: 'center' }]}
-            numberOfLines={2}
+            numberOfLines={tileWidth ? fit.lines : 2}
+            // Safety net if the estimate is short of the real width: shrink,
+            // but never below 12 px.
             adjustsFontSizeToFit
-            minimumFontScale={0.8}
+            minimumFontScale={Math.min(1, 12 / labelSize)}
             maxFontSizeMultiplier={1}
+            android_hyphenationFrequency="none"
+            importantForAccessibility="no"
+            accessibilityElementsHidden
           >
-            {button.label}
+            {fit.text}
           </Text>
           {isNav && (
             <View style={[styles.navMark, { backgroundColor: hc ? c.line : cat.edge }]}>

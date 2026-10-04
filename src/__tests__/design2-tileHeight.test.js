@@ -96,18 +96,27 @@ describe('tile content fits the tile height at large system font sizes', () => {
 });
 
 describe('words are never broken inside', () => {
-  test('"bathroom" at 320 dp, 4 per row, largest text fits on one line', () => {
+  // Updated (design3, 2026-10-04): this used to require one line at >= 11 px,
+  // which was reached by dropping the side padding so the text ran over
+  // the category stripe. "bathroom" is wider than the tile at 12 px, so it
+  // is now hyphenated at >= 12 px inside the padding (see design3-stripe).
+  test('"bathroom" at 320 dp, 4 per row, largest text: hyphenated, never below 12 px', () => {
     mockFontScale = 2; mockTextScale = 1.5;
     const width = gridTileWidth(320, 4); // 68
     const r = render('bathroom', { width, height: 156, symbolStyle: 'text' });
-    const m = measure(r, 'bathroom', width);
-    expect(m.lines).toBe(1);
-    expect(m.size).toBeGreaterThanOrEqual(11);
+    const text = r.root.findAllByType(Text).find((t) => String(t.props.children).replace(/-\n/g, '') === 'bathroom');
+    const ts = flat(text.props.style);
+    expect(text.props.children).toBe('bath-\nroom');
+    expect(ts.fontSize).toBeGreaterThanOrEqual(12);
+    expect(text.props.numberOfLines).toBe(2);
+    // Each line fits the widest label box (left padding 6, right 2, focus border 4).
+    text.props.children.split('\n').forEach((l) => expect(linesAt(l, ts.fontSize, width - 2 * FOCUS_BORDER - 8)).toBe(1));
   });
 
   test('labels are never ellipsised or cut by the platform', () => {
     const r = render('bathroom', { width: 68, height: 104, symbolStyle: 'text' });
-    const text = r.root.findAllByType(Text).find((t) => t.props.children === 'bathroom');
+    // Lookup updated (design3): the drawn text may now be hyphenated ("bath-\nroom").
+    const text = r.root.findAllByType(Text).find((t) => String(t.props.children).replace(/-\n/g, '') === 'bathroom');
     expect(text.props.ellipsizeMode).toBeUndefined();
     expect(text.props.numberOfLines).toBeGreaterThanOrEqual(2);
   });
