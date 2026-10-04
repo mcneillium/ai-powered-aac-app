@@ -53,7 +53,7 @@ export { defaultSettings };
 // differ between devices and platforms, and the compact layout depends on
 // this device's screen. (Keeping them local also means a reset to "default"
 // (null), which the Realtime Database stores as a missing key, is not lost.)
-export const LOCAL_ONLY_KEYS = ['speechVoice', 'compactLayout', 'boardLayoutSource'];
+export const LOCAL_ONLY_KEYS = ['speechVoice', 'compactLayout', 'boardLayoutSource', 'learningCarriedOver'];
 
 /** The settings object as written to the cloud. Exported for tests. */
 export function toCloudSettings(settings) {
@@ -130,7 +130,9 @@ export function migrateLearning(stored, hadLegacyLearning) {
   if (stored && typeof stored.personalLearning === 'boolean') return null;
   if (!hadLegacyLearning) return null;
   const keep = !(stored && stored.aiPersonalisationEnabled === false);
-  return { personalLearning: keep };
+  // learningCarriedOver lets Personalise and Settings say why learning is on
+  // (it was on in the earlier version), instead of "off until you turn it on".
+  return keep ? { personalLearning: true, learningCarriedOver: true } : { personalLearning: false };
 }
 
 export const SettingsContext = createContext({

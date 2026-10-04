@@ -109,13 +109,12 @@ is the storage-free core. The tests and the evaluation use it directly.
 
 **Data** (`scripts/eval/data/`, all authored and synthetic):
 
-> **Reproducibility (re-checked 2026-10-04 on 7342d01):** the repository's
-> `.gitignore` rule `data` also matches `scripts/eval/data/`, so
-> `seed-corpus.txt` and `personas.txt` are **not in Git** and
-> `node scripts/eval/evaluate.js` fails with ENOENT on a clean checkout. With
-> the untracked local copies restored, every quality, size and behaviour number
-> below was reproduced exactly and `build-base-model.js` regenerated a
-> byte-identical `baseModel.json`; only latency varied (run-to-run noise).
+> **Reproducibility (re-checked 2026-10-04):** on 7342d01 the `.gitignore` rule
+> `data` also matched `scripts/eval/data/`, so the corpus was not in Git and a
+> clean checkout could not run the evaluation. Since the agent-team run (branch
+> `claude/voice-team-run`) `scripts/eval/data/` is tracked, and
+> `node scripts/eval/evaluate.js` reproduces every quality, size and behaviour
+> number below exactly; only latency varies (run-to-run noise).
 > The 7342d01 changes (learning carry-over, forget/undo) are not exercised by
 > this evaluation; they are covered by Jest (`learnedControl`, `pred-audit`).
 

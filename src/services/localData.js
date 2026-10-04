@@ -33,6 +33,9 @@ export const PERSONAL_KEYS = [
   personalKey(DEFAULT_PROFILE_ID),
 ];
 
+/** Learned data kept by earlier versions (no longer written). */
+export const LEGACY_LEARNED_KEYS = ['wordPredictionModel', 'wordFrequencyModel'];
+
 /** Settings and housekeeping keys (removed only with the account). */
 export const SETTINGS_KEYS = ['@aac_settings', 'currentSessionId', 'lastActivity', 'logLevel'];
 
@@ -49,6 +52,8 @@ export const SETTINGS_KEYS = ['@aac_settings', 'currentSessionId', 'lastActivity
  */
 export async function deleteLearnedData() {
   await Promise.all([resetLearning(), resetAIProfile()].map((p) => Promise.resolve(p).catch(() => {})));
+  // Learned data from earlier versions of the app.
+  await AsyncStorage.multiRemove(LEGACY_LEARNED_KEYS).catch(() => {});
 }
 
 export async function deleteLocalPersonalData({ includeSettings = false } = {}) {
@@ -56,6 +61,9 @@ export async function deleteLocalPersonalData({ includeSettings = false } = {}) 
   // removed elsewhere can leave its photo behind.
   await removeAllTilePhotos().catch(() => {});
   await resetLearning().catch(() => {});
+  // Clear the usage profile in memory first, so a background flush cannot
+  // write the old profile back after the keys are removed.
+  await resetAIProfile().catch(() => {});
   const keys = includeSettings ? [...PERSONAL_KEYS, ...SETTINGS_KEYS] : PERSONAL_KEYS;
   // Also the backups safeStorage keeps of unreadable data: they hold the
   // same personal content.

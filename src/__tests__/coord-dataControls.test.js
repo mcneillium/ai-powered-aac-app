@@ -51,3 +51,31 @@ test('"Delete my words and messages" also removes unreadable-data backups', asyn
   expect(await AsyncStorage.getItem('@aac_sentence_history__corrupt')).toBeNull();
   expect(await AsyncStorage.getItem('@aac_favourites__corrupt')).toBeNull();
 });
+
+test('"Delete what Voice has learned" also removes learned data kept by earlier versions', async () => {
+  await AsyncStorage.setItem('wordPredictionModel', '{"old":1}');
+  await AsyncStorage.setItem('wordFrequencyModel', '{"old":1}');
+  await localData.deleteLearnedData();
+  expect(await AsyncStorage.getItem('wordPredictionModel')).toBeNull();
+  expect(await AsyncStorage.getItem('wordFrequencyModel')).toBeNull();
+});
+
+test('when "Delete my words and messages" removes the keys, the old usage profile is no longer in memory (so a background flush cannot write it back)', async () => {
+  await aiProfile.loadAIProfile();
+  await aiProfile.recordWordSelection('zebedee', ['see'], false);
+  let inMemoryAtRemoval = null;
+  const spy = jest.spyOn(AsyncStorage, 'multiRemove');
+  spy.mockImplementation(async (keys) => {
+    if (inMemoryAtRemoval === null && keys.includes('@aac_ai_profile')) inMemoryAtRemoval = aiProfile.getTopWords(5);
+  });
+  await localData.deleteLocalPersonalData();
+  spy.mockRestore();
+  expect(inMemoryAtRemoval).not.toBeNull();
+  expect(inMemoryAtRemoval).not.toContain('zebedee');
+});
+
+test('carried-over learning is flagged so the UI can explain it, and the flag stays on this device', () => {
+  const { migrateLearning, LOCAL_ONLY_KEYS } = require('../contexts/SettingsContext');
+  expect(migrateLearning(null, true)).toEqual({ personalLearning: true, learningCarriedOver: true });
+  expect(LOCAL_ONLY_KEYS).toContain('learningCarriedOver');
+});

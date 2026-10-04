@@ -486,12 +486,12 @@ export default function SettingsScreen() {
         <View style={{ flex: 1 }}>
           <Text style={[styles.label, { color: palette.text, marginTop: 0 }]}>Learn from my messages</Text>
           <Text style={[styles.helperText, { color: palette.textSecondary }]}>
-            Off until you turn it on. When on, Voice counts the words you use together in messages you speak, on this device only, to improve suggestions. Taps you delete are never learned.
+            {settings.learningCarriedOver ? 'On because it was on in your earlier version of Voice. ' : 'Off until you turn it on. '}When on, Voice counts the words you use together in messages you speak, on this device, to improve suggestions. Taps you delete are never learned. If you sign in, this choice applies on your other devices too.
           </Text>
         </View>
         <Switch
           value={settings.personalLearning === true}
-          onValueChange={(val) => { updateSettings({ personalLearning: val, aiPersonalisationEnabled: true }); setLearningEnabled(val); }}
+          onValueChange={(val) => { updateSettings({ personalLearning: val, aiPersonalisationEnabled: true, learningCarriedOver: false }); setLearningEnabled(val); }}
           accessibilityLabel="Learn from my messages"
         />
       </View>
