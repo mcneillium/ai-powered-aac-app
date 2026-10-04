@@ -167,6 +167,7 @@ Owner: link a GitHub user in Expo (or turn off that integration); install the AP
 - Certificate SHA-256 `63bc733cf7c902117b0936e5ac96387d70692e398a4a6892711856c1e42080f8`.
 - APK SHA-256 `685b50b8c82026326e70f1ff95b9622543a65c1645716657ef84303adb21dc7d`, 38,535,051 bytes.
 - Local copy: `native-ui-evidence/Voice2Test-f74dd96.apk` (ignored by Git).
+- Phone-only build, same source and key, arm64-v8a: APK SHA-256 `8ba821ebd93b695d87ff755557f246c08c4267b705edcbc7e4a64298969ef1fb`, 30,964,690 bytes (`native-ui-evidence/Voice2Test-f74dd96-arm64.apk`). The dual-ABI file is over the 30 MiB chat upload limit.
 
 ### Owner decisions
 **Release blockers**
