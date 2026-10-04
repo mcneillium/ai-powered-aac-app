@@ -50,8 +50,15 @@
 |---|---|---|
 | `npm run lint` | 0 | 0 errors, 15 warnings (pre-existing) |
 | `CI=1 npx jest` | 0 | 48 suites, 405 tests |
-| `npx expo export --platform android` | 0 | on `30da7ea`; rerun recorded with the APK |
+| `npx expo export --platform android` | 0 | on `30da7ea`; the release bundle was rebuilt by Gradle for the APK below (BUILD_OK) |
 | `node scripts/eval/evaluate.js` | 0 | synthetic only; metrics unchanged from committed `results.json` apart from latency (not committed) |
+
+### Test APK (build only, not installed anywhere)
+- Source: clean `git archive` of `ad3a35d` (no local changes); `expo prebuild --clean`; `assembleRelease`, arm64-v8a.
+- Package `com.elpabloawakens.aipoweredaacapp.prtestv2`, label "Voice 2 Test", versionName 1.2.0, versionCode 2. Separate test identity, so it installs beside the store app. It updates an earlier "Voice 2 Test" signed with the same key.
+- Signing: test key held outside Git. Certificate SHA-256 `63bc733cf7c902117b0936e5ac96387d70692e398a4a6892711856c1e42080f8` (`apksigner verify` passes).
+- APK SHA-256 `9490f431f6a6a3d7a53dc67a28915cd94e7b9a3c9497c2b74f03f1ac3514411e`, 30,959,206 bytes.
+- Firebase env vars unset at build time: cloud features off in this build.
 
 ### Reviews
 - **Reviewer (static, read-only):** 1 blocking finding (B1 font scale), now fixed; non-blocking N1, N4–N7 fixed or covered by tests. Follow-up review of `4c64e1a`: APPROVE (static); grid width made authoritative and 2x cap documented in the next commit.
@@ -72,4 +79,4 @@
 - Human checks: TalkBack, switch scanning, real speech output, picture-symbol readability, checklist §H rows H1–H25.
 
 ### Next
-Collect worker diffs → reproduce/verify → integrate → full gate → reviewer + privacy → clean-checkout APK → draft PR.
+Owner: install the test APK on the S24 and run checklist §H plus TalkBack/switch checks; decide the owner items above. Team: start a fresh session in a checkout of this branch to confirm the agents and `/voice-team` load.
