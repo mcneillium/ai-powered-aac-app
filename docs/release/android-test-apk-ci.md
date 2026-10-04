@@ -4,6 +4,8 @@
 
 The app name is **Voice Visual Test <short-commit>**, with package `com.elpabloawakens.aipoweredaacapp.prtest<first-12-commit-characters>r<run-id>a<run-attempt>`. The APK includes arm64-v8a and x86_64. A newly generated test key lives only in runner temporary storage. No account, signing or cloud secrets are required or uploaded. Firebase accounts, sync and cloud AI have no configuration; explicit ARASAAC searches remain online functionality.
 
+The job also deliberately replaces only the generated release signing configuration after assembling the test APK and verifies that a dry-run release bundle is refused with the signing-guard error. No bundle is produced.
+
 Before upload, the job verifies the actual APK's Android signature, package, app name, both native architectures, allowed release permissions and embedded JavaScript bundle. It uploads only the extracted APK, `SHA256SUMS.txt` and `BUILD-NOTES.md`, retained for 14 days. A successful build is **build evidence**, not installation or device acceptance. The separate lint/test/export CI result must also be checked for the same source SHA.
 
 Download the artifact from the successful Actions run and extract it into `C:\Users\McNei\OneDrive\AAC\Builds\YYYY-MM-DD_<commit>\`. Verify the checksum after extracting and after any copy. Keep older builds and unrelated folders. Update `Latest` only after the new APK passes device testing. Actions cannot verify that this Windows folder exists or that OneDrive has synced.

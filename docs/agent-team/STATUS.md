@@ -267,3 +267,12 @@ consent, startup and deletion fixes; additional sharing caller regressions
 passed with 25 targeted tests. Final native build results will be recorded
 separately with their exact source SHA. SDK 36/NDK and checksum-verified JDK 17
 are installed here; no connected adb device or KVM-backed emulator is available.
+
+Native runner evidence: commit `859acd25879889e13bd1f9f50cc6b7fd07cc332a`
+assembled successfully in Actions run `37223574218`, but artifact verification
+refused unexpected `ACCESS_WIFI_STATE`. NetInfo's source guards Wi-Fi detail
+reads when that permission is absent; Voice's NetworkContext uses only
+`isConnected`/`isInternetReachable`. The unnecessary Wi-Fi-state permission is
+now blocked in Expo config. Rebuild/actual manifest verification remains
+required; the refused APK was not delivered. A native negative signing-guard
+check was added to the runner. No device checks or production actions occurred.

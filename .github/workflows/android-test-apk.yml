@@ -90,6 +90,24 @@ jobs:
           cd android
           ./gradlew assembleRelease --no-daemon --max-workers=2
 
+      - name: Verify signing guard refuses debug-signed release bundles
+        run: |
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          path = Path('android/app/build.gradle')
+          source = path.read_text()
+          original = 'signingConfig signingConfigs.prtest'
+          if source.count(original) != 1:
+              raise SystemExit('Test release signing configuration was not found')
+          path.write_text(source.replace(original, 'signingConfig signingConfigs.debug'))
+          PYCODE
+          cd android
+          if ./gradlew :app:bundleRelease --dry-run --no-daemon --max-workers=2 > "$RUNNER_TEMP/voice-signing-guard.txt" 2>&1; then
+            echo 'Signing guard unexpectedly accepted a debug-signed release bundle'
+            exit 1
+          fi
+          grep -F 'Voice release signing is not configured.' "$RUNNER_TEMP/voice-signing-guard.txt"
+
       - name: Verify APK and write build evidence
         run: |
           mkdir -p test-apk
@@ -148,7 +166,7 @@ jobs:
           Signing certificate SHA-256: `{cert[1].lower()}`
           APK SHA-256: `{digest}`
 
-          Performed in this job: clean checkout, locked dependency install, clean Expo Android prebuild, release APK assembly, Android signature verification, actual package/name/ABI/permission inspection and bundled-JavaScript check. Unit/lint checks are the separate CI workflow; consult its result for this exact commit.
+          Performed in this job: clean checkout, locked dependency install, clean Expo Android prebuild, release APK assembly, Android signature verification, actual package/name/ABI/permission inspection, bundled-JavaScript check and refusal of a debug-signed release bundle. Unit/lint checks are the separate CI workflow; consult its result for this exact commit.
 
           Not performed: installation, emulator/phone use, speech listening, TalkBack, Switch Access, physical camera/gallery, iOS or store release. This artifact is not production-signed and has not passed device acceptance.
 
