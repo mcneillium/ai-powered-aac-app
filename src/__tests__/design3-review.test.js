@@ -25,8 +25,10 @@ function labelText(os) {
     act(() => {
       r = TestRenderer.create(<Tile button={{ id: 'b', label: 'bathroom', category: 'noun' }} height={156} width={68} symbolStyle="text" accessibilityLabel="Say bathroom" />);
     });
-    return r.root.findAllByType(Text).find((t) => typeof t.props.children === 'string');
+    const t = r.root.findAllByType(Text).find((n) => typeof n.props.children === 'string');
+    return { props: { ...t.props } };
   } finally {
+    if (r) act(() => r.unmount());
     Platform.OS = prev;
   }
 }
