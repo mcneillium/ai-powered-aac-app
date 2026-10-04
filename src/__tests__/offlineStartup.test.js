@@ -9,6 +9,8 @@ jest.mock('firebase/database', () => ({
   set: jest.fn(), get: jest.fn(), onValue: jest.fn(), push: jest.fn(), remove: jest.fn(),
 }));
 
+jest.mock('firebase/auth', () => ({ signInAnonymously: jest.fn() }));
+
 describe('startup without Firebase', () => {
   test('custom vocabulary loads and saves locally', async () => {
     const store = require('../services/customVocabStore');
@@ -22,8 +24,13 @@ describe('startup without Firebase', () => {
   });
 
   test('AI backend requests get no token rather than crashing', async () => {
-    const { ENDPOINTS } = require('../services/aiBackend');
-    expect(ENDPOINTS.phraseSuggestions).toEqual(expect.any(String));
+    const { ENDPOINTS, callAIBackend } = require('../services/aiBackend');
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn();
+    try {
+      await expect(callAIBackend(ENDPOINTS.phraseSuggestions, { currentWords: ['synthetic'] })).resolves.toBeNull();
+      expect(global.fetch).not.toHaveBeenCalled();
+    } finally { global.fetch = originalFetch; }
   });
 
   test('core vocabulary and search work', () => {

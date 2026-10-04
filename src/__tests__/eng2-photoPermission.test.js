@@ -22,6 +22,7 @@ jest.mock('../contexts/SettingsContext', () => {
   return { useSettings: () => ({ settings, updateSettings: jest.fn() }) };
 });
 jest.mock('../services/tilePhotoStore', () => ({
+  tilePhotoGeneration: jest.fn(() => 0),
   saveTilePhoto: jest.fn(async () => 'file:///docs/tiles/x.jpg'),
   removeTilePhoto: jest.fn(async () => {}),
   getTilePhoto: jest.fn(() => null),

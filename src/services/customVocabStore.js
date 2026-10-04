@@ -18,6 +18,7 @@ import { getTilePhoto } from './tilePhotoStore';
 import { ref, set as fbSet, get as fbGet } from 'firebase/database';
 import { auth as cloudAuth, db as cloudDb } from '../../firebaseConfig';
 import { safeParse } from '../utils/safeStorage';
+import { isAccountDeletionPaused, accountDataGeneration, trackAccountDataOperation } from './accountDeletionBarrier';
 
 const CUSTOM_VOCAB_KEY = '@aac_custom_vocab';
 const DELETED_IDS_KEY = '@aac_custom_vocab_deleted';
@@ -45,10 +46,14 @@ let loaded = false;
 function getSyncUid() {
   // Null when Firebase is not configured — vocabulary then stays local-only.
   const u = cloudAuth?.currentUser;
-  return u && !u.isAnonymous ? u.uid : null;
+  return !isAccountDeletionPaused() && cloudDb && u && !u.isAnonymous ? u.uid : null;
 }
 
-export async function loadCustomVocab({ reload = false } = {}) {
+export function loadCustomVocab(options = {}) {
+  return trackAccountDataOperation(runLoadCustomVocab(options));
+}
+
+async function runLoadCustomVocab({ reload = false } = {}) {
   if (loaded && !reload) return customItems;
 
   // 1. Local first
@@ -68,13 +73,13 @@ export async function loadCustomVocab({ reload = false } = {}) {
   loaded = true;
 
   // 2. Merge remote
-  await mergeRemote();
+  await trackAccountDataOperation(mergeRemote());
 
   return customItems;
 }
 
 export async function refreshFromFirebase() {
-  await mergeRemote();
+  await trackAccountDataOperation(mergeRemote());
   return customItems;
 }
 
@@ -90,11 +95,12 @@ async function mergeRemote() {
   //   3. Merge remote items, skipping any in deletedIds
   //   4. Prune tombstones older than 30 days (keeps the set bounded)
   try {
+    const generation = accountDataGeneration();
     const uid = getSyncUid();
     if (!uid) return;
     const db = cloudDb;
     const snap = await fbGet(ref(db, `customVocab/${uid}`));
-    if (!snap.exists()) return;
+    if (generation !== accountDataGeneration() || getSyncUid() !== uid || !snap.exists()) return;
     const remote = snap.val();
 
     // Step 1: Merge deletedIds (union, keep newest timestamp per ID)
@@ -171,7 +177,12 @@ export function getCustomButtons() {
 
 // ── Add ──
 
-export async function addCustomVocabItem(word, category = 'noun', source = 'manual') {
+export function addCustomVocabItem(word, category = 'noun', source = 'manual') {
+  if (isAccountDeletionPaused()) return Promise.resolve(null);
+  return trackAccountDataOperation(runAddCustomVocabItem(word, category, source));
+}
+
+async function runAddCustomVocabItem(word, category = 'noun', source = 'manual') {
   if (!word || typeof word !== 'string') return null;
   const trimmed = word.trim().toLowerCase();
   if (!trimmed) return null;
@@ -193,7 +204,12 @@ export async function addCustomVocabItem(word, category = 'noun', source = 'manu
 
 // ── Edit ──
 
-export async function updateCustomVocabItem(id, updates) {
+export function updateCustomVocabItem(id, updates) {
+  if (isAccountDeletionPaused()) return Promise.resolve(null);
+  return trackAccountDataOperation(runUpdateCustomVocabItem(id, updates));
+}
+
+async function runUpdateCustomVocabItem(id, updates) {
   const item = customItems.find(i => i.id === id);
   if (!item) return null;
 
@@ -215,7 +231,12 @@ export async function updateCustomVocabItem(id, updates) {
 
 // ── Remove (with tombstone) ──
 
-export async function removeCustomVocabItem(id) {
+export function removeCustomVocabItem(id) {
+  if (isAccountDeletionPaused()) return Promise.resolve(undefined);
+  return trackAccountDataOperation(runRemoveCustomVocabItem(id));
+}
+
+async function runRemoveCustomVocabItem(id) {
   customItems = customItems.filter(item => item.id !== id);
   deletedIds[id] = Date.now();
   await saveLocal();
@@ -224,7 +245,13 @@ export async function removeCustomVocabItem(id) {
 
 // ── Vocabulary requests ──
 
-export async function getVocabRequests() {
+export function getVocabRequests() {
+  if (isAccountDeletionPaused()) return Promise.resolve({});
+  return trackAccountDataOperation(runGetVocabRequests());
+}
+
+async function runGetVocabRequests() {
+  const generation = accountDataGeneration();
   let requests = {};
   try {
     const raw = await AsyncStorage.getItem(VOCAB_REQUESTS_KEY);
@@ -236,7 +263,7 @@ export async function getVocabRequests() {
     if (uid) {
       const db = cloudDb;
       const snap = await fbGet(ref(db, `vocabRequests/${uid}`));
-      if (snap.exists()) {
+      if (generation === accountDataGeneration() && getSyncUid() === uid && snap.exists()) {
         const remote = snap.val() || {};
         for (const [term, ts] of Object.entries(remote)) {
           if (!requests[term] || ts > requests[term]) {
@@ -251,7 +278,13 @@ export async function getVocabRequests() {
   return requests;
 }
 
-export async function dismissVocabRequest(term) {
+export function dismissVocabRequest(term) {
+  if (isAccountDeletionPaused()) return Promise.resolve(undefined);
+  return trackAccountDataOperation(runDismissVocabRequest(term));
+}
+
+async function runDismissVocabRequest(term) {
+  const generation = accountDataGeneration();
   try {
     const raw = await AsyncStorage.getItem(VOCAB_REQUESTS_KEY);
     const requests = raw ? JSON.parse(raw) : {};
@@ -264,7 +297,7 @@ export async function dismissVocabRequest(term) {
     if (uid) {
       const db = cloudDb;
       const snap = await fbGet(ref(db, `vocabRequests/${uid}`));
-      if (snap.exists()) {
+      if (generation === accountDataGeneration() && getSyncUid() === uid && snap.exists()) {
         const remote = snap.val() || {};
         delete remote[term];
         await fbSet(ref(db, `vocabRequests/${uid}`), remote);
@@ -289,9 +322,9 @@ function syncToFirebase() {
     const uid = getSyncUid();
     if (!uid) return;
     const db = cloudDb;
-    fbSet(ref(db, `customVocab/${uid}`), {
+    trackAccountDataOperation(fbSet(ref(db, `customVocab/${uid}`), {
       items: customItems,
       deletedIds: deletedIds,
-    }).catch(() => {});
+    })).catch(() => {});
   } catch { /* non-blocking */ }
 }

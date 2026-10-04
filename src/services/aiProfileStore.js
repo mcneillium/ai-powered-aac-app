@@ -9,6 +9,7 @@
  * Stored in AsyncStorage under '@aac_ai_profile'
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isAccountDeletionPaused, accountDataGeneration, trackAccountDataOperation } from './accountDeletionBarrier';
 
 const PROFILE_KEY = '@aac_ai_profile';
 const SAVE_INTERVAL = 10; // Save every N updates
@@ -62,8 +63,10 @@ function createDefaultProfile() {
  * Load or create the AI profile from AsyncStorage.
  */
 export async function loadAIProfile() {
+  const generation = accountDataGeneration();
   try {
     const stored = await AsyncStorage.getItem(PROFILE_KEY);
+    if (generation !== accountDataGeneration()) return profile || createDefaultProfile();
     if (stored) {
       profile = JSON.parse(stored);
       // Migrate if needed
@@ -85,10 +88,10 @@ export async function loadAIProfile() {
  * Save the current profile to AsyncStorage.
  */
 async function saveProfile() {
-  if (!profile) return;
+  if (!profile || isAccountDeletionPaused()) return;
   try {
     profile.updatedAt = Date.now();
-    await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    await trackAccountDataOperation(AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profile)));
   } catch (error) {
     console.warn('Error saving AI profile:', error);
   }
@@ -139,7 +142,10 @@ export function hasLearnedData() {
  * @param {boolean} wasSuggestion - Whether the word came from AI suggestion
  */
 export async function recordWordSelection(word, contextWords = [], wasSuggestion = false) {
+  if (isAccountDeletionPaused()) return;
+  const generation = accountDataGeneration();
   if (!profile) await loadAIProfile();
+  if (isAccountDeletionPaused() || generation !== accountDataGeneration()) return;
   if (!word) return;
 
   const w = word.toLowerCase().trim();
@@ -184,7 +190,10 @@ export async function recordWordSelection(word, contextWords = [], wasSuggestion
  * @param {string[]} words - The words in the sentence
  */
 export async function recordSentenceSpoken(words) {
+  if (isAccountDeletionPaused()) return;
+  const generation = accountDataGeneration();
   if (!profile) await loadAIProfile();
+  if (isAccountDeletionPaused() || generation !== accountDataGeneration()) return;
   if (!words || words.length === 0) return;
 
   profile.totalSentencesSpoken++;
@@ -203,7 +212,10 @@ export async function recordSentenceSpoken(words) {
  * @param {string} searchTerm - What the user searched for
  */
 export async function recordFailedSearch(searchTerm) {
+  if (isAccountDeletionPaused()) return;
+  const generation = accountDataGeneration();
   if (!profile) await loadAIProfile();
+  if (isAccountDeletionPaused() || generation !== accountDataGeneration()) return;
   if (!searchTerm) return;
 
   const term = searchTerm.toLowerCase().trim();
@@ -216,7 +228,10 @@ export async function recordFailedSearch(searchTerm) {
  * @param {number} count - Number of suggestions shown
  */
 export async function recordSuggestionsShown(count) {
+  if (isAccountDeletionPaused()) return;
+  const generation = accountDataGeneration();
   if (!profile) await loadAIProfile();
+  if (isAccountDeletionPaused() || generation !== accountDataGeneration()) return;
   profile.suggestionsShown += count;
   // Don't save on every show - too frequent
 }
@@ -225,7 +240,10 @@ export async function recordSuggestionsShown(count) {
  * Record a new session start.
  */
 export async function recordSessionStart() {
+  if (isAccountDeletionPaused()) return;
+  const generation = accountDataGeneration();
   if (!profile) await loadAIProfile();
+  if (isAccountDeletionPaused() || generation !== accountDataGeneration()) return;
   profile.totalSessions++;
   await maybeSave();
 }
@@ -329,7 +347,10 @@ export function scoreByFrequencyAndRecency(candidates) {
  * @param {'bigram'|'neural'|'vertex'|'frequency'} source
  */
 export async function recordSuggestionAccepted(source) {
+  if (isAccountDeletionPaused()) return;
+  const generation = accountDataGeneration();
   if (!profile) await loadAIProfile();
+  if (isAccountDeletionPaused() || generation !== accountDataGeneration()) return;
   if (!profile.suggestionsBySource) {
     profile.suggestionsBySource = {
       bigram: { shown: 0, accepted: 0 },
@@ -351,6 +372,7 @@ export async function recordSuggestionAccepted(source) {
  * @param {number} count
  */
 export function recordSourceShown(source, count) {
+  if (isAccountDeletionPaused()) return;
   if (!profile) return;
   if (!profile.suggestionsBySource) return;
   if (profile.suggestionsBySource[source]) {

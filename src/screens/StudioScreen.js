@@ -25,7 +25,7 @@ import {
 import {
   loadCustomVocab, getCustomVocab, addCustomVocabItem, removeCustomVocabItem,
 } from '../services/customVocabStore';
-import { saveTilePhoto, removeTilePhoto, getTilePhoto } from '../services/tilePhotoStore';
+import { saveTilePhoto, removeTilePhoto, getTilePhoto, tilePhotoGeneration } from '../services/tilePhotoStore';
 import { searchVocabulary } from '../data/coreVocabulary';
 import { getLearningStats, setLearningEnabled } from '../services/suggestionEngine';
 
@@ -72,6 +72,7 @@ export default function StudioScreen() {
   const [draft, setDraft] = useState('');
   const [category, setCategory] = useState('noun');
   const [photo, setPhoto] = useState(null);
+  const [photoGeneration, setPhotoGeneration] = useState(null);
   const [photoNote, setPhotoNote] = useState(null);
   const refreshWords = useCallback(async () => { await loadCustomVocab(); setWords([...getCustomVocab()]); }, []);
   useEffect(() => { refreshWords(); }, [refreshWords]);
@@ -79,6 +80,7 @@ export default function StudioScreen() {
   useEffect(() => { if (suggested && CATEGORIES.some((x) => x.value === suggested)) setCategory(suggested); }, [suggested]);
 
   const pick = async (fromCamera) => {
+    const generation = tilePhotoGeneration();
     setPhotoNote(null);
     try {
       // Only the camera needs a permission. The system photo picker does not
@@ -93,7 +95,8 @@ export default function StudioScreen() {
       }
       const opts = { mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.6 };
       const res = fromCamera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
-      if (!res.canceled && res.assets && res.assets[0]) setPhoto(res.assets[0].uri);
+      if (generation !== tilePhotoGeneration()) return;
+      if (!res.canceled && res.assets && res.assets[0]) { setPhoto(res.assets[0].uri); setPhotoGeneration(generation); }
     } catch {
       setPhotoNote('The photo could not be opened. Try another one, or save the tile without a photo.');
     }
@@ -105,7 +108,7 @@ export default function StudioScreen() {
       Alert.alert('Word not added', 'That word is empty or already on your board.');
       return;
     }
-    if (photo) await saveTilePhoto(entry.id, photo).catch(() => setPhotoNote('The tile was saved without its photo.'));
+    if (photo) await saveTilePhoto(entry.id, photo, photoGeneration).catch(() => setPhotoNote('The tile was saved without its photo.'));
     setDraft(''); setPhoto(null);
     refreshWords();
   };
@@ -244,7 +247,7 @@ export default function StudioScreen() {
         <Card title="Learning">
           <SwitchRow
             label="Learn from my messages"
-            description={settings.learningCarriedOver && settings.personalLearning === true ? "On because it was on in your earlier version of Voice; phrases you used repeatedly were kept. Turn it off here at any time. When on, Voice counts the words you use together in messages you speak, on this phone, to improve suggestions." : "Off until you turn it on. When on, Voice counts which words you use together in messages you speak, on this phone, to improve suggestions. If you sign in, this choice applies on your other devices too."}
+            description={settings.learningCarriedOver && settings.personalLearning === true ? "On because it was on in your earlier version of Voice; phrases you used repeatedly were kept. Turn it off here at any time. When on, Voice counts the words you use together in messages you speak, on this phone, to improve suggestions." : "Off until you turn it on. When on, Voice counts which words you use together in messages you speak, on this phone, to improve suggestions. This choice applies only on this device."}
             value={settings.personalLearning === true}
             onValueChange={toggleLearning}
           />

@@ -226,3 +226,53 @@ Validation (cloud source checkout, no physical/emulator claim):
 No live Firebase changes, merges, releases, phone installs or CI subscriptions. Java exists but Android SDK/adb/Gradle are unavailable here, so no APK was built or tested and no copy to the Windows OneDrive folder can be claimed. New native modules require a new APK, not merely a JS update. Keep the existing test signing identity when available; save extracted builds/checksums/notes to `C:\Users\McNei\OneDrive\AAC\Builds\YYYY-MM-DD_<commit>\` and only update `Latest` after verification.
 
 Remaining gates: section I native checks, Samsung large-font/speech/back navigation, TalkBack and switch usability, native file sharing/PDF/photo picker, iOS testing, and user/partner evaluation of picture comprehension and communication benefit. Synthetic adaptation is not a market or clinical benchmark. Vocabulary export is Voice-specific, not OBF/full account backup. No general multilingual model, eye-gaze or voice-cloning feature is claimed.
+
+## 2026-10-04 — release preparation (PR #15 stack)
+
+Branch `codex/voice-release-readiness` starts at published PR #15 commit
+`8a04b4c8181883970b629b1935e96281fe5a8284`. PR #15's Actions run passed.
+
+Concrete fixes: device-only learning/online consent; no anonymous guest identity
+on startup; authenticated explicitly requested AI calls only; photo upload
+confirmation and no automatic generated speech; ARASAAC searches only after an
+informed request, with offline words retained. Initial Auth observations no
+longer invalidate local settings loading. Workspace scanning reaches its input
+and scrolls focused controls into view.
+
+Account deletion pauses writers, drains earlier operations and removes all
+seven app database roots before Auth. Failures retain an authenticated retry
+and report partial removal. Settings, diagnostics, vocabulary, feedback,
+history/favourites/pronunciations, learned profiles, photos, scene/draft/export
+operations are guarded against stale or fresh writes during deletion. Tests
+use synthetic fixtures with Firebase/FS/network mocked; they are not live
+cloud-deletion evidence.
+
+A clean Expo prebuild revealed release builds defaulted to the public debug
+key despite historical signing documentation. A config plugin now guards the
+actual release task graph; the signing guide describes current wiring instead
+of unsupported `RELEASE_STORE_*` properties. Native verification is in progress.
+
+Current gates: `docs/release/current-release-gates.md`; Data Safety draft updated
+against actual off-device flows. Configured privacy URL returned HTTP 404.
+Public pages, age groups/parental policy, symbol/artwork rights, provider/rules
+operations, production signing, store configuration and physical/human checks
+remain release gates. No production deployment, merge, submission or phone
+installation has occurred. Windows OneDrive is inaccessible from this cloud
+checkout; do not claim an APK copy or successful sync there.
+
+Integrated source checks after the release fixes: full Jest 77 suites / 945
+passing tests, lint exit 0 (15 existing warnings), Expo public config and
+Android export exit 0; diff check passes. Independent read-only review verified
+consent, startup and deletion fixes; additional sharing caller regressions
+passed with 25 targeted tests. Final native build results will be recorded
+separately with their exact source SHA. SDK 36/NDK and checksum-verified JDK 17
+are installed here; no connected adb device or KVM-backed emulator is available.
+
+Native runner evidence: commit `859acd25879889e13bd1f9f50cc6b7fd07cc332a`
+assembled successfully in Actions run `37223574218`, but artifact verification
+refused unexpected `ACCESS_WIFI_STATE`. NetInfo's source guards Wi-Fi detail
+reads when that permission is absent; Voice's NetworkContext uses only
+`isConnected`/`isInternetReachable`. The unnecessary Wi-Fi-state permission is
+now blocked in Expo config. Rebuild/actual manifest verification remains
+required; the refused APK was not delivered. A native negative signing-guard
+check was added to the runner. No device checks or production actions occurred.

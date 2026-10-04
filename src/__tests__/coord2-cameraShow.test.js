@@ -43,7 +43,7 @@ test('a failing camera permission request shows the note instead of rejecting', 
   await act(async () => { await btn.props.onPress().catch((e) => { err = e; }); });
   expect(err).toBeNull();
   expect(alert).toHaveBeenCalledWith('Camera permission needed', expect.any(String));
-  r.unmount();
+  act(() => r.unmount());
   alert.mockRestore();
   warn.mockRestore();
 });
@@ -58,4 +58,29 @@ test('a long message on the Show screen scrolls instead of being cut off', () =>
   while (n) { if (n.type === ScrollView) { inScroll = true; break; } n = n.parent; }
   expect(inScroll).toBe(true);
   expect(msg.props.adjustsFontSizeToFit).toBeFalsy();
+});
+
+test('camera screen requests no permission on mount and uploads only after image consent without automatic speech', async () => {
+  mockRequest.mockClear();
+  const picker = require('expo-image-picker');
+  const backend = require('../services/aiBackend');
+  const speech = require('../services/speechService');
+  const image = require('../services/imageFile');
+  backend.callAIBackend.mockClear(); speech.speak.mockClear();
+  picker.launchImageLibraryAsync.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///synthetic.jpg' }] });
+  image.readImageBase64.mockResolvedValue('synthetic');
+  backend.callAIBackend.mockResolvedValueOnce({ caption: 'Synthetic caption' }).mockResolvedValueOnce({ summary: ['Synthetic description'] });
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  let r;
+  await act(async () => { r = TestRenderer.create(<CameraScreen />); });
+  expect(mockRequest).not.toHaveBeenCalled();
+  const gallery = r.root.find((n) => n.props.accessibilityLabel === 'Pick from gallery' && typeof n.props.onPress === 'function');
+  await act(async () => gallery.props.onPress());
+  expect(backend.callAIBackend).not.toHaveBeenCalled();
+  const choices = alert.mock.calls.at(-1)[2];
+  expect(choices[0].text).toBe('Keep on screen');
+  await act(async () => choices[1].onPress());
+  expect(backend.callAIBackend).toHaveBeenCalledTimes(2);
+  expect(speech.speak).not.toHaveBeenCalled();
+  act(() => r.unmount()); alert.mockRestore();
 });

@@ -12,6 +12,7 @@ import { safeParse } from '../utils/safeStorage';
 import { effectiveSettings, routeSettingsUpdate, migrateExperience } from './experience';
 import { LEGACY_PROFILE_KEY, hasLegacyLearning } from '../services/prediction/legacyImport';
 import { importLegacyLearning } from '../services/suggestionEngine';
+import { isAccountDeletionPaused, accountDataGeneration, trackAccountDataOperation, registerAccountDeletionStopper } from '../services/accountDeletionBarrier';
 
 const SETTINGS_STORAGE_KEY = '@aac_settings';
 
@@ -53,7 +54,7 @@ export { defaultSettings };
 // differ between devices and platforms, and the compact layout depends on
 // this device's screen. (Keeping them local also means a reset to "default"
 // (null), which the Realtime Database stores as a missing key, is not lost.)
-export const LOCAL_ONLY_KEYS = ['speechVoice', 'compactLayout', 'boardLayoutSource', 'learningCarriedOver'];
+export const LOCAL_ONLY_KEYS = ['speechVoice', 'compactLayout', 'boardLayoutSource', 'learningCarriedOver', 'personalLearning', 'aiPersonalisationEnabled', 'cloudSuggestionsEnabled'];
 
 /** The settings object as written to the cloud. Exported for tests. */
 export function toCloudSettings(settings) {
@@ -159,10 +160,16 @@ export function SettingsProvider({ children }) {
 
   // Load from AsyncStorage first (instant, offline-safe)
   useEffect(() => {
-    (async () => {
+    const generation = accountDataGeneration();
+    const persistInitial = (value) => {
+      if (isAccountDeletionPaused() || generation !== accountDataGeneration()) return;
+      trackAccountDataOperation(AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(value))).catch(() => {});
+    };
+    trackAccountDataOperation((async () => {
       try {
         const stored = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
-        const parsed = await safeParse(SETTINGS_STORAGE_KEY, stored, null);
+        const parsed = !isAccountDeletionPaused() && generation === accountDataGeneration()
+          ? await safeParse(SETTINGS_STORAGE_KEY, stored, null) : null;
         const hasStored = !!(parsed && typeof parsed === 'object');
         // Settings that exist but cannot be read (backed up by safeParse)
         // belong to an existing user: never treat them as a new install or
@@ -185,7 +192,7 @@ export function SettingsProvider({ children }) {
             ...migration,
             boardLayoutSource: migration.boardLayout === 'studio' ? 'new-install' : 'existing-install',
           };
-          AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(loadedSettings)).catch(() => {});
+          persistInitial(loadedSettings);
         }
         // Someone who was already learning in an earlier version keeps
         // learning, with what was learned carried over (once).
@@ -195,18 +202,20 @@ export function SettingsProvider({ children }) {
         const learning = unreadable ? null : migrateLearning(hasStored ? parsed : null, hasLegacyLearning(legacy));
         if (learning) {
           loadedSettings = { ...loadedSettings, ...learning };
-          AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(loadedSettings)).catch(() => {});
+          persistInitial(loadedSettings);
           if (learning.personalLearning) importLegacyLearning(legacy).catch(() => {});
         }
-        latestSettings.current = loadedSettings;
-        setSettings(loadedSettings);
+        if (!isAccountDeletionPaused() && generation === accountDataGeneration()) {
+          latestSettings.current = loadedSettings;
+          setSettings(loadedSettings);
+        }
       } catch (e) {
         console.warn('Failed to load local settings:', e);
       }
       // Always finish loading after local read, even if it fails
       setLoading(false);
       localLoaded.current.resolve();
-    })();
+    })());
   }, []);
 
   // Subscribe to Firebase as secondary sync (non-blocking)
@@ -216,20 +225,25 @@ export function SettingsProvider({ children }) {
     // Wait for local settings first: a cloud snapshot arriving earlier used to
     // be merged into defaults and saved over the user's local settings.
     const uid = user && !user.isAnonymous ? user.uid : null;
-    if (!uid || !db || loading) return undefined;
+    if (!uid || !db || loading || isAccountDeletionPaused()) return undefined;
+
+    const generation = accountDataGeneration();
+    let stopped = false;
 
     const settingsRef = ref(db, dbPath(DB_PATHS.USER_SETTINGS, uid));
     const unsubscribe = onValue(
       settingsRef,
       (snapshot) => {
+        if (stopped || isAccountDeletionPaused() || generation !== accountDataGeneration()) return;
         if (snapshot.exists()) {
           const remote = snapshot.val();
           setSettings(prev => {
+            if (stopped || isAccountDeletionPaused() || generation !== accountDataGeneration()) return prev;
             const merged = mergeRemoteSettings(prev, remote);
             if (merged === prev) return prev;
             latestSettings.current = merged;
             // Persist the merged result locally
-            AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(merged)).catch(() => {});
+            trackAccountDataOperation(AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(merged))).catch(() => {});
             return merged;
           });
         }
@@ -240,12 +254,15 @@ export function SettingsProvider({ children }) {
       }
     );
 
-    return () => unsubscribe();
+    const unregister = registerAccountDeletionStopper(() => { stopped = true; unsubscribe(); });
+    return () => { stopped = true; unregister(); unsubscribe(); };
   }, [user, loading]);
 
   // Update settings: write to AsyncStorage immediately, sync to Firebase if possible
   const updateSettings = useCallback(async (updates) => {
     await localLoaded.current.promise;
+    if (isAccountDeletionPaused()) return;
+    const generation = accountDataGeneration();
     // Per-mode presentation keys are stored in the active mode's profile.
     const previous = latestSettings.current;
     const newSettings = routeSettingsUpdate(previous, updates);
@@ -260,7 +277,7 @@ export function SettingsProvider({ children }) {
 
     // Write locally first (always succeeds)
     try {
-      await AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(newSettings));
+      await trackAccountDataOperation(AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(newSettings)));
     } catch (e) {
       console.warn('Failed to save settings locally:', e);
     }
@@ -268,7 +285,7 @@ export function SettingsProvider({ children }) {
     // Try Firebase sync (non-blocking; guests stay local-only)
     try {
       const uid = user && !user.isAnonymous ? user.uid : null;
-      if (uid && db) {
+      if (uid && db && !isAccountDeletionPaused() && generation === accountDataGeneration()) {
         const patch = cloudPatchFor(changed, previous);
         // A new install records its board on the account with its first
         // write, so later snapshots don't mistake it for a pre-Voice 2 account.
@@ -276,7 +293,7 @@ export function SettingsProvider({ children }) {
           patch.boardLayout = newSettings.boardLayout;
         }
         if (Object.keys(patch).length > 0) {
-          await update(ref(db, dbPath(DB_PATHS.USER_SETTINGS, uid)), patch);
+          await trackAccountDataOperation(update(ref(db, dbPath(DB_PATHS.USER_SETTINGS, uid)), patch));
         }
       }
     } catch (e) {

@@ -4,15 +4,28 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Print from 'expo-print';
 import { MAX_PACK_CHARS, makeScenePack, parseScenePack, scenePrintHtml } from './communication-scenes';
 import { createPrivateExportFile } from './privateExportCache';
+import { isAccountDeletionPaused, accountDataGeneration, trackAccountDataOperation } from './accountDeletionBarrier';
 
-async function shareFile(uri, options) {
+function checkAccountGeneration(generation) {
+  if (isAccountDeletionPaused() || generation !== accountDataGeneration()) throw new Error('Sharing cancelled during account deletion.');
+}
+
+
+async function shareFile(uri, options, generation) {
+  checkAccountGeneration(generation);
   if (!await Sharing.isAvailableAsync()) throw new Error('File sharing is unavailable on this device.');
+  checkAccountGeneration(generation);
   await Sharing.shareAsync(uri, options);
 }
-export async function shareSceneBackup(scenes) {
+export function shareSceneBackup(scenes) {
+  if (isAccountDeletionPaused()) return Promise.reject(new Error('Sharing cancelled during account deletion.'));
+  return trackAccountDataOperation(runShareSceneBackup(scenes, accountDataGeneration()));
+}
+
+async function runShareSceneBackup(scenes, generation) {
   const text = JSON.stringify(makeScenePack(scenes));
   const uri = await createPrivateExportFile('json', (path) => FileSystem.writeAsStringAsync(path, text));
-  await shareFile(uri, { mimeType: 'application/json', UTI: 'public.json', dialogTitle: 'Save or share your photo scenes' });
+  await shareFile(uri, { mimeType: 'application/json', UTI: 'public.json', dialogTitle: 'Save or share your photo scenes' }, generation);
 }
 export async function pickSceneBackup() {
   const result = await DocumentPicker.getDocumentAsync({ type: ['application/json', 'text/plain'], copyToCacheDirectory: true, multiple: false });
@@ -32,15 +45,21 @@ export async function pickSceneBackup() {
     if (copiedFile) await FileSystem.deleteAsync(asset.uri, { idempotent: true }).catch(() => {});
   }
 }
-export async function shareScenePdf(scenes) {
+export function shareScenePdf(scenes) {
+  if (isAccountDeletionPaused()) return Promise.reject(new Error('Sharing cancelled during account deletion.'));
+  return trackAccountDataOperation(runShareScenePdf(scenes, accountDataGeneration()));
+}
+
+async function runShareScenePdf(scenes, generation) {
   let uri;
   try {
     const exported = await createPrivateExportFile('pdf', async (path) => {
       const result = await Print.printToFileAsync({ html: scenePrintHtml(scenes) });
       uri = result.uri;
+      checkAccountGeneration(generation);
       await FileSystem.copyAsync({ from: uri, to: path });
     });
-    await shareFile(exported, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Save or print your scene companion' });
+    await shareFile(exported, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Save or print your scene companion' }, generation);
   } finally {
     if (uri && FileSystem.cacheDirectory && uri.startsWith(FileSystem.cacheDirectory)) await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
   }

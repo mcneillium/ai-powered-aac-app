@@ -1,0 +1,200 @@
+name: Android test APK
+
+on:
+  push:
+    branches: [codex/voice-release-readiness]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: voice-test-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-apk:
+    if: github.ref == 'refs/heads/codex/voice-release-readiness'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: '1'
+      EXPO_NO_DOTENV: '1'
+      NODE_OPTIONS: --max-old-space-size=4096
+      LOCALAPPDATA: /tmp/voice-signing-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android tooling and locked dependencies
+        run: |
+          sdkmanager 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.1.12297006' 'cmake;3.22.1'
+          npm ci --legacy-peer-deps
+          git diff --exit-code
+          git diff --cached --exit-code
+
+      - name: Prepare separate test identity without cloud credentials
+        run: |
+          python3 - <<'PY'
+          import os
+          if any(k.startswith('EXPO_PUBLIC_') and v for k, v in os.environ.items()):
+              raise SystemExit('Unexpected public cloud configuration: refusing test build')
+          PY
+          echo "PRTEST_ID=prtest${GITHUB_SHA:0:12}r${GITHUB_RUN_ID}a${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+          echo "PRTEST_NAME=Voice Visual Test ${GITHUB_SHA:0:12}" >> "$GITHUB_ENV"
+          npx expo prebuild --platform android --no-install --clean
+          mkdir -p "$LOCALAPPDATA/VoiceTest"
+          python3 - <<'PY'
+          import hashlib, os, pathlib, secrets, subprocess
+          directory = pathlib.Path(os.environ['LOCALAPPDATA']) / 'VoiceTest'
+          os.chmod(directory, 0o700)
+          password = secrets.token_hex(32)
+          # Pass passwords by environment, never as command arguments or log text.
+          environment = dict(os.environ, VOICE_TEST_KEY_PASSWORD=password)
+          subprocess.run([
+              'keytool', '-genkeypair', '-keystore', str(directory / 'prtest.keystore'),
+              '-storepass:env', 'VOICE_TEST_KEY_PASSWORD', '-keypass:env', 'VOICE_TEST_KEY_PASSWORD',
+              '-alias', 'voice-test', '-keyalg', 'RSA', '-keysize', '2048',
+              '-validity', '3650', '-dname', 'CN=Voice CI Test,OU=Testing,O=Voice',
+          ], env=environment, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+          certificate = subprocess.run([
+              'keytool', '-exportcert', '-keystore', str(directory / 'prtest.keystore'),
+              '-storepass:env', 'VOICE_TEST_KEY_PASSWORD', '-alias', 'voice-test',
+          ], env=environment, check=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout
+          (pathlib.Path(os.environ['RUNNER_TEMP']) / 'voice-expected-certificate.txt').write_text(hashlib.sha256(certificate).hexdigest())
+          properties = directory / 'prtest.properties'
+          properties.write_text(f'storePassword={password}\nkeyAlias=voice-test\nkeyPassword={password}\n')
+          os.chmod(properties, 0o600)
+          os.chmod(directory / 'prtest.keystore', 0o600)
+          PY
+
+      - name: Apply test identity and assemble APK
+        run: |
+          node scripts/native-ui/make-test-identity.js arm64-v8a,x86_64
+          cd android
+          ./gradlew assembleRelease --no-daemon --max-workers=2
+
+      - name: Verify signing guard refuses debug-signed release bundles
+        run: |
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          path = Path('android/app/build.gradle')
+          source = path.read_text()
+          original = 'signingConfig signingConfigs.prtest'
+          if source.count(original) != 1:
+              raise SystemExit('Test release signing configuration was not found')
+          path.write_text(source.replace(original, 'signingConfig signingConfigs.debug'))
+          PYCODE
+          cd android
+          if ./gradlew :app:bundleRelease --dry-run --no-daemon --max-workers=2 > "$RUNNER_TEMP/voice-signing-guard.txt" 2>&1; then
+            echo 'Signing guard unexpectedly accepted a debug-signed release bundle'
+            exit 1
+          fi
+          grep -F 'Voice release signing is not configured.' "$RUNNER_TEMP/voice-signing-guard.txt"
+
+      - name: Verify APK and write build evidence
+        run: |
+          mkdir -p test-apk
+          apk="test-apk/Voice-Visual-Test-${GITHUB_SHA:0:12}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$apk"
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          "$tools/apksigner" verify --verbose --print-certs "$apk" > "$RUNNER_TEMP/voice-signature.txt"
+          "$tools/aapt2" dump badging "$apk" > "$RUNNER_TEMP/voice-badging.txt"
+          "$tools/aapt2" dump permissions "$apk" > "$RUNNER_TEMP/voice-permissions.txt"
+          python3 - <<'PY'
+          import datetime, hashlib, os, pathlib, re, zipfile
+          root = pathlib.Path('test-apk')
+          sha = os.environ['GITHUB_SHA']
+          name = f'Voice-Visual-Test-{sha[:12]}.apk'
+          apk = root / name
+          temporary = pathlib.Path(os.environ['RUNNER_TEMP'])
+          badging = (temporary / 'voice-badging.txt').read_text()
+          permissions = (temporary / 'voice-permissions.txt').read_text()
+          signature = (temporary / 'voice-signature.txt').read_text()
+          package = f"com.elpabloawakens.aipoweredaacapp.{os.environ['PRTEST_ID']}"
+          match = re.search(r"^package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'", badging, re.M)
+          if not match or match[1] != package:
+              raise SystemExit('Unexpected APK package identity')
+          if f"application-label:'{os.environ['PRTEST_NAME']}'" not in badging:
+              raise SystemExit('Unexpected APK app name')
+          abis = re.search(r'^native-code: (.+)$', badging, re.M)
+          if not abis or set(re.findall(r"'([^']+)'", abis[1])) != {'arm64-v8a', 'x86_64'}:
+              raise SystemExit('Unexpected APK native architectures')
+          requested = sorted(set(re.findall(r"uses-permission: name='([^']+)'", permissions)))
+          allowed = {
+              'android.permission.CAMERA', 'android.permission.INTERNET',
+              'android.permission.VIBRATE', 'android.permission.ACCESS_NETWORK_STATE',
+              package + '.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION',
+          }
+          if not requested or set(requested) - allowed:
+              raise SystemExit(f'Unexpected release APK permissions: {set(requested) - allowed}')
+          cert = re.search(r'Signer #1 certificate SHA-256 digest: ([0-9a-fA-F]{64})', signature)
+          if not cert or cert[1].lower() != (temporary / 'voice-expected-certificate.txt').read_text():
+              raise SystemExit('APK does not match this run’s temporary signing certificate')
+          with zipfile.ZipFile(apk) as archive:
+              if 'assets/index.android.bundle' not in archive.namelist():
+                  raise SystemExit('Release JavaScript bundle missing')
+          digest = hashlib.sha256(apk.read_bytes()).hexdigest()
+          (root / 'SHA256SUMS.txt').write_text(f'{digest}  {name}\n')
+          run = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          date = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+          notes = f'''# Voice Visual Test — native build only
+
+          Source commit: `{sha}`
+          Build date (UTC): {date}
+          Build run: {run}
+          App: {os.environ['PRTEST_NAME']}
+          Package: `{package}`
+          Version: {match[3]} (code {match[2]})
+          ABIs: arm64-v8a, x86_64
+          Signing certificate SHA-256: `{cert[1].lower()}`
+          APK SHA-256: `{digest}`
+
+          Performed in this job: clean checkout, locked dependency install, clean Expo Android prebuild, release APK assembly, Android signature verification, actual package/name/ABI/permission inspection, bundled-JavaScript check and refusal of a debug-signed release bundle. Unit/lint checks are the separate CI workflow; consult its result for this exact commit.
+
+          Not performed: installation, emulator/phone use, speech listening, TalkBack, Switch Access, physical camera/gallery, iOS or store release. This artifact is not production-signed and has not passed device acceptance.
+
+          No Firebase configuration or cloud credentials were supplied. Accounts, sync and cloud AI are unavailable in this build. User-requested ARASAAC picture searches can still contact ARASAAC.
+
+          Requested permissions:
+          ''' + '\n'.join(f'- `{permission}`' for permission in requested) + f'''
+
+          Download and extract the artifact. Verify the APK with `sha256sum -c SHA256SUMS.txt` (Windows: `certutil -hashfile {name} SHA256`). Save the extracted APK and these two files under `C:\\Users\\McNei\\OneDrive\\AAC\\Builds\\{date}_{sha[:12]}\\`; verify again after copying. The runner did not copy files to OneDrive or verify syncing. Preserve earlier builds. Update `Latest` only after device testing verifies the new APK.
+
+          Open the APK on Android and approve installation from the chosen file app, or use `adb install -r {name}`. It installs separately from production and differently versioned test packages. Each build attempt has a different package and temporary key, so it installs alongside earlier attempts. If Android reports a signature conflict, stop; do not uninstall or delete app data.
+          '''
+          (root / 'BUILD-NOTES.md').write_text('\n'.join(line.removeprefix('          ') for line in notes.splitlines()) + '\n')
+          PY
+          cd test-apk
+          sha256sum -c SHA256SUMS.txt
+
+      - name: Upload extracted APK, checksum and notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: Voice-Visual-Test-${{ github.sha }}
+          path: test-apk/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove temporary signing material
+        if: always()
+        run: |
+          rm -rf "$LOCALAPPDATA/VoiceTest"
+          # The identity script writes the temporary key passwords into generated Gradle.
+          rm -f android/app/build.gradle

@@ -15,7 +15,8 @@
         }
       ],
       "expo-asset",
-      "./plugins/withFontScaleConfigChange"
+      "./plugins/withFontScaleConfigChange",
+      "./plugins/withReleaseSigningGuard"
     ],
     "assetBundlePatterns": [
       "assets/**/*"
@@ -47,7 +48,8 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.SYSTEM_ALERT_WINDOW"
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.ACCESS_WIFI_STATE"
       ],
       "package": "com.elpabloawakens.aipoweredaacapp",
       "versionCode": 2

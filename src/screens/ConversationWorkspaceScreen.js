@@ -28,6 +28,9 @@ export default function ConversationWorkspaceScreen({ navigation, route }) {
   const [scanning, setScanning] = useState(false);
   const [focused, setFocused] = useState(null);
   const scanItems = useRef([]);
+  const scanRefs = useRef({});
+  const scrollRef = useRef(null);
+  const scrollOffset = useRef(0);
   scanItems.current = [];
   const { c } = usePaper();
   const { settings } = useSettings();
@@ -80,6 +83,14 @@ export default function ConversationWorkspaceScreen({ navigation, route }) {
     return () => { stopScan(); setFocused(null); restoreScanContext(saved, { resume: false }); };
   }, [scanning, isFocused, settings.scanMode, settings.scanSpeed]);
   useEffect(() => { if (scanning && isFocused) setScanItems(scanItems.current); }, [scanning, isFocused, message, drafts, busy, previous]);
+  useEffect(() => {
+    const node = scanRefs.current[focused];
+    if (node?.measureInWindow && scrollRef.current?.measureInWindow) {
+      node.measureInWindow((x, y, width, height) => scrollRef.current?.measureInWindow((sx, sy, sw, sh) => {
+        if (y < sy || y + height > sy + sh) scrollRef.current?.scrollTo({ y: Math.max(0, scrollOffset.current + y - sy - 20), animated: false });
+      }));
+    }
+  }, [focused]);
   const act = async task => {
     if (busy) return;
     setBusy(true); setError(null);
@@ -90,7 +101,7 @@ export default function ConversationWorkspaceScreen({ navigation, route }) {
   const changeMessage = value => { setPrevious(message); setMessage(value); };
   const button = (label, action, { disabled = false, primary = false, scan = true, id = label, a11yLabel = label } = {}) => {
     if (!disabled && scan) scanItems.current.push({ id, label: a11yLabel, onSelect: action });
-    return <Pressable
+    return <Pressable ref={node => { scanRefs.current[id] = node; }}
     accessibilityRole="button" accessibilityLabel={a11yLabel} accessibilityState={{ disabled }} disabled={disabled}
     onPress={action} style={{ minHeight: touch.min, minWidth: touch.min, padding: 12, borderRadius: 14,
       borderWidth: 3, borderColor: focused === id ? c.focus : 'transparent',
@@ -98,15 +109,18 @@ export default function ConversationWorkspaceScreen({ navigation, route }) {
     <Text style={[type.label, { color: primary ? c.onSignal : c.ink }]}>{label}</Text>
   </Pressable>;
   };
-  return <ScrollView keyboardShouldPersistTaps="handled" style={{ backgroundColor: c.paper }} contentContainerStyle={{ padding: 16, paddingBottom: 48 + insets.bottom, gap: 16 }}>
+  // Input is an explicit scan target; the device switch keyboard handles typing.
+  scanItems.current.push({ id: 'draft-input', label: 'Current conversation draft', onSelect: () => scanRefs.current['draft-input']?.focus() });
+  return <ScrollView ref={scrollRef} onScroll={e => { scrollOffset.current = e.nativeEvent.contentOffset.y; }} scrollEventThrottle={32} keyboardShouldPersistTaps="handled" style={{ backgroundColor: c.paper }} contentContainerStyle={{ padding: 16, paddingBottom: 48 + insets.bottom, gap: 16 }}>
     <Text accessibilityRole="header" style={[type.heading, { color: c.ink }]}>Conversation workspace</Text>
     <Text style={[type.body, { color: c.inkSoft }]}>Keep a message for later while you answer something else. Up to 10 drafts stay on this device. Saving does not train predictions or add to history.</Text>
+    <Text style={[type.body, { color: c.inkSoft }]}>Workspace scanning reaches the message field and buttons. Use device switch access for the keyboard.</Text>
     {button(scanning ? 'Stop workspace scanning' : 'Start workspace scanning', () => setScanning(!scanning), { disabled: !isFocused })}
     {scanning && isFocused && <View>{button('Next scan item', advanceScan, { scan: false })}{button('Choose scan item', selectCurrent, { scan: false })}</View>}
     <View style={{ backgroundColor: c.card, padding: 16, borderRadius: 18 }}>
-      <TextInput accessibilityLabel="Current conversation draft" multiline value={message} onChangeText={setMessage}
+      <TextInput ref={node => { scanRefs.current['draft-input'] = node; }} accessibilityLabel="Current conversation draft" multiline value={message} onChangeText={setMessage}
         maxLength={MAX_MESSAGE_LENGTH} placeholder="Write a message" placeholderTextColor={c.inkSoft}
-        style={[type.body, { color: c.ink, minHeight: 120, padding: 12, borderWidth: 1, borderColor: c.lineStrong, borderRadius: 12, textAlignVertical: 'top' }]} />
+        style={[type.body, { color: c.ink, minHeight: 120, padding: 12, borderWidth: focused === 'draft-input' ? 3 : 1, borderColor: focused === 'draft-input' ? c.focus : c.lineStrong, borderRadius: 12, textAlignVertical: 'top' }]} />
       <VisualMessage text={message} />
       {button('Speak draft', () => { speak(message, buildSpeechOptions(settings)); }, { disabled: !message.trim(), primary: true })}
       {button('Stop speaking', stop)}

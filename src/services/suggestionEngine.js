@@ -12,6 +12,7 @@ import {
   createPredictor, createPersistentPredictor, getBaseModel, getRankerWeights,
   clearPersonalData, DEFAULT_PROFILE_ID,
 } from './prediction/index.js';
+import { isAccountDeletionPaused } from './accountDeletionBarrier';
 import { personalFromLegacyProfile } from './prediction/legacyImport.js';
 
 // Usable at once: base model only, nothing stored.
@@ -70,16 +71,18 @@ export function suggestNext(words, { context, mode, k = 6, prefix } = {}) {
 }
 
 export function learnFromSpoken(words) {
-  if (!learning) return;
+  if (!learning || isAccountDeletionPaused()) return;
   try { predictor.learnFromSpokenSentence(words); } catch { /* optional */ }
 }
 
 export function suggestionAccepted(word, wordsBefore) {
+  if (isAccountDeletionPaused()) return;
   try { predictor.recordSuggestionAccepted(word, wordsBefore); } catch { /* optional */ }
 }
 
 /** "Don't suggest this here": hides the word after the current last word. */
 export function dismissSuggestion(word, wordsBefore) {
+  if (isAccountDeletionPaused()) return;
   try { predictor.dismissSuggestion(word, wordsBefore); } catch { /* optional */ }
   notify();
 }
@@ -104,6 +107,7 @@ const loaded = () => (initPromise || Promise.resolve());
 
 export async function forgetLearnedWord(word) {
   await loaded();
+  if (isAccountDeletionPaused()) return;
   try { await predictor.forgetLearnedWord(word); } catch { /* optional */ }
   notify();
 }
@@ -115,6 +119,7 @@ export function getDismissedSuggestions() {
 
 export async function undismissSuggestion(prev, word) {
   await loaded();
+  if (isAccountDeletionPaused()) return;
   try { await predictor.undismissSuggestion(prev, word); } catch { /* optional */ }
   notify();
 }
@@ -134,6 +139,7 @@ export async function resetLearning() {
  */
 export async function importLegacyLearning(profile) {
   await initPrediction();
+  if (isAccountDeletionPaused()) return false;
   try {
     const s = predictor.getPersonalStats();
     if ((s.sentences || 0) > 0 || (s.words || 0) > 0) return false;

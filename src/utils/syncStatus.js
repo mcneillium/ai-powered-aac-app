@@ -6,17 +6,24 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ref, set } from 'firebase/database';
 import { db, auth } from '../../firebaseConfig';
 import { DB_PATHS, dbPath } from '../shared/schema';
+import { isAccountDeletionPaused, accountDataGeneration, trackAccountDataOperation } from '../services/accountDeletionBarrier';
 
 /**
  * Updates the lastActivity timestamp locally and in Firebase.
  */
-export const updateLastActivity = async () => {
+export const updateLastActivity = () => {
+  if (isAccountDeletionPaused()) return Promise.resolve();
+  return trackAccountDataOperation(writeLastActivity());
+};
+
+async function writeLastActivity() {
+  const generation = accountDataGeneration();
   const user = auth?.currentUser;
   const timestamp = new Date().toISOString();
 
   try {
     await AsyncStorage.setItem('lastActivity', timestamp);
-    if (user && db) {
+    if (!isAccountDeletionPaused() && generation === accountDataGeneration() && user && !user.isAnonymous && db && auth.currentUser === user) {
       await set(ref(db, dbPath(DB_PATHS.USER_SYNC, user.uid)), {
         lastActivity: timestamp,
       });
@@ -25,7 +32,7 @@ export const updateLastActivity = async () => {
     // Non-blocking — local timestamp is the priority
     console.warn('Failed to update sync timestamp:', err.message);
   }
-};
+}
 
 /**
  * Gets the last sync time from AsyncStorage.
