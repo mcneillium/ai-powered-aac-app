@@ -1,63 +1,78 @@
-# Voice — Brand Guide v3
+# Voice — Flow identity (2026-10-04)
 
-## Brand Name
-**Voice** — communication for everyone
+A speech bubble with an open, flowing V. The small mint endpoint adds warmth.
+The mark works for both Child and Adult modes; it does not imply microphone
+input or promise a clinical outcome.
 
-## Icon Design
-5 vertical blue pills spelling V-O-I-C-E in an equalizer/soundwave pattern.
-A small microphone sits above the centre I pill. White on blue. White background.
+## Colour and typography
 
-## Colour Palette
+| Colour | Hex | Brand use |
+|---|---|---|
+| Ink | `#14233F` | App icon background; dark lockups |
+| Blue | `#2B65EF` | Speech-bubble gradient start |
+| Iris | `#6576FF` | Speech-bubble gradient end |
+| Mint | `#79E8C5` | V endpoint accent |
+| Paper | `#F5F7FC` | Launch background |
 
-### Primary
-| Name | Hex | Use |
-|------|-----|-----|
-| Blue | `#2979FF` | Primary buttons, icon bg, key accents |
-| Blue Dark | `#195AC8` | Pressed / hover states |
-| Blue Soft | `#DCEAFF` | Muted tint, selected backgrounds |
-| Blue Mid | `#448AFF` | Secondary accent, AI features |
+These are artwork colours. The AAC control palette and Fitzgerald category
+colours remain governed by the existing accessible design tokens.
 
-### Secondary Accents
-| Name | Hex | Use |
-|------|-----|-----|
-| Coral | `#E8A070` | Warm highlights, warning |
-| Green | `#6BBF90` | Success, ready states |
-| Lilac | `#7C8FCC` | Secondary accent, camera button |
+The Voice wordmark is outlined DejaVu Sans Bold, with adjusted spacing.
+SVGs use paths, with no external fonts, scripts, images or remote resources.
 
-### Neutrals
-| Name | Hex | Use |
-|------|-----|-----|
-| Page BG | `#FAFAFA` | Page backgrounds |
-| Surface | `#F2F4F7` | Cards, panels |
-| White | `#FFFFFF` | Tab bar, inputs, button text on blue |
-| Text Dark | `#2E2E3A` | Headings |
-| Text Mid | `#6E6E82` | Subheadings |
-| Stroke | `#DDD9D4` | Borders |
+## Masters and exports
 
-## Visual Style
-- **Shapes:** Rounded pills, soft corners (8–24dp radius)
-- **Feel:** Calm, friendly, accessible. Not childish, not clinical.
-- **Icon motif:** Vertical pill equalizer with letters
-- **Backgrounds:** White or light grey for app, light blue tint for promo
-- **Shadows:** Subtle 2–4px, 8–12% opacity
+All masters are in `assets/branding/logo/` unless noted.
 
-## Icon System
+| Purpose | Master | Export |
+|---|---|---|
+| Primary lockup | `voice-logo.svg` | Editable SVG |
+| Dark-background lockup | `voice-logo-light.svg` | Editable SVG |
+| Symbol | `voice-mark.svg`, `voice-mark-mono.svg` | `brand-mark-256.png` |
+| iOS / Expo icon | `voice-app-icon.svg` | `assets/icon.png`, `icon-1024.png` (1024 square, opaque) |
+| Play icon | `voice-app-icon.svg` | `icon-512.png` (512 square, opaque) |
+| Android adaptive foreground | `voice-adaptive-foreground.svg` | `assets/adaptive-icon.png` (transparent) |
+| Android themed icon | `voice-adaptive-monochrome.svg` | `assets/adaptive-icon-monochrome.png` (white alpha silhouette) |
+| Adaptive background | `voice-adaptive-background.svg` | `assets/adaptive-icon-background.png` (opaque) |
+| Favicon | `voice-app-icon.svg` | `assets/favicon.png` (48 square) |
+| Launch logo | `../splash/voice-splash.svg` | `assets/splash-icon.png` |
+| Store feature graphic | `../google-play/feature-graphic/voice-feature-graphic.svg` | 1024 × 500 RGB PNG |
+| Brand preview | `voice-brand-preview.svg` | `voice-brand-preview.png` |
 
-| Asset | Size | File |
-|-------|------|------|
-| App icon source | 1024x1024 | `branding/logo/icon-1024.png` |
-| App icon (Expo) | 512x512 | `assets/icon.png` |
-| Adaptive foreground | 1024x1024 | `assets/adaptive-icon.png` |
-| Adaptive background | 1024x1024 | `assets/adaptive-icon-background.png` |
-| Splash icon | 1024x1024 | `assets/splash-icon.png` |
-| Favicon | 48x48 | `assets/favicon.png` |
-| Brand mark | 256x256 | `branding/logo/brand-mark-256.png` |
+The app icon has no baked-in outer rounded corners: the platform applies its
+own mask. Android foreground artwork is inside the central circular safe area.
+Keep at least one quarter of the symbol width as space around standalone marks.
+Use the monochrome version when colour cannot be reproduced.
 
-## Asset Workflow
+Regenerate PNGs from the checked-in SVG masters:
 
-**Icon, adaptive icon, splash, favicon** — designer-provided PNGs. Do not overwrite with the script. Place the real files directly in `assets/`.
-
-**Feature graphic + screenshot templates** — regenerated with:
 ```bash
 python3 scripts/generate-brand-assets.py
 ```
+
+Requires Inkscape and Pillow. Paths resolve relative to the script, so the
+checkout can be anywhere. No fonts need to be installed for regeneration.
+The script does not rewrite historical screenshot templates or captures.
+Those are placeholders and must be replaced by current app screenshots.
+
+## Provenance and notices
+
+Speech-bubble geometry adapted from Lucide `message-circle.svg`, source revision
+`95f5ecacad69025777c76d9458e6dec9a17fafff`:
+https://github.com/lucide-icons/lucide/blob/95f5ecacad69025777c76d9458e6dec9a17fafff/icons/message-circle.svg
+
+The unchanged upstream SVG is retained in `../sources/lucide-message-circle.svg`.
+Modifications: filled shape, gradient, custom V and mint endpoint; Voice layout
+and platform exports. Lucide attribution and its full licence are retained in
+`../licenses/LUCIDE-LICENSE.txt`, SVG metadata, PNG metadata and the in-app
+credits. Lucide permits modification/distribution under ISC.
+
+The wordmark is rendered from DejaVu Sans Bold; no font file is bundled.
+See `../licenses/DEJAVU-LICENSE.txt` and the in-app notice.
+Original Voice composition/V artwork follows the repository’s declared 0BSD
+licence; upstream parts retain their own licences. No exclusivity or trademark
+clearance is asserted.
+
+This identity replaces the previously undocumented designer-provided launcher,
+adaptive, splash and favicon artwork. Old artwork remains in Git history and
+historical screenshot templates; those are not current release masters.

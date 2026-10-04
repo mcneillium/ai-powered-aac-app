@@ -24,7 +24,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FAFAFA"
+      "backgroundColor": "#F5F7FC"
     },
     "ios": {
       "supportsTablet": true,
@@ -39,7 +39,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundImage": "./assets/adaptive-icon-background.png",
-        "backgroundColor": "#2979FF"
+        "monochromeImage": "./assets/adaptive-icon-monochrome.png",
+        "backgroundColor": "#14233F"
       },
       "permissions": [
         "CAMERA"

@@ -1,6 +1,6 @@
-# Play Store Assets Checklist — Voice v1.1.0
+# Play Store Assets Checklist — Voice
 
-**Updated:** 2026-03-23
+**Brand assets updated:** 2026-10-04. Screenshot tasks below still require current app captures.
 
 ---
 
@@ -8,10 +8,13 @@
 
 | Requirement | File | Status |
 |-------------|------|--------|
-| 512x512 RGBA PNG | `assets/icon.png` | **DONE** |
+| Play 512x512 opaque PNG | `assets/branding/logo/icon-512.png` | **GENERATED — Flow identity** |
+| Expo / iOS 1024x1024 opaque PNG | `assets/icon.png` | **GENERATED — Flow identity** |
 | Adaptive foreground 1024x1024 | `assets/adaptive-icon.png` | **DONE** |
 | Adaptive background 1024x1024 | `assets/adaptive-icon-background.png` | **DONE** |
-| 1024x1024 master source | `assets/branding/logo/icon-1024.png` | **DONE** |
+| Android themed monochrome 1024x1024 | `assets/adaptive-icon-monochrome.png` | **GENERATED** |
+| Editable SVG master | `assets/branding/logo/voice-app-icon.svg` | **GENERATED** |
+| 1024x1024 master export | `assets/branding/logo/icon-1024.png` | **GENERATED** |
 
 ---
 
@@ -56,7 +59,7 @@ Compositing: `python3 scripts/composite-screenshots.py`
 
 | Item | Value | Status |
 |------|-------|--------|
-| Privacy policy URL | `https://paulmartinmcneill.com/commai/privacy-policy` | **DONE** |
+| Privacy policy URL | `https://paulmartinmcneill.com/commai/privacy-policy` | **BLOCKED — HTTP 404 recorded in current-release-gates.md; publish and verify** |
 | Support email | `support@paulmartinmcneill.com` | **DONE** |
 
 ---
@@ -84,5 +87,5 @@ Compositing: `python3 scripts/composite-screenshots.py`
 | Raw screenshots | TODO — capture from device |
 | Final composited screenshots | TODO — run script after capture |
 | Listing text | DONE |
-| Privacy policy URL | DONE |
+| Privacy policy URL | BLOCKED — see current-release-gates.md |
 | Voice-branded AAB | TODO — run EAS build |
