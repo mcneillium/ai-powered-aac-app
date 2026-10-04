@@ -57,3 +57,7 @@ ai-powered-aac-app.zip
 
 # Native UI test evidence (scripts/native-ui)
 native-ui-evidence/
+
+# Firebase emulator logs (npm run test:rules)
+database-debug.log
+storage-debug.log
