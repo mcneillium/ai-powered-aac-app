@@ -8,8 +8,15 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, Linking } from 'rea
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, spacing, radii } from '../theme';
 import notices from '../data/thirdPartyNotices.json';
+import brandNotices from '../data/brandAssetNotices.json';
 
 const CREDITS = [
+  {
+    id: 'voice-brand',
+    title: 'Voice identity',
+    body: 'Voice’s rounded waveform adapts Lucide’s open-source audio-lines SVG. The softer wordmark uses outlined Nunito lettering. Their full notices are available below.',
+    link: { label: 'Lucide icon source', url: 'https://github.com/lucide-icons/lucide/blob/27c0a136cdced32c9e2ba1e969a27dbca42a9d3f/icons/audio-lines.svg' },
+  },
   {
     id: 'arasaac',
     title: 'ARASAAC pictograms',
@@ -31,6 +38,7 @@ const CREDITS = [
 ];
 
 function licenceTextsFor(pkg) {
+  if (pkg.licenceText) return [pkg.licenceText];
   if (pkg.textId && notices.texts[pkg.textId]) return [notices.texts[pkg.textId]];
   // Packages published without a LICENSE file (and the icon fonts): show the
   // copyright notice followed by the standard text for each licence named
@@ -48,7 +56,7 @@ export default function LicensesScreen() {
   const [open, setOpen] = useState(null);
   // Icon fonts first (separate works with their own notices), then packages.
   const data = useMemo(
-    () => [...(notices.fonts || []).map(f => ({ ...f, version: '' })), ...notices.packages],
+    () => [...brandNotices, ...(notices.fonts || []).map(f => ({ ...f, version: '' })), ...notices.packages],
     []
   );
 
@@ -71,10 +79,10 @@ export default function LicensesScreen() {
         </View>
       ))}
       <Text style={[styles.section, { color: palette.text }]} accessibilityRole="header">
-        Open-source software ({notices.packages.length} packages, {(notices.fonts || []).length} fonts)
+        Open-source software and artwork ({notices.packages.length} packages, {(notices.fonts || []).length} fonts, {brandNotices.length} brand assets)
       </Text>
       <Text style={[styles.body, { color: palette.textSecondary, marginBottom: spacing.sm }]}>
-        Tap a package to read its licence.
+        Tap an item to read its licence.
       </Text>
     </View>
   );

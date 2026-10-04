@@ -14,7 +14,7 @@ import { logEvent } from '../utils/enhancedLogger';
 import { useNavigation } from '@react-navigation/native';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette, brand, radii, spacing } from '../theme';
-import logo from '../../assets/icon.png';
+import logo from '../../assets/branding/logo/brand-mark-256.png';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
