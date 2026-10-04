@@ -44,11 +44,12 @@ test('a new install starts on the new board with learning off', async () => {
 test('switching mode and back keeps per-mode choices and shared data', async () => {
   const ctx = await mount();
   await act(async () => { await ctx().updateSettings({ uiMode: 'child' }); });
-  await act(async () => { await ctx().updateSettings({ textScale: 1.25, speechRate: 0.7 }); });
+  await act(async () => { await ctx().updateSettings({ theme: 'dark', textScale: 1.25, speechRate: 0.7 }); });
   await act(async () => { await ctx().updateSettings({ uiMode: 'adult' }); });
-  expect(ctx().settings.textScale).toBe(1.25); // carried over on first use of Adult
-  await act(async () => { await ctx().updateSettings({ textScale: 1 }); });
+  expect(ctx().settings.theme).toBe('dark'); // carried over on first use of Adult
+  await act(async () => { await ctx().updateSettings({ theme: 'light' }); });
   await act(async () => { await ctx().updateSettings({ uiMode: 'child' }); });
-  expect(ctx().settings.textScale).toBe(1.25);
+  expect(ctx().settings.theme).toBe('dark');
+  expect(ctx().settings.textScale).toBe(1.25); // shared
   expect(ctx().settings.speechRate).toBe(0.7);
 });

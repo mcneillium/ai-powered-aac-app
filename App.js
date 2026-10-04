@@ -42,6 +42,7 @@ import VocabManagerScreen from './src/screens/VocabManagerScreen';
 import LicensesScreen from './src/screens/LicensesScreen';
 import StudioBoardScreen from './src/screens/StudioBoardScreen';
 import StudioScreen from './src/screens/StudioScreen';
+import LearnedScreen from './src/screens/LearnedScreen';
 import PhrasesScreen from './src/screens/PhrasesScreen';
 import MeScreen from './src/screens/MeScreen';
 import WelcomeSheet from './src/components/studio/WelcomeSheet';
@@ -298,6 +299,11 @@ function RootNavigator() {
         name="Studio"
         component={StudioScreen}
         options={{ title: 'Personalise' }}
+      />
+      <RootStack.Screen
+        name="Learned"
+        component={LearnedScreen}
+        options={{ title: 'What Voice has learned' }}
       />
       <RootStack.Screen
         name="Sentence"

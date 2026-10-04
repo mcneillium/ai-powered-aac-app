@@ -135,8 +135,35 @@ PR #7 was merged into `master` (`0b18c0d`) at the owner's request. PR #8 was ret
 
 **CI.** "Lint, Test & Build" passed on PR #8 at `3bd4b16` (run 37107844998). Earlier heads showed no check runs while the PR was being retargeted from the #7 branch to `master`.
 
+## 7c. Integration with PR #9 and first native run (04/10/2026)
+The owner chose this PR as the base, with the strongest parts of PR #9 (Soft Studio, branch
+`voice-transformation`) ported in. PR #9 was then closed unmerged.
+
+| Change | Why | Evidence |
+|---|---|---|
+| Words per row and text size are **shared by both modes**; tile height no longer depends on mode or picture style (`TILE_HEIGHT`); grid or text size left in a mode profile by earlier test builds is ignored | Child was 3 columns and Adult 4, so switching mode moved every word (measured natively: 9/9 visible tiles moved). A learned motor plan must survive a mode switch | `experience.test.js`; emulator: identical bounds for every tile in Adult and Child |
+| **Built-in pictures** (system emoji, `src/data/symbols.js`) show offline when no ARASAAC symbol is downloaded; downloaded symbols still take priority | Pictures without a download or the ARASAAC non-commercial question; nothing bundled or licensed | `symbols.test.js`; emulator screenshots |
+| **Learning carried over** for existing learners: someone with earlier on-device learning who never turned it off keeps "Learn from my messages" on, and their repeated phrases (used ≥2 times) seed the personal layer once, only into an empty store (`legacyImport.js`, `migrateLearning`) | Existing users' suggestions should not get worse on upgrade. New installs and anyone who opted out stay off | `learnedControl.test.js`; emulator upgrade below |
+| **What Voice has learned** screen (Personalise › Learning): every learned word with *Forget* (removes it from counts, pairs, phrases and feedback, saved immediately even with learning paused), hidden suggestions with *Undo*, and delete-all | User control over each piece of what is learned | `learnedControl.test.js`; emulator screenshot |
+| Native suite (`suite.js`, font-scale scripts) works on both boards ("Sentence"/"Message" labels, Saved sheet, settings below the fold) | Run the existing regression suite on the new board | Results below |
+
+**Native results (Android 15 emulator, offline, real Google TTS):**
+- **Upgrade from PR #7.** A PR #7 install with real use (3 messages spoken repeatedly, a
+  favourite, speech 0.5×) was upgraded in place. It stayed on Classic with no welcome
+  sheet, and the favourite, history and speed were kept. Learning stayed on, and after
+  "I want" it suggested "more please" ("a sentence you have said before") and "more"
+  ("you often say this next").
+- **Regression suite on the upgraded Classic board:** 48/48 pass (board, history,
+  settings, compact, fonts, speech, camera, persistence).
+- **Regression suite on the new board:** 31/31 pass (board, history, settings, speech,
+  persistence). Words per row was set to 4 for this run so the test words are visible
+  without scrolling.
+- **Live font-size scripts:** 13/13 pass on each board.
+- **Fresh install:** welcome sheet, new board, learning off.
+- **Not tested:** TalkBack, physical switches and a physical phone.
+
 ## 8. Known issues and next tasks (priority order)
-1. Run checklist §G on the S24 Ultra and the two emulators (Android 15 / 11) with `scripts/native-ui`; fix what fails.
+1. Run checklist §G on the S24 Ultra and the Android 11 emulator; the Android 15 emulator runs are recorded in §7c. Have a person check TalkBack and switch access.
 2. ~~Remove TensorFlow~~ (done in `acbb3b9`).
 3. ~~Restyle remaining screens~~ (done by palette mapping; Phrases and Me rebuilt). Settings could still be reorganised into Personalise-style cards.
 4. Owner decisions before release: ARASAAC non-commercial terms (symbols + API), tokenizer/model provenance (now unused by the board), "VOICE" icon artwork rights, native-only licence notices (`docs/legal/asset-inventory.md`).

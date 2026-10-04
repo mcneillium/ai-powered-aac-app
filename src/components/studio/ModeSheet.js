@@ -79,7 +79,7 @@ export default function ModeSheet({ visible, onClose }) {
         );
       })}
       <Text style={[type.body, { color: c.inkSoft, marginVertical: space.sm }]}>
-        Your words, favourites, history, voice and pronunciations stay the same in both. Each mode remembers its own text size, grid and symbol settings.
+        Every word stays in the same place in both modes. Your words, favourites, history, voice and pronunciations are shared; each mode remembers its own colours and picture style.
       </Text>
       <ActionButton
         label={choice === current ? 'Keep this mode' : `Switch to ${MODE_DESCRIPTIONS[choice].title}`}

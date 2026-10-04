@@ -23,6 +23,7 @@ import { Tile, ActionButton, SuggestionChip, ListRow, Sheet, tileCategory } from
 import { space, type, touch } from '../design/tokens';
 import { subscribeSpeechStatus, stop } from '../services/speechService';
 import { symbolSourceFor, subscribeSymbols, loadSymbolState } from '../services/symbolStore';
+import { symbolFor } from '../data/symbols';
 import { getContextPack } from '../data/contextPacks';
 import { dismissSuggestion } from '../services/suggestionEngine';
 import { t } from '../i18n/strings';
@@ -36,6 +37,9 @@ import ModeSheet from '../components/studio/ModeSheet';
 import MoreSheet from '../components/studio/MoreSheet';
 import { advanceScan, selectCurrent, getScanState } from '../services/switchScanService';
 import { useOverlayScan } from '../hooks/useOverlayScan';
+
+// One tile height for every mode and picture style (see Grid geometry).
+const TILE_HEIGHT = 104;
 
 export default function StudioBoardScreen() {
   const [modelling, setModelling] = useState(false);
@@ -110,14 +114,14 @@ export default function StudioBoardScreen() {
   const context = settings.activeContext ? getContextPack(settings.activeContext) : null;
 
   // ── Grid geometry ──
-  const baseColumns = settings.gridSize || (mode === 'child' ? 3 : 4);
+  // Columns and tile height depend only on shared settings (words per row,
+  // text size), never on the mode or picture style, so switching Child/Adult
+  // or pictures never moves a word.
+  const baseColumns = settings.gridSize || 3;
   const paneWidth = wide ? Math.min(420, width * 0.4) : 0;
   const gridWidth = width - paneWidth;
   const columns = wide ? Math.max(baseColumns, Math.floor(gridWidth / 150)) : baseColumns;
-  const tileHeight = Math.round(
-    (symbolStyle === 'text' ? 68 : symbolStyle === 'symbols' ? (mode === 'child' ? 116 : 104) : 88)
-    * Math.min(scale, 1.5)
-  );
+  const tileHeight = Math.round(TILE_HEIGHT * Math.min(scale, 1.5));
 
   const renderTile = useCallback(({ item }) => {
     const isNav = !!item.navigateTo;
@@ -127,6 +131,7 @@ export default function StudioBoardScreen() {
         height={tileHeight}
         symbolStyle={symbolStyle}
         symbolSource={symbolStyle === 'text' ? null : symbolSourceFor(item)}
+        emoji={symbolStyle === 'text' ? null : symbolFor(item)}
         focused={isScanFocused('vocab', item.id)}
         onPress={() => handleButtonPress(item)}
         accessibilityLabel={isNav ? `Go to ${item.label} page` : `Say ${item.label}. ${tileCategory(item)}`}

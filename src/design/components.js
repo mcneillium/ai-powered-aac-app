@@ -35,10 +35,11 @@ export function tileCategory(button) {
 /**
  * A vocabulary tile.
  * symbolStyle: 'symbols' (large picture), 'mixed' (small picture + label),
- * 'text' (label only). Pictures appear only when available offline.
+ * 'text' (label only). Pictures appear only when available offline: a
+ * downloaded symbol image if there is one, otherwise the built-in emoji.
  */
 export function Tile({
-  button, onPress, symbolSource, symbolStyle = 'mixed', focused = false,
+  button, onPress, symbolSource, emoji = null, symbolStyle = 'mixed', focused = false,
   height, accessibilityLabel, accessibilityHint, testID,
 }) {
   const p = usePaper();
@@ -48,7 +49,9 @@ export function Tile({
   const isNav = !!button.navigateTo;
   const child = mode === 'child';
   const hc = theme === 'highContrast';
-  const showSymbol = symbolStyle !== 'text' && !!symbolSource;
+  const showImage = symbolStyle !== 'text' && !!symbolSource;
+  const showEmoji = symbolStyle !== 'text' && !showImage && !!emoji;
+  const showSymbol = showImage || showEmoji;
   const bigSymbol = showSymbol && symbolStyle === 'symbols';
   const bg = hc ? '#000' : child ? cat.fill : (isNav ? c.sunk : c.card);
   const iconName = !showSymbol && button.icon ? button.icon : null;
@@ -84,7 +87,17 @@ export function Tile({
           {/* Category edge (Adult / High contrast); Child uses the fill. */}
           {!child && <View style={[styles.edge, { backgroundColor: cat.edge }]} />}
           {pressed && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.signal, opacity: 0.14 }]} />}
-          {showSymbol && (
+          {showEmoji && (
+            <Text
+              style={{ fontSize: Math.round(symbolSize * 0.8), lineHeight: symbolSize, marginBottom: space.xs, textAlign: 'center' }}
+              importantForAccessibility="no"
+              accessibilityElementsHidden
+              maxFontSizeMultiplier={1}
+            >
+              {emoji}
+            </Text>
+          )}
+          {showImage && (
             <Image
               source={symbolSource}
               style={{ width: symbolSize, height: symbolSize, marginBottom: space.xs }}

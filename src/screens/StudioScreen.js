@@ -171,18 +171,18 @@ export default function StudioScreen() {
             </View>
             <ActionButton label="Change" onPress={() => setModeOpen(true)} size={touch.min} a11yLabel="Change mode" />
           </View>
-          <Text style={[type.body, { color: c.inkSoft, marginTop: space.sm }]}>The settings below are saved for {MODE_DESCRIPTIONS[mode].title} mode only.</Text>
+          <Text style={[type.body, { color: c.inkSoft, marginTop: space.sm }]}>The settings below are saved for {MODE_DESCRIPTIONS[mode].title} mode only. They never move a word.</Text>
           {segment('Pictures on tiles', 'symbolStyle', [
             { value: 'symbols', label: 'Large' }, { value: 'mixed', label: 'Small' }, { value: 'text', label: 'Words only' },
-          ], sym.downloaded ? null : 'Pictures appear after you download symbols below.')}
-          {segment('Text size', 'textScale', [{ value: 1, label: 'Standard' }, { value: 1.25, label: 'Large' }, { value: 1.5, label: 'Extra large' }])}
-          {segment('Words per row', 'gridSize', [{ value: 3, label: '3' }, { value: 4, label: '4' }, { value: 5, label: '5' }], 'Changing this moves words to new places. Change it rarely.')}
+          ], sym.downloaded ? null : 'Built-in pictures show now. Download picture symbols below for more detailed ones.')}
           {segment('Colours', 'theme', [{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, { value: 'highContrast', label: 'High contrast' }])}
           <SwitchRow label="Speak each word" description="Say a word aloud as you add it." value={settings.speakWordsOnTap !== false} onValueChange={(v) => updateSettings({ speakWordsOnTap: v })} />
           <SwitchRow label="Show suggestions" description="A row of suggested next words. They are never added for you." value={settings.predictionEnabled !== false} onValueChange={(v) => updateSettings({ predictionEnabled: v })} />
         </Card>
 
-        <Card title="Board layout" caption="Shared by both modes.">
+        <Card title="Board layout" caption="Shared by both modes, so a word is in the same place in Child and Adult.">
+          {segment('Text size', 'textScale', [{ value: 1, label: 'Standard' }, { value: 1.25, label: 'Large' }, { value: 1.5, label: 'Extra large' }])}
+          {segment('Words per row', 'gridSize', [{ value: 3, label: '3' }, { value: 4, label: '4' }, { value: 5, label: '5' }], 'Changing this moves words to new places. Change it rarely.')}
           {segment('Layout', 'boardLayout', [{ value: 'studio', label: 'New' }, { value: 'classic', label: 'Classic' }], 'Classic is the familiar board from earlier versions. Your words and messages are the same in both.')}
           {segment('Message and controls', 'controlsPosition', [{ value: 'top', label: 'Top' }, { value: 'bottom', label: 'Bottom (one hand)' }])}
         </Card>
@@ -253,6 +253,7 @@ export default function StudioScreen() {
           <Text style={[type.body, { color: c.inkSoft, marginTop: space.sm }]}>
             What is kept: word counts and word pairs from spoken messages. Not kept: taps you delete, modelling sessions, or anything when learning is off. Long-press a suggestion on the board to stop it appearing.
           </Text>
+          <ListRow icon="sparkles-outline" text="See what Voice has learned" meta="forget words, undo hidden suggestions" onPress={() => navigation.navigate('Learned')} />
           <ActionButton icon="trash-outline" label="Delete what Voice has learned" variant="danger" onPress={confirmReset} size={touch.min} style={{ marginTop: space.md }} />
         </Card>
 

@@ -10,6 +10,10 @@
 // pronunciations, voice, scanning, learning — is shared, so switching mode
 // never loses anything.
 //
+// Nothing that decides where a word sits is per-mode: words per row and text
+// size (which sets tile height) are shared, so switching mode never moves a
+// word and a learned motor plan keeps working in both.
+//
 // Pure functions only (no React), so they can be unit-tested.
 
 export const MODES = ['child', 'adult'];
@@ -17,8 +21,6 @@ export const MODES = ['child', 'adult'];
 // Presentation settings that each mode keeps separately.
 export const PER_MODE_KEYS = [
   'theme',
-  'textScale',
-  'gridSize',
   'symbolStyle',      // 'symbols' | 'mixed' | 'text'
   'speakWordsOnTap',
   'predictionEnabled',
@@ -26,14 +28,23 @@ export const PER_MODE_KEYS = [
 ];
 
 // Starting values for a mode the first time it is used. The user's own
-// accessibility choices (theme, text size, speech on tap, suggestions) are
-// carried over; only layout density and symbol emphasis differ.
+// accessibility choices (theme, speech on tap, suggestions) are carried
+// over; only symbol emphasis differs.
 export const MODE_DEFAULTS = {
-  child: { gridSize: 3, symbolStyle: 'symbols', showVoiceStyles: false },
-  adult: { gridSize: 4, symbolStyle: 'mixed', showVoiceStyles: false },
+  child: { symbolStyle: 'symbols', showVoiceStyles: false },
+  adult: { symbolStyle: 'mixed', showVoiceStyles: false },
 };
 
-const CARRIED_KEYS = ['theme', 'textScale', 'speakWordsOnTap', 'predictionEnabled'];
+const CARRIED_KEYS = ['theme', 'speakWordsOnTap', 'predictionEnabled'];
+
+// Only per-mode keys are read from a mode profile. Profiles saved by earlier
+// test builds also held gridSize and textScale; those are ignored so the
+// shared values always decide the layout.
+function perModeOnly(profile) {
+  const out = {};
+  PER_MODE_KEYS.forEach((k) => { if (profile[k] !== undefined) out[k] = profile[k]; });
+  return out;
+}
 
 /** Values a mode starts with, based on the current (flat) settings. */
 export function initialModeProfile(mode, flat) {
@@ -54,7 +65,7 @@ export function effectiveSettings(stored) {
   if (!MODES.includes(mode) || stored.boardLayout === 'classic') return stored;
   const profile = (stored.modeProfiles && stored.modeProfiles[mode]) || null;
   if (!profile) return stored;
-  return { ...stored, ...profile };
+  return { ...stored, ...perModeOnly(profile) };
 }
 
 /**
@@ -109,10 +120,10 @@ export function migrateExperience(stored, isExistingInstall) {
 export const MODE_DESCRIPTIONS = {
   child: {
     title: 'Child',
-    summary: 'Warm colours, larger picture symbols and roomier tiles.',
+    summary: 'Warm colours and larger picture symbols.',
     details: [
-      'Bigger tiles (3 across) with picture symbols first',
-      'Soft colour for each kind of word',
+      'Picture symbols first, in a warm colour for each kind of word',
+      'Friendlier wording and headings',
       'Optional modelling for a parent or teacher to show words',
     ],
   },
@@ -120,7 +131,7 @@ export const MODE_DESCRIPTIONS = {
     title: 'Adult',
     summary: 'Calm, text-first design with symbols beside the words.',
     details: [
-      'More words per screen (4 across)',
+      'Clean tiles with a colour edge for each kind of word',
       'Small symbols with clear text labels',
       'Phrases for work, university, appointments and social life',
     ],

@@ -28,19 +28,39 @@ describe('modes', () => {
     const eff = effectiveSettings(next);
     expect(eff.theme).toBe('dark');
     expect(eff.textScale).toBe(1.5);
-    expect(eff.gridSize).toBe(4); // Adult default density
+    expect(eff.gridSize).toBe(3); // shared: choosing a mode never changes the grid
     expect(eff.speechRate).toBe(0.6); // shared
   });
 
-  test('each mode keeps its own presentation settings', () => {
+  test('each mode keeps its own colours and picture style', () => {
     let s = routeSettingsUpdate(legacy, { uiMode: 'child' });
-    s = routeSettingsUpdate(s, { textScale: 1.25, gridSize: 3 });
+    s = routeSettingsUpdate(s, { theme: 'light', symbolStyle: 'symbols' });
     s = routeSettingsUpdate(s, { uiMode: 'adult' });
-    s = routeSettingsUpdate(s, { gridSize: 5 });
-    expect(effectiveSettings(s).gridSize).toBe(5);
+    s = routeSettingsUpdate(s, { theme: 'highContrast', symbolStyle: 'text' });
+    expect(effectiveSettings(s).theme).toBe('highContrast');
     s = routeSettingsUpdate(s, { uiMode: 'child' });
-    expect(effectiveSettings(s).gridSize).toBe(3);
+    expect(effectiveSettings(s).theme).toBe('light');
+    expect(effectiveSettings(s).symbolStyle).toBe('symbols');
+  });
+
+  test('words per row and text size are shared, so switching mode never moves a word', () => {
+    let s = routeSettingsUpdate(legacy, { uiMode: 'child' });
+    s = routeSettingsUpdate(s, { textScale: 1.25, gridSize: 4 });
+    s = routeSettingsUpdate(s, { uiMode: 'adult' });
+    expect(effectiveSettings(s).gridSize).toBe(4);
     expect(effectiveSettings(s).textScale).toBe(1.25);
+    s = routeSettingsUpdate(s, { gridSize: 5 });
+    s = routeSettingsUpdate(s, { uiMode: 'child' });
+    expect(effectiveSettings(s).gridSize).toBe(5);
+    ['gridSize', 'textScale'].forEach((k) => expect(PER_MODE_KEYS).not.toContain(k));
+  });
+
+  test('grid or text size left in a profile by an earlier build is ignored', () => {
+    const s = { gridSize: 3, textScale: 1, uiMode: 'adult', modeProfiles: { adult: { gridSize: 4, textScale: 1.5, theme: 'dark' } } };
+    const eff = effectiveSettings(s);
+    expect(eff.gridSize).toBe(3);
+    expect(eff.textScale).toBe(1);
+    expect(eff.theme).toBe('dark');
   });
 
   test('shared settings stay shared across modes', () => {

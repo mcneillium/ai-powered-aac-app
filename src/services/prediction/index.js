@@ -76,6 +76,18 @@ export async function createPersistentPredictor(opts = {}) {
       // Keep whatever was learned while it was on; just stop learning more.
       if (!predictor.isLearningEnabled()) saver.flush();
     },
+    // Edits the user makes to what was learned are saved straight away, even
+    // with learning paused, so a forgotten word stays forgotten.
+    async forgetLearnedWord(word) {
+      const ok = predictor.forgetLearnedWord(word);
+      if (ok) { saver.cancel(); await savePersonalData(profileId, predictor.exportPersonal()); }
+      return ok;
+    },
+    async undismissSuggestion(prev, word) {
+      const ok = predictor.undismissSuggestion(prev, word);
+      if (ok) { saver.cancel(); await savePersonalData(profileId, predictor.exportPersonal()); }
+      return ok;
+    },
     async resetPersonal() {
       saver.cancel();
       predictor.resetPersonal();

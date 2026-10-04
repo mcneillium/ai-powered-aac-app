@@ -11,6 +11,7 @@
 import {
   createPredictor, createPersistentPredictor, getBaseModel, getRankerWeights,
 } from './prediction/index.js';
+import { personalFromLegacyProfile } from './prediction/legacyImport.js';
 
 // Usable at once: base model only, nothing stored.
 let predictor = createPredictor({ base: getBaseModel(), ranker: getRankerWeights(), learningEnabled: false });
@@ -91,9 +92,49 @@ export function getLearningStats() {
   }
 }
 
+/** Learned words for "What Voice has learned": [{ word, display, uses }]. */
+export function getLearnedWords(limit = 60) {
+  try { return predictor.getLearnedWords ? predictor.getLearnedWords(limit) : []; } catch { return []; }
+}
+
+export async function forgetLearnedWord(word) {
+  try { await predictor.forgetLearnedWord(word); } catch { /* optional */ }
+  notify();
+}
+
+/** "Don't suggest" entries: [{ prev, word }]. */
+export function getDismissedSuggestions() {
+  try { return predictor.getDismissed ? predictor.getDismissed() : []; } catch { return []; }
+}
+
+export async function undismissSuggestion(prev, word) {
+  try { await predictor.undismissSuggestion(prev, word); } catch { /* optional */ }
+  notify();
+}
+
 export async function resetLearning() {
   if (predictor.resetPersonal) await predictor.resetPersonal();
   notify();
+}
+
+/**
+ * One-time carry-over of an earlier version's learning (see legacyImport.js).
+ * Only fills an empty personal layer, so it can never overwrite anything
+ * learned by this version. Returns true when something was imported.
+ */
+export async function importLegacyLearning(profile) {
+  await initPrediction();
+  try {
+    const s = predictor.getPersonalStats();
+    if ((s.sentences || 0) > 0 || (s.words || 0) > 0) return false;
+    const json = personalFromLegacyProfile(profile);
+    if (!json || !predictor.importPersonal) return false;
+    const ok = await predictor.importPersonal(json);
+    notify();
+    return !!ok;
+  } catch {
+    return false;
+  }
 }
 
 export function flushPrediction() {

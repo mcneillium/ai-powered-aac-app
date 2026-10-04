@@ -200,6 +200,60 @@ function packNested(map) {
 }
 
 /** Plain JSON-safe snapshot of the state. */
+// ── Seeing and editing what was learned (user control) ──
+
+/** Learned words, most used first: [{ word, display, uses }] (uses faded by age). */
+export function listLearnedWords(state, now, limit = 60) {
+  const hl = state.limits.halfLifeMs;
+  return [...state.uni.entries()]
+    .map(([word, e]) => ({ word, display: state.display.get(word) || word, uses: decayed(e, now, hl) }))
+    .filter((x) => x.uses >= 0.05)
+    .sort((a, b) => (b.uses - a.uses) || (a.word < b.word ? -1 : 1))
+    .slice(0, limit);
+}
+
+/**
+ * Forget one word everywhere it was learned: its count, the pairs and
+ * triples that predict it or follow it, phrases containing it, and its
+ * suggestion feedback. The word itself stays on the board.
+ */
+export function forgetWord(state, word, now) {
+  const w = String(word || '').toLowerCase().trim();
+  if (!w) return false;
+  const has = (key) => key.split(' ').includes(w);
+  state.uni.delete(w);
+  state.display.delete(w);
+  for (const map of [state.bi, state.tri]) {
+    for (const [hist, conts] of [...map.entries()]) {
+      if (has(hist)) { map.delete(hist); continue; }
+      conts.delete(w);
+      if (conts.size === 0) map.delete(hist);
+    }
+  }
+  for (const map of [state.phrases, state.accepted, state.dismissed]) {
+    for (const key of [...map.keys()]) if (has(key)) map.delete(key);
+  }
+  touch(state, now);
+  return true;
+}
+
+/** Suggestions the user asked not to see: [{ prev, word }] (newest first). */
+export function listDismissed(state) {
+  return [...state.dismissed.entries()]
+    .sort((a, b) => b[1].t - a[1].t)
+    .map(([key]) => {
+      const i = key.indexOf(' ');
+      return { prev: key.slice(0, i), word: key.slice(i + 1) };
+    });
+}
+
+/** Undo a "don't suggest this here". */
+export function undismiss(state, prev, word, now) {
+  const ok = state.dismissed.delete(feedbackKey(prev, word));
+  if (ok) touch(state, now);
+  return ok;
+}
+
 export function exportPersonalState(state) {
   return {
     format: PERSONAL_FORMAT,

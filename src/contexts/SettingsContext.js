@@ -10,6 +10,8 @@ import { useAuth } from './AuthContext';
 import { DB_PATHS, dbPath } from '../shared/schema';
 import { safeParse } from '../utils/safeStorage';
 import { effectiveSettings, routeSettingsUpdate, migrateExperience } from './experience';
+import { LEGACY_PROFILE_KEY, hasLegacyLearning } from '../services/prediction/legacyImport';
+import { importLegacyLearning } from '../services/suggestionEngine';
 
 const SETTINGS_STORAGE_KEY = '@aac_settings';
 
@@ -116,6 +118,21 @@ export function mergeRemoteSettings(local, remote) {
   return merged;
 }
 
+/**
+ * Learning setting for a user upgrading from an earlier version. Earlier
+ * versions learned on this device by default ("Learn from my usage", on
+ * unless switched off). Someone with learned data who never switched it off
+ * keeps learning; everyone else, and every new install, stays off. Returns
+ * null when nothing changes (an explicit choice is never overridden).
+ * Exported for tests.
+ */
+export function migrateLearning(stored, hadLegacyLearning) {
+  if (stored && typeof stored.personalLearning === 'boolean') return null;
+  if (!hadLegacyLearning) return null;
+  const keep = !(stored && stored.aiPersonalisationEnabled === false);
+  return { personalLearning: keep };
+}
+
 export const SettingsContext = createContext({
   settings: defaultSettings,
   loading: true,
@@ -158,6 +175,17 @@ export function SettingsProvider({ children }) {
             boardLayoutSource: migration.boardLayout === 'studio' ? 'new-install' : 'existing-install',
           };
           AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(latestSettings.current)).catch(() => {});
+        }
+        // Someone who was already learning in an earlier version keeps
+        // learning, with what was learned carried over (once).
+        const legacyRaw = await AsyncStorage.getItem(LEGACY_PROFILE_KEY).catch(() => null);
+        let legacy = null;
+        try { legacy = legacyRaw ? JSON.parse(legacyRaw) : null; } catch { legacy = null; }
+        const learning = migrateLearning(hasStored ? parsed : null, hasLegacyLearning(legacy));
+        if (learning) {
+          latestSettings.current = { ...latestSettings.current, ...learning };
+          AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(latestSettings.current)).catch(() => {});
+          if (learning.personalLearning) importLegacyLearning(legacy).catch(() => {});
         }
         setSettings(latestSettings.current);
       } catch (e) {

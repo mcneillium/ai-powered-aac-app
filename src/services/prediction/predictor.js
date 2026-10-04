@@ -21,6 +21,7 @@ import { BOS, tokenize, isPredictableWord, displayWord, stripNonWord } from './t
 import { indexBaseModel } from './baseIndex.js';
 import {
   createPersonalState, learnSentence, recordAccepted, recordDismissed,
+  listLearnedWords, forgetWord, listDismissed, undismiss,
   dismissalStrength, acceptedStrength, decayed, exportPersonalState,
   importPersonalState, wordPairCount, gramCount,
 } from './personalModel.js';
@@ -400,6 +401,28 @@ export function createPredictor(opts = {}) {
     return true;
   }
 
+  /** What was learned, for the "What Voice has learned" screen. */
+  function getLearnedWords(limit) {
+    return listLearnedWords(personal, now(), limit).map((x) => ({ ...x, display: displayWord(x.word, personal.display.has(x.word) ? { [x.word]: personal.display.get(x.word) } : base.display) }));
+  }
+
+  /** Forget one word (works whether learning is on or off). */
+  function forgetLearnedWord(word) {
+    const ok = forgetWord(personal, tokenize(word)[0] || word, now());
+    if (ok) { persCache = { key: '', total: 0, top: [] }; notify(); }
+    return ok;
+  }
+
+  function getDismissed() {
+    return listDismissed(personal);
+  }
+
+  function undismissSuggestion(prev, word) {
+    const ok = undismiss(personal, prev, word, now());
+    if (ok) notify();
+    return ok;
+  }
+
   function resetPersonal() {
     personal = createPersonalState(limits);
     persCache = { key: '', total: 0, top: [] };
@@ -451,6 +474,10 @@ export function createPredictor(opts = {}) {
     importPersonal,
     resetPersonal,
     getPersonalStats,
+    getLearnedWords,
+    forgetLearnedWord,
+    getDismissed,
+    undismissSuggestion,
     setLearningEnabled(v) { learningEnabled = v === true; },
     isLearningEnabled() { return learningEnabled; },
     // Internal: detailed candidate rows for evaluation / ranker training.
