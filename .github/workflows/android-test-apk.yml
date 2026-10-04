@@ -21,7 +21,7 @@ jobs:
       CI: '1'
       EXPO_NO_DOTENV: '1'
       NODE_OPTIONS: --max-old-space-size=4096
-      LOCALAPPDATA: ${{ runner.temp }}/voice-signing
+      LOCALAPPDATA: /tmp/voice-signing-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - uses: actions/checkout@v4
