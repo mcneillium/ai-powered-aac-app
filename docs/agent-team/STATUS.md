@@ -126,3 +126,69 @@ New coverage without a defect: upgrade fixtures for oldest settings/history/favo
 
 ### Next
 Owner: link a GitHub user in Expo (or turn off that integration); install the APK and run the device checks above; decide the owner items.
+
+## Run 3 (2026-10-04): validation
+**Goal (owner):** validate PR #11 on its exact head; make CI run for the stacked PR; investigate emulators; native automation; fix text over the category stripe; owner-decision table. No merge, retarget or release.
+
+### Results per commit (local, clean tree; CI = GitHub Actions "Lint, Test & Build")
+| Commit | Lint | Jest | Android export | GitHub CI |
+|---|---|---|---|---|
+| `ffcb0d5` | exit 0 (0 errors, 15 warnings) | exit 0, 618 tests | exit 0 | success (first run on this PR) |
+| `b43b8a9` | not run separately | 817 tests (before commit) | not run | success |
+| `23d9940` | exit 0 | exit 0, 820 tests | exit 0 | success |
+| `f74dd96` (final app source) | exit 0 (0 errors, 15 warnings) | exit 0, 56 suites / 820 tests | exit 0 | success |
+
+### CI for the stacked PR
+- `ci.yml` `pull_request.branches` now includes `codex/**` and `claude/**` as well as main/master. The PR base stays `codex/voice-agent-team`.
+- PR #10's own CI on `28bf33c` was already green.
+
+### Emulators (environment limitation)
+- The emulators used before (API 35 and 30, WHPX) are on the owner's Windows PC (`docs/audit/aac-usability-improvements-2026-10.md`, Phase 3).
+- This cloud container has an AVD (`aac34`, x86_64) and emulator 37.2.12, but no `/dev/kvm`. The CPU exposes no vmx/svm, and `emulator -accel-check` reports "KVM requires a CPU that supports vmx or svm".
+- An earlier unaccelerated boot here never completed (about 40 minutes, adb offline), so it was not retried.
+- No adb device is attached; the S24 cannot connect to a cloud container.
+- **Native automation was not run in this run.**
+
+### Fixes (reproduced first)
+| Commit | Fix | Evidence |
+|---|---|---|
+| `ffcb0d5` | Native suite: two checks filtered on `endsWith('prtest')`, which matched nothing for `.prtestv2`, so the touch-target check passed vacuously. It now uses the driven package and fails when no app controls are found | static; `node --check`, eslint |
+| `b43b8a9` | Text no longer drawn over the category stripe (up to 5 px before). Minimum is now 12 px (was 11). Words too wide wrap with a visible hyphen (bath-room); up to 3 lines when height allows. Grid, words per row and positions are unchanged | unit (`design3-stripe` fails 167/199 on previous code); computed-layout drawings, not app screenshots |
+| `23d9940` | Android ignores `minimumFontScale`, so platform shrink-to-fit could go towards 4 px. It is now iOS only. Fit is memoised; hyphenation check made robust | unit (`design3-review` fails 2/3 on previous code) |
+
+### Reviews (static, read-only)
+- Reviewer on `b43b8a9`: CHANGES NEEDED (Android shrink floor), fixed in `23d9940`.
+- Re-check of `23d9940`: APPROVE.
+- Pre-existing items not changed (follow-up): ActionButton (`minimumFontScale 0.8`) and Classic board tile labels (`AACBoardScreen.js:135`, no floor) can shrink below readable sizes on Android.
+
+### Test APK (built, not installed)
+- Source: clean `git archive` of `f74dd96`; `expo prebuild --clean`; `assembleRelease`; ABIs **arm64-v8a + x86_64** (phone and emulators); Firebase env unset.
+- Package `com.elpabloawakens.aipoweredaacapp.prtestv2`, "Voice 2 Test", 1.2.0 (versionCode 2).
+- Certificate SHA-256 `63bc733cf7c902117b0936e5ac96387d70692e398a4a6892711856c1e42080f8`.
+- APK SHA-256 `685b50b8c82026326e70f1ff95b9622543a65c1645716657ef84303adb21dc7d`, 38,535,051 bytes.
+- Local copy: `native-ui-evidence/Voice2Test-f74dd96.apk` (ignored by Git).
+
+### Owner decisions
+**Release blockers**
+| Decision | Current behaviour | Recommended | Consequence |
+|---|---|---|---|
+| Account deletion and `feedback/{uid}` | Deletes users, settings, logs, sync, words and requests, but not `feedback/{uid}` (may hold name and email). Says "all associated data permanently deleted" even if a cloud removal failed | Also remove `feedback/{uid}` (rules already allow it). Only report success when every removal succeeded | Feedback history for deleted users is lost. The deletion claim becomes true |
+| ARASAAC licence | Pictograms fetched at runtime; CC BY-NC-SA; API "only for non-commercial applications" | Get written confirmation from ARASAAC before any store release; keep the credit | Without confirmation, ship without ARASAAC (built-in pictures only) |
+| Learning consent scope | `personalLearning` syncs with account settings, but learned data stays on each device. Turning it on on one phone turns it on on another signed-in phone without its consent screen | Per device: add it to `LOCAL_ONLY_KEYS` | One opt-in per device; a one-line change plus a test |
+| Android backup | `android:allowBackup="true"` (Expo default). Settings, history, own words and learned data go to Google Auto Backup | Keep it on (losing vocabulary on a phone change is severe), and disclose it in the privacy policy and Play Data safety | Disclosure needed. Turning it off means guests lose everything on a new phone |
+
+**Optional improvements**
+| Decision | Current behaviour | Recommended | Consequence |
+|---|---|---|---|
+| Signed-in "Delete my data" | Removes local data; own words sync back from the account (copy says so) | Keep; later add "also delete from my account" | None now |
+| Relaunch after account deletion | `hasLaunched` kept, so the user is treated as existing and gets the Classic board | Clear `hasLaunched` on account deletion | The welcome screen shows again |
+| Emoji in store screenshots | Built-in pictures are OS vendor emoji | Use text-only or licensed pictures in store assets | Avoids a vendor artwork question |
+| Very long words, 5 per row, 320 dp | "Overwhelmed" and "Appointments" render as 4 hyphenated lines at 12 px | Keep; the words-per-row setting is the remedy | Poor breaks in that one case |
+| EAS Update status | Expo GitHub app job never starts (account not linked); app has no `expo-updates` | Disconnect it, or link a GitHub user in Expo | Removes a red status unrelated to code |
+| Android shrink in ActionButton and Classic tiles | Can go below readable sizes on Android (pre-existing) | Fix in a follow-up PR with a device check | — |
+
+### NOT TESTED
+- Emulator, S24 and iOS.
+- Native suite.
+- Device-level text rendering of hyphenated labels.
+- TalkBack, switch scanning, real speech, permission dialogs, airplane mode, checklist §H.
