@@ -81,7 +81,15 @@ export default function CombinedImageScreen() {
   const openCamera = async () => {
     // Ask for permission (again) at the point of use; expo returns the
     // cached result if already decided.
-    const perm = cameraPerm?.granted ? cameraPerm : await requestPerm();
+    let perm = cameraPerm;
+    if (!perm?.granted) {
+      try {
+        perm = await requestPerm();
+      } catch (e) {
+        console.warn('[Camera] permission request failed:', e?.message);
+        perm = null;
+      }
+    }
     if (!perm?.granted) {
       Alert.alert(
         'Camera permission needed',

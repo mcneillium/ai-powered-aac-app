@@ -19,10 +19,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { t } from '../i18n/strings';
 import DisplayMode from '../components/DisplayMode';
+import ClassicTileLabel, { classicLabelWidth } from '../components/ClassicTileLabel';
 import VoicePresetPicker from '../components/VoicePresetPicker';
 import WordFinder from '../components/WordFinder';
 import MoreActionsMenu from '../components/MoreActionsMenu';
@@ -96,6 +98,9 @@ export default function AACBoardScreen() {
     isCurrentFavourite,
   } = useBoardController();
 
+  const { width: windowWidth } = useWindowDimensions();
+  const labelWidth = classicLabelWidth(windowWidth, numColumns);
+
   const renderButton = useCallback(({ item }) => {
     const isNavButton = !!item.navigateTo;
     const buttonColor = settings.theme === 'highContrast' ? palette.cardBg : item.color;
@@ -129,16 +134,15 @@ export default function AACBoardScreen() {
         {item.icon && (
           <Ionicons name={item.icon} size={Math.round(20 * textScale)} color={buttonTextColor} style={styles.buttonIcon} />
         )}
-        <Text
-          style={[styles.buttonLabel, { color: buttonTextColor, fontSize: labelSize }]}
-          numberOfLines={2}
-          adjustsFontSizeToFit
-        >
-          {item.label}
-        </Text>
+        <ClassicTileLabel
+          label={item.label}
+          size={labelSize}
+          width={labelWidth}
+          style={[styles.buttonLabel, { color: buttonTextColor }]}
+        />
       </TouchableOpacity>
     );
-  }, [handleButtonPress, numColumns, palette, settings.theme, isScanFocused, textScale, scanRingStyle]);
+  }, [handleButtonPress, numColumns, palette, settings.theme, isScanFocused, textScale, scanRingStyle, labelWidth]);
 
   const hasWords = sentenceWords.length > 0;
   const sentenceLineHeight = Math.round(26 * textScale);

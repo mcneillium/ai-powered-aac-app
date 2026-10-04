@@ -82,8 +82,8 @@ describe('learning carried over from earlier versions', () => {
   });
 
   test('settings: earlier learners keep learning, everyone else stays off', () => {
-    expect(migrateLearning(null, true)).toEqual({ personalLearning: true });
-    expect(migrateLearning({ theme: 'dark' }, true)).toEqual({ personalLearning: true });
+    expect(migrateLearning(null, true)).toEqual({ personalLearning: true, learningCarriedOver: true });
+    expect(migrateLearning({ theme: 'dark' }, true)).toEqual({ personalLearning: true, learningCarriedOver: true });
     expect(migrateLearning({ aiPersonalisationEnabled: false }, true)).toEqual({ personalLearning: false });
     expect(migrateLearning(null, false)).toBeNull(); // new install: default (off)
     expect(migrateLearning({ personalLearning: false }, true)).toBeNull(); // explicit choice wins

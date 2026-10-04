@@ -334,8 +334,11 @@ async function samplePlayers(ms, every = 150) {
     const nodes = await d.dump('E2-compact');
     const tabC = nodes.find((n) => /tab$/.test(n.label));
     const fullyVisible = (n) => n.x1 > 0 && n.x2 < 1080 && n.y2 <= (tabC ? tabC.y1 : 2400) && !/tab$/.test(n.label);
-    const small = nodes.filter((n) => n.clickable === 'true' && n.package.endsWith('prtest') && fullyVisible(n) && ((n.x2 - n.x1) < 115 || (n.y2 - n.y1) < 115));
-    check('E2 compact tappable controls >= 44dp', small.length === 0, small.map((n) => `${n.label}:${n.x2 - n.x1}x${n.y2 - n.y1}`).join('; ') || 'none smaller');
+    const small = nodes.filter((n) => n.clickable === 'true' && n.package === d.PKG && fullyVisible(n) && ((n.x2 - n.x1) < 115 || (n.y2 - n.y1) < 115));
+    // Fails if no controls of the app under test were found at all (a wrong
+    // package filter or an empty dump must not count as a pass).
+    const seen = nodes.filter((n) => n.clickable === 'true' && n.package === d.PKG && fullyVisible(n)).length;
+    check('E2 compact tappable controls >= 44dp', seen > 0 && small.length === 0, seen === 0 ? 'no app controls found' : (small.map((n) => `${n.label}:${n.x2 - n.x1}x${n.y2 - n.y1}`).join('; ') || `none smaller (${seen} checked)`));
     // restore standard layout
     await openSettings(); await setSwitch('Compact layout', false); await scrollTop();
     d.sh('input keyevent KEYCODE_BACK'); await sleep(1000);
@@ -350,7 +353,7 @@ async function samplePlayers(ms, every = 150) {
     d.screenshot('E6-font-scale-2.0-board');
     const nodes = await d.dump('E6-board');
     const tabF = nodes.find((n) => /tab$/.test(n.label));
-    const btn = nodes.filter((n) => n.clickable === 'true' && n.package.endsWith('prtest') && n.x2 > n.x1 && (/tab$/.test(n.label) || n.y2 <= (tabF ? tabF.y1 : 2400)));
+    const btn = nodes.filter((n) => n.clickable === 'true' && n.package === d.PKG && n.x2 > n.x1 && (/tab$/.test(n.label) || n.y2 <= (tabF ? tabF.y1 : 2400)));
     const overlaps = [];
     for (let i = 0; i < btn.length; i++) for (let j = i + 1; j < btn.length; j++) {
       const a = btn[i], b = btn[j];

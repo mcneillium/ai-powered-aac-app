@@ -24,7 +24,7 @@ export default function MeScreen() {
   const confirmDeleteLocal = () => {
     Alert.alert(
       'Delete my words and messages?',
-      'Removes from this phone: spoken history, favourites, your own words and their photos, pronunciations and everything Voice has learned. Your settings stay. Copies synced to an account are not affected.',
+      'Removes from this phone: spoken history, favourites, your own words and their photos, pronunciations and everything Voice has learned. Your settings stay. If you are signed in, your own words are kept in your account and sync back to this phone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -32,7 +32,7 @@ export default function MeScreen() {
           style: 'destructive',
           onPress: async () => {
             await deleteLocalPersonalData();
-            Alert.alert('Deleted', 'Your words and messages were removed from this phone.');
+            Alert.alert('Deleted', account ? 'Your messages and learning were removed from this phone. Your own words sync back from your account.' : 'Your words and messages were removed from this phone.');
           },
         },
       ]
@@ -45,7 +45,7 @@ export default function MeScreen() {
         <Text style={[type.title, { color: c.ink }]}>{account ? (account.email || 'Signed in') : 'Using Voice without an account'}</Text>
         <Text style={[type.body, { color: c.inkSoft, marginTop: 4, marginBottom: space.sm }]}>
           {account
-            ? 'Settings and your own words sync to your account. Photos and learning stay on this phone.'
+            ? 'Settings (including your learning and online-suggestion choices) and your own words sync to your account. Photos and learning stay on this phone, apart from the phone\'s own backup if it is turned on.'
             : 'Everything works on this phone. An account is only needed to sync between devices.'}
         </Text>
         {!cloud ? (

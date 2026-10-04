@@ -8,6 +8,7 @@ files
 credentials
 data
 !src/data/
+!scripts/eval/data/
 
 # Expo
 .expo/

@@ -358,8 +358,8 @@ const styles = StyleSheet.create({
   },
   headerBtn: {
     marginRight: Platform.OS === 'ios' ? 16 : 12,
-    minWidth: 44,
-    minHeight: 44,
+    minWidth: 48,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },

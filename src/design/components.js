@@ -5,14 +5,15 @@
 // - shows a visible focus ring when scanning focuses it,
 // - gives press feedback that respects reduced motion.
 
-import React, { useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
-  View, Text, Pressable, Animated, StyleSheet, Modal, Image, ScrollView, Switch,
+  View, Text, Pressable, Animated, StyleSheet, Modal, Image, ScrollView, Switch, useWindowDimensions, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePaper } from './usePaper';
 import { getCategoryColors, space, type, touch, motion } from './tokens';
+import { fitLabelSize, fitTileLabel } from './fitLabel';
 import { getScanState, advanceScan, selectCurrent } from '../services/switchScanService';
 
 /** Press feedback: a quick scale-down (skipped with reduced motion). */
@@ -32,6 +33,9 @@ export function tileCategory(button) {
   return button.category || 'misc';
 }
 
+// Extra label width a tile may take from its right-hand padding (6 -> 2 px).
+const WIDE_PAD = 4;
+
 /**
  * A vocabulary tile.
  * symbolStyle: 'symbols' (large picture), 'mixed' (small picture + label),
@@ -40,23 +44,68 @@ export function tileCategory(button) {
  */
 export function Tile({
   button, onPress, symbolSource, emoji = null, symbolStyle = 'mixed', focused = false,
-  height, accessibilityLabel, accessibilityHint, testID,
+  height, accessibilityLabel, accessibilityHint, testID, width = 0,
 }) {
   const p = usePaper();
+  // The system font size (Android "Font size", iOS Dynamic Type) is applied
+  // here rather than by the platform, so the label can be fitted at the size
+  // it will actually render. Capped at 2x: past that the tile width, not
+  // the requested size, limits the label anyway.
+  const { fontScale: sysScale = 1 } = useWindowDimensions();
+  const fontScale = Math.min(2, Math.max(1, sysScale || 1));
   const { c, r, mode, theme, scale: textScale } = p;
   const press = usePressScale(p.reduceMotion);
   const cat = getCategoryColors(theme, tileCategory(button));
   const isNav = !!button.navigateTo;
   const child = mode === 'child';
   const hc = theme === 'highContrast';
-  const showImage = symbolStyle !== 'text' && !!symbolSource;
+  // A picture that fails to load (offline, missing file) falls back to the
+  // built-in picture, or to the label alone, instead of a blank gap.
+  const [failedUri, setFailedUri] = useState(null);
+  // Tile width: given by the grid (so the label is fitted on the first
+  // render and does not jump), otherwise measured once laid out.
+  const [measuredWidth, setTileWidth] = useState(0);
+  const tileWidth = width || measuredWidth;
+  const imageOk = !!symbolSource && !(symbolSource.uri && symbolSource.uri === failedUri);
+  const showImage = symbolStyle !== 'text' && imageOk;
   const showEmoji = symbolStyle !== 'text' && !showImage && !!emoji;
-  const showSymbol = showImage || showEmoji;
+  const wantSymbol = showImage || showEmoji;
+  const wantIcon = !wantSymbol && !!button.icon;
+  // Fit the label so no word is broken anywhere but at a visible hyphen,
+  // cut off or clipped by the tile: the user's size when it fits, otherwise
+  // the largest size that does, never below 12 px. A word wider than the
+  // tile at 12 px wraps with a hyphen ("bath-" / "room"). The label always
+  // keeps the side padding, so it never runs over the category stripe
+  // (5 px, inside the border) or the focus border. The picture shrinks
+  // first (to 20 px) and is dropped only if the label does not fit beside
+  // it. Width and height budgets: 6 px padding and up to 4 px focus border
+  // on each side (the same in every focus state, so focus never reflows);
+  // a word slightly too wide may use 4 px of the right-hand padding (the
+  // side without the stripe) before it is hyphenated.
+  const wantedSize = Math.round((child ? 17 : 15) * textScale * fontScale);
+  const iconSize = Math.round(20 * textScale);
+  const symbolNeed = wantSymbol ? 20 + space.xs : wantIcon ? iconSize + 2 : 0;
+  // Memoised: tiles re-render on every switch-scan step.
+  const fit = useMemo(() => fitTileLabel(button.label, wantedSize, {
+    width: tileWidth ? tileWidth - 20 : 0,
+    height: height ? height - 20 : Infinity,
+    symbol: symbolNeed,
+    pad: WIDE_PAD,
+  }), [button.label, wantedSize, tileWidth, height, symbolNeed]);
+  const labelSize = fit.size;
+  const labelLine = fit.lineHeight;
+  const showSymbol = wantSymbol && fit.symbol;
+  const showImageNow = showImage && showSymbol;
+  const showEmojiNow = showEmoji && showSymbol;
   const bigSymbol = showSymbol && symbolStyle === 'symbols';
   const bg = hc ? '#000' : child ? cat.fill : (isNav ? c.sunk : c.card);
-  const iconName = !showSymbol && button.icon ? button.icon : null;
-  const labelSize = Math.round((child ? 17 : 15) * textScale);
-  const symbolSize = bigSymbol ? Math.round(height * 0.5) : Math.round(Math.min(34, height * 0.38));
+  const iconName = wantIcon && fit.symbol ? button.icon : null;
+  // The picture gives way to the label when both do not fit the tile.
+  const baseSymbol = bigSymbol ? Math.round(height * 0.5) : Math.round(Math.min(34, height * 0.38));
+  const symbolSize = Math.max(20, Math.min(baseSymbol, height - 20 - space.xs - fit.lines * labelLine));
+  // Pictures are black line art: in dark and high contrast they sit on a
+  // light plate so they stay visible.
+  const plate = c.symbolPlate;
 
   return (
     <Pressable
@@ -65,10 +114,15 @@ export function Tile({
       onPressIn={press.onPressIn}
       onPressOut={press.onPressOut}
       accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
+      // The name is the plain label, never the hyphenated text drawn below.
+      accessibilityLabel={accessibilityLabel || button.label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ selected: focused }}
       style={styles.tileOuter}
+      onLayout={(e) => {
+        const w = Math.round(e.nativeEvent.layout.width);
+        if (w !== measuredWidth) setTileWidth(w);
+      }}
     >
       {({ pressed }) => (
         <Animated.View
@@ -76,6 +130,8 @@ export function Tile({
             styles.tile,
             {
               height,
+              // Never the left padding: that keeps the label off the stripe.
+              ...(fit.wide ? { paddingRight: 6 - WIDE_PAD } : null),
               backgroundColor: bg,
               borderRadius: r.tile,
               borderColor: focused ? c.focus : hc ? c.line : child ? 'transparent' : c.line,
@@ -87,7 +143,7 @@ export function Tile({
           {/* Category edge (Adult / High contrast); Child uses the fill. */}
           {!child && <View style={[styles.edge, { backgroundColor: cat.edge }]} />}
           {pressed && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: c.signal, opacity: 0.14 }]} />}
-          {showEmoji && (
+          {showEmojiNow && (
             <Text
               style={{ fontSize: Math.round(symbolSize * 0.8), lineHeight: symbolSize, marginBottom: space.xs, textAlign: 'center' }}
               importantForAccessibility="no"
@@ -97,24 +153,35 @@ export function Tile({
               {emoji}
             </Text>
           )}
-          {showImage && (
-            <Image
-              source={symbolSource}
-              style={{ width: symbolSize, height: symbolSize, marginBottom: space.xs }}
-              resizeMode="contain"
-              accessibilityIgnoresInvertColors
-            />
+          {showImageNow && (
+            <View style={{ width: symbolSize, height: symbolSize, marginBottom: space.xs, alignItems: 'center', justifyContent: 'center', borderRadius: Math.round(symbolSize / 5), backgroundColor: plate || 'transparent' }}>
+              <Image
+                source={symbolSource}
+                style={{ width: plate ? symbolSize - 6 : symbolSize, height: plate ? symbolSize - 6 : symbolSize }}
+                resizeMode="contain"
+                accessibilityIgnoresInvertColors
+                onError={() => setFailedUri(symbolSource.uri || null)}
+              />
+            </View>
           )}
           {iconName && (
             <Ionicons name={iconName} size={Math.round(20 * textScale)} color={hc ? cat.edge : c.inkSoft} style={{ marginBottom: 2 }} />
           )}
           <Text
-            style={[type.tile, { color: c.ink, fontSize: labelSize, lineHeight: Math.round(labelSize * 1.25), textAlign: 'center' }]}
-            numberOfLines={2}
-            adjustsFontSizeToFit
-            minimumFontScale={0.8}
+            style={[type.tile, { color: c.ink, fontSize: labelSize, lineHeight: labelLine, textAlign: 'center' }]}
+            numberOfLines={tileWidth ? fit.lines : 2}
+            // Safety net if the estimate is short of the real width: shrink,
+            // but never below 12 px. iOS only: Android (Fabric) ignores
+            // minimumFontScale and would shrink to 4 px, so there the
+            // computed fit is used as is.
+            adjustsFontSizeToFit={Platform.OS === 'ios'}
+            minimumFontScale={Math.min(1, 12 / labelSize)}
+            maxFontSizeMultiplier={1}
+            android_hyphenationFrequency="none"
+            importantForAccessibility="no"
+            accessibilityElementsHidden
           >
-            {button.label}
+            {fit.text}
           </Text>
           {isNav && (
             <View style={[styles.navMark, { backgroundColor: hc ? c.line : cat.edge }]}>
@@ -133,7 +200,7 @@ export function Tile({
  */
 export function ActionButton({
   icon, label, a11yLabel, onPress, variant = 'quiet', disabled = false,
-  focused = false, size = touch.action, flex, style, testID, hint,
+  focused = false, size = touch.action, flex, style, testID, hint, lines = 2,
 }) {
   const p = usePaper();
   const { c, r } = p;
@@ -167,7 +234,9 @@ export function ActionButton({
         ]}
       >
         {icon && <Ionicons name={icon} size={label ? 22 : 24} color={fg} />}
-        {label ? <Text style={[type.label, { color: fg, fontSize: 16, marginLeft: icon ? 8 : 0, flexShrink: 1 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.5}>{label}</Text> : null}
+        {/* Two lines rather than an ellipsis: a cut-off label hides what the
+            control does (e.g. "Save this message as a favou…"). */}
+        {label ? <Text style={[type.label, { color: fg, fontSize: 16, marginLeft: icon ? 8 : 0, flexShrink: 1, textAlign: 'center' }]} numberOfLines={lines} adjustsFontSizeToFit={Platform.OS === 'ios'} minimumFontScale={0.8} maxFontSizeMultiplier={1.5}>{label}</Text> : null}
       </Animated.View>
     </Pressable>
   );
@@ -249,27 +318,36 @@ export function Segmented({ value, options, onChange, label }) {
   const { c, r, theme } = usePaper();
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[styles.segment, { backgroundColor: c.sunk, borderRadius: r.control }]}>
-      {options.map((o) => {
-        const on = o.value === value;
-        return (
-          <Pressable
-            key={String(o.value)}
-            onPress={() => onChange(o.value)}
-            accessibilityRole="radio"
-            accessibilityLabel={o.a11yLabel || o.label}
-            accessibilityState={{ checked: on }}
-            style={[
-              styles.segmentItem,
-              { borderRadius: r.control - 4, backgroundColor: on ? c.card : 'transparent' },
-              on && theme === 'highContrast' && { borderWidth: 2, borderColor: c.signal },
-            ]}
-          >
-            {o.icon ? <Ionicons name={o.icon} size={18} color={on ? c.signal : c.inkSoft} style={{ marginRight: 6 }} /> : null}
-            <Text style={[type.label, { color: on ? c.ink : c.inkSoft }]} numberOfLines={1}>{o.label}</Text>
-          </Pressable>
-        );
-      })}
+      {options.map((o) => (
+        <SegmentItem key={String(o.value)} o={o} on={o.value === value} onChange={onChange} c={c} r={r} theme={theme} />
+      ))}
     </View>
+  );
+}
+
+// One option. Its label wraps to two lines and, if a word still does not
+// fit (narrow phones, large text), gets smaller instead of being cut off.
+function SegmentItem({ o, on, onChange, c, r, theme }) {
+  const [w, setW] = useState(0);
+  // Width budget: 6 px padding and 2 px high-contrast border each side, icon.
+  const avail = w ? w - 16 - (o.icon ? 24 : 0) : 0;
+  const size = fitLabelSize(o.label, type.label.fontSize, avail, { min: 11 });
+  return (
+    <Pressable
+      onPress={() => onChange(o.value)}
+      onLayout={(e) => { const nw = Math.round(e.nativeEvent.layout.width); if (nw !== w) setW(nw); }}
+      accessibilityRole="radio"
+      accessibilityLabel={o.a11yLabel || o.label}
+      accessibilityState={{ checked: on }}
+      style={[
+        styles.segmentItem,
+        { borderRadius: r.control - 4, backgroundColor: on ? c.card : 'transparent' },
+        on && theme === 'highContrast' && { borderWidth: 2, borderColor: c.signal },
+      ]}
+    >
+      {o.icon ? <Ionicons name={o.icon} size={18} color={on ? c.signal : c.inkSoft} style={{ marginRight: 6 }} /> : null}
+      <Text style={[type.label, { color: on ? c.ink : c.inkSoft, fontSize: size, lineHeight: Math.round(size * 1.25), textAlign: 'center', flexShrink: 1 }]} numberOfLines={2}>{o.label}</Text>
+    </Pressable>
   );
 }
 
@@ -354,7 +432,8 @@ export function ListRow({ icon, iconColor, text, meta, onPress, a11yLabel, right
       >
         {icon ? <Ionicons name={icon} size={20} color={iconColor || c.signal} /> : null}
         <Text style={[type.body, { color: c.ink, flex: 1, fontSize: 17, marginLeft: icon ? space.md : 0 }]} numberOfLines={3}>{text}</Text>
-        {meta ? <Text style={[type.caption, { color: c.inkSoft }]}>{meta}</Text> : null}
+        {/* Meta never squeezes the main text (it was cut to "See what Voic…"). */}
+        {meta ? <Text style={[type.caption, { color: c.inkSoft, flexShrink: 1, maxWidth: '40%', marginLeft: space.sm, textAlign: 'right' }]}>{meta}</Text> : null}
       </Pressable>
       {right}
     </View>
@@ -373,7 +452,7 @@ const styles = StyleSheet.create({
   },
   action: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   chip: {
-    minHeight: touch.min, paddingHorizontal: 16, borderRadius: 999,
+    minHeight: touch.min, minWidth: touch.min, paddingHorizontal: 16, borderRadius: 999, borderStyle: 'dashed',
     alignItems: 'center', justifyContent: 'center', marginRight: space.sm,
   },
   scrim: { flex: 1, justifyContent: 'flex-end' },
