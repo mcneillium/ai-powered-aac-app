@@ -40,7 +40,7 @@ export default function ShowMessage({ visible, onClose, text, onSpeak }) {
           </Text>
         </View>
         <View style={styles.bar}>
-          <ActionButton icon="arrow-back" label="Back to board" onPress={onClose} flex={1} size={touch.action} focused={focused === 'back'} />
+          <ActionButton icon="arrow-back" label="Back" a11yLabel="Back to board" onPress={onClose} flex={1} size={touch.action} focused={focused === 'back'} />
           <ActionButton icon="swap-vertical" a11yLabel={flipped ? 'Turn text back to me' : 'Turn text to face the other person'} onPress={() => setFlipped((f) => !f)} size={touch.action} focused={focused === 'flip'} />
           {onSpeak && <ActionButton icon="volume-high" label="Speak" variant="signal" onPress={onSpeak} flex={1} size={touch.action} focused={focused === 'speak'} />}
         </View>
