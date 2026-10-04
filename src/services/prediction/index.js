@@ -17,8 +17,10 @@ import {
   loadPersonalData, savePersonalData, clearPersonalData, createDebouncedSaver,
   personalKey, DEFAULT_PROFILE_ID,
 } from './personalStore.js';
+import { importPersonalState, exportPersonalState, forgetWord, undismiss } from './personalModel.js';
+import { tokenize } from './tokenize.js';
 
-export { createPredictor, CONTEXTS, MODES, DEFAULT_WEIGHTS, personalKey, DEFAULT_PROFILE_ID };
+export { createPredictor, CONTEXTS, MODES, DEFAULT_WEIGHTS, personalKey, DEFAULT_PROFILE_ID, clearPersonalData };
 export { tokenize, displayWord } from './tokenize.js';
 
 /** The shipped base model (authored synthetic seed corpus, 0BSD). */
@@ -52,7 +54,10 @@ export function getRankerWeights() {
 export async function createPersistentPredictor(opts = {}) {
   const profileId = opts.profileId || DEFAULT_PROFILE_ID;
   const saver = createDebouncedSaver(profileId, opts.debounceMs ?? 2000);
+  // Throws if storage cannot be read: better no persistent layer this run
+  // than an empty one that would be saved over the user's data.
   const stored = await loadPersonalData(profileId);
+  const clock = opts.now || (() => Date.now());
 
   let predictor = null;
   predictor = createPredictor({
@@ -68,6 +73,24 @@ export async function createPersistentPredictor(opts = {}) {
     },
   });
 
+  // Save a user edit now. With learning on, memory is what should be stored.
+  // While paused, memory may hold session-only changes (e.g. dismissals that
+  // must not be written), so the edit is applied to the stored copy instead.
+  async function saveEdit(apply) {
+    if (predictor.isLearningEnabled()) {
+      saver.cancel();
+      await savePersonalData(profileId, predictor.exportPersonal());
+      return;
+    }
+    await saver.flush(); // anything still due from while learning was on
+    let data;
+    try { data = await loadPersonalData(profileId); } catch { return; }
+    const st = data && importPersonalState(data, opts.limits || {}, clock());
+    if (!st) return;
+    apply(st);
+    await savePersonalData(profileId, exportPersonalState(st));
+  }
+
   return {
     ...predictor,
     profileId,
@@ -80,12 +103,15 @@ export async function createPersistentPredictor(opts = {}) {
     // with learning paused, so a forgotten word stays forgotten.
     async forgetLearnedWord(word) {
       const ok = predictor.forgetLearnedWord(word);
-      if (ok) { saver.cancel(); await savePersonalData(profileId, predictor.exportPersonal()); }
+      if (ok) {
+        const w = tokenize(word)[0] || word;
+        await saveEdit((st) => forgetWord(st, w, clock()));
+      }
       return ok;
     },
     async undismissSuggestion(prev, word) {
       const ok = predictor.undismissSuggestion(prev, word);
-      if (ok) { saver.cancel(); await savePersonalData(profileId, predictor.exportPersonal()); }
+      await saveEdit((st) => undismiss(st, prev, word, clock()));
       return ok;
     },
     async resetPersonal() {

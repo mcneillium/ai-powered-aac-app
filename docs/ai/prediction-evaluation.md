@@ -109,6 +109,16 @@ is the storage-free core. The tests and the evaluation use it directly.
 
 **Data** (`scripts/eval/data/`, all authored and synthetic):
 
+> **Reproducibility (re-checked 2026-10-04 on 7342d01):** the repository's
+> `.gitignore` rule `data` also matches `scripts/eval/data/`, so
+> `seed-corpus.txt` and `personas.txt` are **not in Git** and
+> `node scripts/eval/evaluate.js` fails with ENOENT on a clean checkout. With
+> the untracked local copies restored, every quality, size and behaviour number
+> below was reproduced exactly and `build-base-model.js` regenerated a
+> byte-identical `baseModel.json`; only latency varied (run-to-run noise).
+> The 7342d01 changes (learning carry-over, forget/undo) are not exercised by
+> this evaluation; they are covered by Jest (`learnedControl`, `pred-audit`).
+
 - **Seed corpus:** 666 unique sentences. Duplicates are merged before
   splitting, and the split is by sentence (seed 42): 533 train and 133 test,
   with **0 overlapping sentences**.

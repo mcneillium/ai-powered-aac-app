@@ -10,6 +10,7 @@
 
 import {
   createPredictor, createPersistentPredictor, getBaseModel, getRankerWeights,
+  clearPersonalData, DEFAULT_PROFILE_ID,
 } from './prediction/index.js';
 import { personalFromLegacyProfile } from './prediction/legacyImport.js';
 
@@ -97,7 +98,12 @@ export function getLearnedWords(limit = 60) {
   try { return predictor.getLearnedWords ? predictor.getLearnedWords(limit) : []; } catch { return []; }
 }
 
+// User edits wait for stored data to finish loading; otherwise the load
+// would replace the edited layer and bring back what was just removed.
+const loaded = () => (initPromise || Promise.resolve());
+
 export async function forgetLearnedWord(word) {
+  await loaded();
   try { await predictor.forgetLearnedWord(word); } catch { /* optional */ }
   notify();
 }
@@ -108,12 +114,16 @@ export function getDismissedSuggestions() {
 }
 
 export async function undismissSuggestion(prev, word) {
+  await loaded();
   try { await predictor.undismissSuggestion(prev, word); } catch { /* optional */ }
   notify();
 }
 
 export async function resetLearning() {
+  await loaded();
   if (predictor.resetPersonal) await predictor.resetPersonal();
+  // Also when stored data could not be loaded (memory-only predictor).
+  await clearPersonalData(DEFAULT_PROFILE_ID);
   notify();
 }
 
