@@ -46,7 +46,8 @@ export function Tile({
   const p = usePaper();
   // The system font size (Android "Font size", iOS Dynamic Type) is applied
   // here rather than by the platform, so the label can be fitted at the size
-  // it will actually render (capped at 2x).
+  // it will actually render. Capped at 2x: past that the tile width, not
+  // the requested size, limits the label anyway.
   const { fontScale: sysScale = 1 } = useWindowDimensions();
   const fontScale = Math.min(2, Math.max(1, sysScale || 1));
   const { c, r, mode, theme, scale: textScale } = p;
@@ -61,7 +62,7 @@ export function Tile({
   // Tile width: given by the grid (so the label is fitted on the first
   // render and does not jump), otherwise measured once laid out.
   const [measuredWidth, setTileWidth] = useState(0);
-  const tileWidth = measuredWidth || width;
+  const tileWidth = width || measuredWidth;
   const imageOk = !!symbolSource && !(symbolSource.uri && symbolSource.uri === failedUri);
   const showImage = symbolStyle !== 'text' && imageOk;
   const showEmoji = symbolStyle !== 'text' && !showImage && !!emoji;
