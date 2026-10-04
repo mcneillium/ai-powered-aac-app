@@ -24,7 +24,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { t } from '../i18n/strings';
 import DisplayMode from '../components/DisplayMode';
-import ClassicTileLabel from '../components/ClassicTileLabel';
+import ClassicTileLabel, { classicLabelWidth } from '../components/ClassicTileLabel';
 import VoicePresetPicker from '../components/VoicePresetPicker';
 import WordFinder from '../components/WordFinder';
 import MoreActionsMenu from '../components/MoreActionsMenu';
@@ -98,10 +98,8 @@ export default function AACBoardScreen() {
     isCurrentFavourite,
   } = useBoardController();
 
-  // Label width of a tile: grid padding 4, tile margin 3, padding 8 and
-  // border on each side, plus room for the scan ring.
   const { width: windowWidth } = useWindowDimensions();
-  const labelWidth = Math.max(0, Math.floor((windowWidth - 8) / numColumns) - 6 - 16 - 3 - 8);
+  const labelWidth = classicLabelWidth(windowWidth, numColumns);
 
   const renderButton = useCallback(({ item }) => {
     const isNavButton = !!item.navigateTo;

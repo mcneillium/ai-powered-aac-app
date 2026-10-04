@@ -18,7 +18,7 @@ jest.mock('../design/usePaper', () => {
   const { getScheme, shape } = jest.requireActual('../design/tokens');
   return { usePaper: () => ({ theme: 'light', mode: 'adult', c: getScheme('light'), r: shape.adult, scale: 1.5, reduceMotion: true }) };
 });
-const ClassicTileLabel = require('../components/ClassicTileLabel').default;
+const { default: ClassicTileLabel, classicLabelWidth } = require('../components/ClassicTileLabel');
 const { ActionButton } = require('../design/components');
 
 const flat = (s) => Object.assign({}, ...[].concat(s).flat(Infinity).filter(Boolean));
@@ -39,8 +39,16 @@ function renderOn(os, el) {
 
 afterEach(() => { mockFontScale = 1; });
 
-// Classic grid at 320 dp, 4 per row: label width as AACBoardScreen computes it.
-const WIDTH = Math.floor((320 - 8) / 4) - 6 - 16 - 3 - 8; // 45
+// Classic grid at 320 dp, 4 per row, as AACBoardScreen computes it.
+const WIDTH = classicLabelWidth(320, 4);
+
+test('label width never exceeds the real focused tile content width', () => {
+  [[320, 3], [320, 4], [320, 5], [412, 4], [800, 6]].forEach(([w, n]) => {
+    const content = Math.floor((w - 8) / n) - 6 - 16 - 8; // margin, padding, 4 px scan ring
+    expect(classicLabelWidth(w, n)).toBeLessThanOrEqual(content);
+    expect(classicLabelWidth(w, n)).toBeGreaterThan(content - 6);
+  });
+});
 
 describe('Classic board tile label', () => {
   test.each(['bathroom', 'toothbrush', 'Overwhelmed', 'thank you', 'I need help'])('%s: no Android shrink, >= 12 px, lines fit', (label) => {

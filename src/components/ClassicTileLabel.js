@@ -5,9 +5,18 @@
 // wide wraps with a visible hyphen. Android shrink-to-fit is not used: it
 // ignores any minimum and can shrink a word far below a readable size.
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Text, Platform, useWindowDimensions } from 'react-native';
 import { fitTileLabel } from '../design/fitLabel';
+
+/**
+ * Label width of a Classic tile: grid padding 4 and tile margin 3 on each
+ * side, padding 8 each side, and the widest border (the 4 px scan ring) plus
+ * 1.5 px of slack. Errs on the narrow side.
+ */
+export function classicLabelWidth(windowWidth, columns) {
+  return Math.max(0, Math.floor((windowWidth - 8) / columns) - 6 - 16 - 3 - 8);
+}
 
 /**
  * @param {string} label
@@ -18,7 +27,9 @@ import { fitTileLabel } from '../design/fitLabel';
 export default function ClassicTileLabel({ label, size, width, style }) {
   const { fontScale: sysScale = 1 } = useWindowDimensions();
   const fontScale = Math.min(2, Math.max(1, sysScale || 1));
-  const fit = fitTileLabel(label, Math.round(size * fontScale), { width, height: Infinity, symbol: 0 });
+  const wanted = Math.round(size * fontScale);
+  // Memoised: every tile re-renders on each switch-scan step.
+  const fit = useMemo(() => fitTileLabel(label, wanted, { width, height: Infinity, symbol: 0 }), [label, wanted, width]);
   return (
     <Text
       style={[style, { fontSize: fit.size, lineHeight: fit.lineHeight }]}
