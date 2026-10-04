@@ -20,6 +20,45 @@ const LOG_LEVELS = {
 // Current log level (only logs at this level or higher are stored/sent)
 let currentLogLevel = LOG_LEVELS.INFO;
 
+// The only fields database.rules.json permits under userLogs/$uid/$logId.
+// Anything else is rejected by `"$other": {".validate": false}` — and because
+// syncLogsToFirebase only clears AsyncStorage once every entry resolves, one
+// rejected entry wedges log sync permanently. Filter here rather than let the
+// write fail.
+const ALLOWED_LOG_FIELDS = [
+  'action', 'timestamp', 'level', 'sessionId', 'targetUserId', 'carerId',
+  'synced', 'syncTimestamp', 'serverTimestamp', 'count', 'error', 'deviceInfo',
+];
+
+function pickAllowedLogFields(source) {
+  const picked = {};
+  for (const key of ALLOWED_LOG_FIELDS) {
+    if (source && source[key] !== undefined) picked[key] = source[key];
+  }
+  return picked;
+}
+
+// A write the database rules reject will be rejected identically on every
+// retry. Left in the queue it becomes a poison pill: syncLogsToFirebase only
+// clears AsyncStorage once the whole batch resolves, so one such entry blocks
+// every later log on that device indefinitely. Rejected entries are therefore
+// dropped, while transient failures (offline, timeout, server error) stay
+// queued. Anything not clearly a rules rejection counts as transient, so an
+// unrecognised error costs a retry rather than the entry.
+const PERMISSION_ERROR_CODES = [
+  'PERMISSION_DENIED',
+  'permission-denied',
+  'permission_denied',
+];
+
+function isPermissionError(error) {
+  if (!error) return false;
+  const code = typeof error.code === 'string' ? error.code : '';
+  if (PERMISSION_ERROR_CODES.includes(code)) return true;
+  const message = typeof error.message === 'string' ? error.message : '';
+  return message.toUpperCase().includes('PERMISSION_DENIED');
+}
+
 // In-memory queue for logs waiting to be written to AsyncStorage
 let logQueue = [];
 let isProcessingQueue = false;
@@ -138,8 +177,11 @@ export async function logEvent(action, metadata = {}, level = 'info') {
     // Get device info
     const deviceInfo = await getDeviceInfo();
     
-    // Create the log entry
+    // Create the log entry. Filtered metadata goes first so this function's own
+    // values always win — a caller cannot replace action/timestamp/deviceInfo
+    // with something the rules' type validators would then reject.
     const logEntry = {
+      ...pickAllowedLogFields(metadata),
       targetUserId,
       carerId,
       action,
@@ -147,7 +189,6 @@ export async function logEvent(action, metadata = {}, level = 'info') {
       timestamp: Date.now(),
       sessionId: await getSessionId(),
       deviceInfo,
-      ...metadata
     };
     
     // Add to in-memory queue
@@ -248,33 +289,71 @@ export async function syncLogsToFirebase() {
     
     // Create a batch of logs in Firebase
     const logsRef = ref(db, `userLogs/${auth.currentUser.uid}`);
+    // Filter again on the way out: entries left in AsyncStorage by an older
+    // build predate the whitelist above, and one unknown field here would
+    // reject the whole batch and leave it queued forever.
     const promises = storedLogs.map(log => {
       const newLogRef = push(logsRef);
       return set(newLogRef, {
-        ...log,
+        ...pickAllowedLogFields(log),
         synced: true,
         syncTimestamp: serverTimestamp()
       });
     });
     
-    await Promise.all(promises);
-    
-    // Clear local logs after successful sync
-    await AsyncStorage.setItem('userInteractionLog', JSON.stringify([]));
-    
-    console.log('✅ Logs successfully synced to Firebase');
-    
-    // Log the sync itself (directly to Firebase)
-    const syncLogRef = push(ref(db, `userLogs/${auth.currentUser.uid}`));
-    await set(syncLogRef, {
-      action: 'logs_synced',
-      count: storedLogs.length,
-      timestamp: Date.now(),
-      carerId: auth.currentUser.uid,
-      serverTimestamp: serverTimestamp()
+    // allSettled, not all: one rejection must not discard the outcome of every
+    // other entry in the batch. `promises` is index-aligned with `storedLogs`.
+    const results = await Promise.allSettled(promises);
+
+    const retryable = [];
+    let syncedCount = 0;
+    let rejectedCount = 0;
+
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        syncedCount += 1;
+      } else if (isPermissionError(result.reason)) {
+        // Unsyncable by construction — drop it rather than block the queue.
+        rejectedCount += 1;
+        console.warn(
+          'Log entry rejected by database rules, dropping it:',
+          storedLogs[index] && storedLogs[index].action,
+          result.reason && result.reason.message
+        );
+      } else {
+        retryable.push(storedLogs[index]);
+      }
     });
-    
-    return true;
+
+    // Keep only what is worth another attempt. This replaces the previous
+    // blanket clear, which ran only when every entry succeeded.
+    await AsyncStorage.setItem('userInteractionLog', JSON.stringify(retryable));
+
+    if (rejectedCount > 0) {
+      console.warn(`Dropped ${rejectedCount} log entr${rejectedCount === 1 ? 'y' : 'ies'} rejected by database rules`);
+    }
+    if (retryable.length > 0) {
+      console.log(`Synced ${syncedCount} logs; ${retryable.length} kept for retry`);
+    } else if (syncedCount > 0) {
+      console.log('✅ Logs successfully synced to Firebase');
+    }
+
+    // Log the sync itself (directly to Firebase). Only when something actually
+    // landed — a summary claiming a sync that wrote nothing is worse than none.
+    // `count` keeps its field name and type; it now reports entries actually
+    // written rather than entries attempted.
+    if (syncedCount > 0) {
+      const syncLogRef = push(ref(db, `userLogs/${auth.currentUser.uid}`));
+      await set(syncLogRef, {
+        action: 'logs_synced',
+        count: syncedCount,
+        timestamp: Date.now(),
+        carerId: auth.currentUser.uid,
+        serverTimestamp: serverTimestamp()
+      });
+    }
+
+    return retryable.length === 0;
   } catch (error) {
     console.error('Error syncing logs to Firebase:', error);
     
