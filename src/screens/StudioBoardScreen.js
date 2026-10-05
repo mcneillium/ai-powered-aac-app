@@ -43,6 +43,10 @@ import { useOverlayScan } from '../hooks/useOverlayScan';
 // One tile height for every mode and picture style (see Grid geometry).
 const TILE_HEIGHT = 104;
 
+// Message text follows the system font size up to this scale (as the tab
+// labels do); the message box grows to fit two full lines at that size.
+export const MESSAGE_MAX_FONT_SCALE = 1.6;
+
 export default function StudioBoardScreen() {
   const [modelling, setModelling] = useState(false);
   const [scanHeight, setScanHeight] = useState(0);
@@ -71,7 +75,7 @@ export default function StudioBoardScreen() {
   const p = usePaper();
   const { c, r, mode, scale } = p;
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, fontScale } = useWindowDimensions();
   const wide = width >= 720;
   // Narrow phones: smaller secondary controls so "Speak" is never truncated.
   const narrow = width < 360;
@@ -190,14 +194,25 @@ export default function StudioBoardScreen() {
   );
 
   const lineHeight = Math.round(type.message.lineHeight * scale);
+  // The system font size also scales text (and its line height). The box
+  // grows with it, up to MESSAGE_MAX_FONT_SCALE, and the text is capped at
+  // the same scale, so two full lines always fit instead of being clipped.
+  const messageScale = Math.min(Math.max(fontScale || 1, 1), MESSAGE_MAX_FONT_SCALE);
+  const messageBoxHeight = Math.ceil(lineHeight * messageScale) * 2 + 8;
   const stage = (
     <View style={[styles.stage, { backgroundColor: c.card, borderRadius: r.sheet, borderColor: c.line, borderWidth: p.theme === 'highContrast' ? 2 : 1 }]}>
       <ScrollView
         ref={sentenceScrollRef}
-        horizontal={symbolStyle !== 'text'}
-        contentContainerStyle={symbolStyle !== 'text' ? { alignItems: 'center' } : undefined}
-        style={{ height: lineHeight * 2 + 8 }}
-        onContentSizeChange={() => sentenceScrollRef.current?.scrollToEnd({ animated: false })}
+        // Words scroll sideways with their pictures; the empty-message hint
+        // wraps inside the same fixed height instead. (Scrolled to its end,
+        // a one-line hint at a large font was cut off on the left.)
+        horizontal={hasWords && symbolStyle !== 'text'}
+        contentContainerStyle={hasWords && symbolStyle !== 'text' ? { alignItems: 'center' } : undefined}
+        style={{ height: messageBoxHeight }}
+        onContentSizeChange={() => {
+          if (hasWords) sentenceScrollRef.current?.scrollToEnd({ animated: false });
+          else sentenceScrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
+        }}
         accessible
         accessibilityRole="text"
         accessibilityLabel={hasWords ? `Message: ${message}` : 'Message is empty. Tap words to build a message.'}
@@ -208,12 +223,12 @@ export default function StudioBoardScreen() {
         {hasWords && symbolStyle !== 'text' ? (
           <VisualMessage text={message} horizontal />
         ) : hasWords ? (
-          <Text style={[type.message, { color: c.ink, fontSize: Math.round(type.message.fontSize * scale), lineHeight }]}>
+          <Text style={[type.message, { color: c.ink, fontSize: Math.round(type.message.fontSize * scale), lineHeight }]} maxFontSizeMultiplier={MESSAGE_MAX_FONT_SCALE}>
             {message}
             <Text style={{ color: c.signal, fontWeight: '300' }}>|</Text>
           </Text>
         ) : (
-          <Text style={[type.message, { color: c.inkSoft, fontWeight: '500', fontSize: Math.round(22 * scale), lineHeight }]}>
+          <Text style={[type.message, { color: c.inkSoft, fontWeight: '500', fontSize: Math.round(22 * scale), lineHeight }]} maxFontSizeMultiplier={MESSAGE_MAX_FONT_SCALE}>
             {modelling ? 'Show words by tapping them' : mode === 'child' ? 'Tap pictures to talk' : 'Tap words to build a message'}
           </Text>
         )}

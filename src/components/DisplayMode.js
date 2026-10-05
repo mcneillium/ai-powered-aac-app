@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { getPalette } from '../theme';
 import { t } from '../i18n/strings';
+import { closeUnlessTyping } from '../services/keyboardBack';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -43,7 +44,7 @@ export default function DisplayMode({ visible, onClose, text, mode = 'display' }
     <Modal
       visible={visible}
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={closeUnlessTyping(onClose)}
       supportedOrientations={['portrait', 'landscape']}
     >
       <StatusBar hidden />

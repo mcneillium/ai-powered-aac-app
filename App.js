@@ -14,7 +14,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, AppState, View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { ActivityIndicator, AppState, View, Text, StyleSheet, TouchableOpacity, Platform, useWindowDimensions } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -59,6 +59,8 @@ import { loadCustomVocab } from './src/services/customVocabStore';
 import { loadPronunciations } from './src/services/pronunciationStore';
 import { loadTilePhotos } from './src/services/tilePhotoStore';
 import { cleanupExpiredExports } from './src/services/privateExportCache';
+import { installKeyboardBackGuard } from './src/services/keyboardBack';
+import { studioTabBarMetrics, LABEL_MIN_FIT } from './src/design/tabBarMetrics';
 
 const Tab = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -110,6 +112,11 @@ const STUDIO_TAB_ICONS = {
 function StudioApp() {
   const { settings } = useSettings();
   const c = getScheme(settings.theme);
+  // The bar grows with the system font so labels never run into the Android
+  // gesture area (studioTabBarMetrics); at normal sizes it is the default.
+  const insets = useSafeAreaInsets();
+  const { fontScale } = useWindowDimensions();
+  const bar = studioTabBarMetrics({ fontScale, bottomInset: insets.bottom });
   return (
     <Tab.Navigator
       screenOptions={({ route, navigation }) => ({
@@ -120,13 +127,20 @@ function StudioApp() {
         headerRight: () => <SettingsHeaderButton tintColor={c.ink} navigation={navigation} />,
         tabBarActiveTintColor: c.signal,
         tabBarInactiveTintColor: c.inkSoft,
-        // Shrinks to fit instead of truncating on narrow phones.
+        // Grows with the system font up to the size a long name still fits
+        // in a quarter-width tab; shrinks only a little, and only if needed.
         tabBarLabel: ({ color }) => (
-          <Text style={{ color, fontSize: 12, fontWeight: '600' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+          <Text
+            style={{ color, fontSize: 12, lineHeight: bar.labelLineHeight, fontWeight: '600' }}
+            numberOfLines={1}
+            maxFontSizeMultiplier={bar.labelMaxMultiplier}
+            adjustsFontSizeToFit
+            minimumFontScale={LABEL_MIN_FIT}
+          >
             {route.name}
           </Text>
         ),
-        tabBarStyle: { backgroundColor: c.card, borderTopColor: c.line },
+        tabBarStyle: { backgroundColor: c.card, borderTopColor: c.line, height: bar.height, paddingBottom: bar.paddingBottom },
         tabBarIcon: ({ color, size }) => (
           <Ionicons name={STUDIO_TAB_ICONS[route.name] || 'ellipse-outline'} size={size} color={color} />
         ),
@@ -339,6 +353,24 @@ function RootNavigator() {
   );
 }
 
+// Back closes the keyboard before it leaves a screen (see keyboardBack.js).
+// React Native calls the most recently added Back listener first, so this
+// must be added after React Navigation's, which NavigationContainer adds in
+// its own effect. Rendered inside the container and deferred past that
+// commit, it is always later — even though SafeAreaProvider mounts the
+// container only after the first inset measurement.
+function KeyboardBackGuard() {
+  useEffect(() => {
+    let sub = null;
+    const timer = setTimeout(() => { sub = installKeyboardBackGuard(); }, 0);
+    return () => {
+      clearTimeout(timer);
+      if (sub) sub.remove();
+    };
+  }, []);
+  return null;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -348,6 +380,7 @@ export default function App() {
             <SafeAreaProvider>
               <OfflineBanner>
                 <NavigationContainer>
+                  <KeyboardBackGuard />
                   <RootNavigator />
                 </NavigationContainer>
               </OfflineBanner>

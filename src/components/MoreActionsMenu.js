@@ -11,6 +11,7 @@ import { getPalette, radii, spacing } from '../theme';
 import { useSettings } from '../contexts/SettingsContext';
 import { t } from '../i18n/strings';
 import VoicePresetPicker from './VoicePresetPicker';
+import { closeUnlessTyping } from '../services/keyboardBack';
 
 export default function MoreActionsMenu({ visible, onClose, items, voicePreset, onSelectVoicePreset }) {
   const { settings } = useSettings();
@@ -34,7 +35,7 @@ export default function MoreActionsMenu({ visible, onClose, items, voicePreset, 
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} onDismiss={handleDismiss} accessibilityViewIsModal>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={closeUnlessTyping(onClose)} onDismiss={handleDismiss} accessibilityViewIsModal>
       <View style={[styles.overlay, { backgroundColor: palette.overlay }]}>
         <View style={[styles.panel, { backgroundColor: palette.cardBg }]}>
           <View style={styles.header}>
