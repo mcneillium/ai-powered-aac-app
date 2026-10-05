@@ -5,7 +5,7 @@
 // 2. the Phrases tab label ran into the gesture area (fixed-height tab bar).
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
-import { ScrollView } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
 import { studioTabBarMetrics, BASE_BAR_HEIGHT, LABEL_MAX_SCALE } from '../design/tabBarMetrics';
 
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
@@ -80,6 +80,19 @@ describe('empty-message hint at large text', () => {
     act(() => area.props.onContentSizeChange(900, 120));
     expect(scrollTo).toHaveBeenCalledWith({ x: 0, y: 0, animated: false });
     expect(scrollToEnd).not.toHaveBeenCalled();
+  });
+
+  test('two full lines of the hint fit at a large system font (box grows, text capped at 1.6x)', async () => {
+    const { MESSAGE_MAX_FONT_SCALE } = require('../screens/StudioBoardScreen');
+    const { type } = jest.requireActual('../design/tokens');
+    const area = await messageArea([]);
+    const hint = area.findAll((n) => n.type === Text && /^Tap words to build a message$/.test(n.props.children))[0];
+    expect(hint.props.maxFontSizeMultiplier).toBe(MESSAGE_MAX_FONT_SCALE);
+    // fontScale is mocked at 2.0, so the box is sized for 1.6x text.
+    const line = Math.round(type.message.lineHeight * 1);
+    const height = StyleSheet.flatten(area.props.style).height;
+    expect(height).toBe(Math.ceil(line * MESSAGE_MAX_FONT_SCALE) * 2 + 8);
+    expect(height).toBeGreaterThan(line * 2 + 8);
   });
 
   test('words still scroll sideways and keep the newest word in view', async () => {
