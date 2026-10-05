@@ -194,10 +194,16 @@ export default function StudioBoardScreen() {
     <View style={[styles.stage, { backgroundColor: c.card, borderRadius: r.sheet, borderColor: c.line, borderWidth: p.theme === 'highContrast' ? 2 : 1 }]}>
       <ScrollView
         ref={sentenceScrollRef}
-        horizontal={symbolStyle !== 'text'}
-        contentContainerStyle={symbolStyle !== 'text' ? { alignItems: 'center' } : undefined}
+        // Words scroll sideways with their pictures; the empty-message hint
+        // wraps inside the same fixed height instead. (Scrolled to its end,
+        // a one-line hint at a large font was cut off on the left.)
+        horizontal={hasWords && symbolStyle !== 'text'}
+        contentContainerStyle={hasWords && symbolStyle !== 'text' ? { alignItems: 'center' } : undefined}
         style={{ height: lineHeight * 2 + 8 }}
-        onContentSizeChange={() => sentenceScrollRef.current?.scrollToEnd({ animated: false })}
+        onContentSizeChange={() => {
+          if (hasWords) sentenceScrollRef.current?.scrollToEnd({ animated: false });
+          else sentenceScrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
+        }}
         accessible
         accessibilityRole="text"
         accessibilityLabel={hasWords ? `Message: ${message}` : 'Message is empty. Tap words to build a message.'}
