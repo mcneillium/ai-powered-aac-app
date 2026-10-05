@@ -59,6 +59,7 @@ import { loadCustomVocab } from './src/services/customVocabStore';
 import { loadPronunciations } from './src/services/pronunciationStore';
 import { loadTilePhotos } from './src/services/tilePhotoStore';
 import { cleanupExpiredExports } from './src/services/privateExportCache';
+import { installKeyboardBackGuard } from './src/services/keyboardBack';
 
 const Tab = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -339,6 +340,24 @@ function RootNavigator() {
   );
 }
 
+// Back closes the keyboard before it leaves a screen (see keyboardBack.js).
+// React Native calls the most recently added Back listener first, so this
+// must be added after React Navigation's, which NavigationContainer adds in
+// its own effect. Rendered inside the container and deferred past that
+// commit, it is always later — even though SafeAreaProvider mounts the
+// container only after the first inset measurement.
+function KeyboardBackGuard() {
+  useEffect(() => {
+    let sub = null;
+    const timer = setTimeout(() => { sub = installKeyboardBackGuard(); }, 0);
+    return () => {
+      clearTimeout(timer);
+      if (sub) sub.remove();
+    };
+  }, []);
+  return null;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -348,6 +367,7 @@ export default function App() {
             <SafeAreaProvider>
               <OfflineBanner>
                 <NavigationContainer>
+                  <KeyboardBackGuard />
                   <RootNavigator />
                 </NavigationContainer>
               </OfflineBanner>
