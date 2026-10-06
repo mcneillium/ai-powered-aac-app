@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBoardController } from './useBoardController';
 import { usePaper } from '../design/usePaper';
-import { Tile, ActionButton, SuggestionChip, ListRow, Sheet, tileCategory } from '../design/components';
+import { Tile, ActionButton, Sheet, tileCategory } from '../design/components';
 import { space, type, touch } from '../design/tokens';
 import { subscribeSpeechStatus, stop } from '../services/speechService';
 import { symbolSourceFor, subscribeSymbols, loadSymbolState } from '../services/symbolStore';
@@ -28,6 +28,7 @@ import { getContextPack } from '../data/contextPacks';
 import { dismissSuggestion } from '../services/suggestionEngine';
 import { t } from '../i18n/strings';
 import WordFinder from '../components/WordFinder';
+import { VisualMessage, VisualListRow as ListRow, VisualSuggestionChip as SuggestionChip } from '../components/studio/VisualMessage';
 import ExplainSheet from '../components/studio/ExplainSheet';
 import PhrasesSheet from '../components/studio/PhrasesSheet';
 import SavedSheet from '../components/studio/SavedSheet';
@@ -188,6 +189,8 @@ export default function StudioBoardScreen() {
     <View style={[styles.stage, { backgroundColor: c.card, borderRadius: r.sheet, borderColor: c.line, borderWidth: p.theme === 'highContrast' ? 2 : 1 }]}>
       <ScrollView
         ref={sentenceScrollRef}
+        horizontal={symbolStyle !== 'text'}
+        contentContainerStyle={symbolStyle !== 'text' ? { alignItems: 'center' } : undefined}
         style={{ height: lineHeight * 2 + 8 }}
         onContentSizeChange={() => sentenceScrollRef.current?.scrollToEnd({ animated: false })}
         accessible
@@ -197,7 +200,9 @@ export default function StudioBoardScreen() {
         // so TalkBack and the voice do not talk over each other.
         accessibilityLiveRegion={settings.speakWordsOnTap === false ? 'polite' : 'none'}
       >
-        {hasWords ? (
+        {hasWords && symbolStyle !== 'text' ? (
+          <VisualMessage text={message} horizontal />
+        ) : hasWords ? (
           <Text style={[type.message, { color: c.ink, fontSize: Math.round(type.message.fontSize * scale), lineHeight }]}>
             {message}
             <Text style={{ color: c.signal, fontWeight: '300' }}>|</Text>
@@ -428,6 +433,8 @@ export default function StudioBoardScreen() {
         scanActive={scanActive} onToggleScan={() => { close(); toggleScan(); }}
         onCamera={() => { close(); navigation.navigate('Camera'); }}
         onStudio={() => { close(); navigation.navigate('Studio'); }}
+        onTools={() => { close(); navigation.navigate('CommunicationTools', { message }); }}
+        onWorkspace={() => { close(); navigation.navigate('ConversationWorkspace', { message }); }}
       />
     </View>
   );

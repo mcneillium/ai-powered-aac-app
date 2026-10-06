@@ -11,7 +11,8 @@ import {
   View, Text, TextInput, TouchableOpacity, FlatList, Modal, StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { searchVocabulary } from '../data/coreVocabulary';
+import { FINDER_CONCEPTS, findRelatedVocabulary } from '../data/conceptSearch';
+import { VisualMessage } from './studio/VisualMessage';
 import { getPalette, radii, spacing } from '../theme';
 import { useSettings } from '../contexts/SettingsContext';
 import { t } from '../i18n/strings';
@@ -25,7 +26,7 @@ export default function WordFinder({ visible, onClose, onAddWord, onShowPage, on
     if (!visible) setQuery('');
   }, [visible]);
 
-  const results = useMemo(() => searchVocabulary(query), [query]);
+  const results = useMemo(() => findRelatedVocabulary(query), [query]);
   const trimmed = query.trim();
 
   return (
@@ -66,6 +67,20 @@ export default function WordFinder({ visible, onClose, onAddWord, onShowPage, on
             accessibilityLabel={t('findWordPlaceholder')}
           />
 
+          {!trimmed && (
+            <View style={styles.concepts}>
+              {FINDER_CONCEPTS.map(concept => (
+                <TouchableOpacity key={concept.query} onPress={() => setQuery(concept.query)}
+                  accessibilityRole="button" accessibilityLabel={`Find ${concept.label.toLowerCase()}`}
+                  style={[styles.concept, { backgroundColor: palette.chipBg }]}>
+                  <Text style={[styles.wordText, { color: palette.text }]}>{concept.emoji} {concept.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          {!!trimmed && results.some(result => result.related) && (
+            <Text style={[styles.hint, { color: palette.textSecondary }]}>Related words are choices. Tap a word to add it, or its page to find its usual place.</Text>
+          )}
           {trimmed !== '' && results.length === 0 ? (
             <Text style={[styles.empty, { color: palette.textSecondary }]} accessibilityLiveRegion="polite">
               {t('findWordNoResults')}
@@ -84,9 +99,11 @@ export default function WordFinder({ visible, onClose, onAddWord, onShowPage, on
                     accessibilityRole="button"
                     accessibilityLabel={`${t('findWordAdd')}: ${item.button.label}. ${item.pageLabel} page`}
                   >
+                    <VisualMessage text={item.button.label} compact />
                     <Text style={[styles.wordText, { color: item.button.textColor || palette.text }]}>
                       {item.button.label}
                     </Text>
+                    {item.related && <Text style={{ color: item.button.textColor || palette.text }}>Related word</Text>}
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.pageBtn, { backgroundColor: palette.chipBg }]}
@@ -118,6 +135,9 @@ const styles = StyleSheet.create({
   input: { borderWidth: 2, borderRadius: radii.sm, paddingHorizontal: spacing.md, minHeight: 52, fontSize: 18 },
   list: { marginTop: spacing.sm },
   empty: { fontSize: 16, marginTop: spacing.lg, lineHeight: 22 },
+  hint: { fontSize: 14, marginTop: spacing.sm },
+  concepts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing.md },
+  concept: { minHeight: 48, padding: 12, justifyContent: 'center', borderRadius: radii.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs, borderBottomWidth: StyleSheet.hairlineWidth },
   wordBtn: { flex: 1, minHeight: 52, borderRadius: radii.sm, justifyContent: 'center', paddingHorizontal: spacing.md },
   wordText: { fontSize: 18, fontWeight: '600' },

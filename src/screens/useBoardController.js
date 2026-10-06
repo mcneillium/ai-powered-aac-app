@@ -18,6 +18,7 @@ import {
 import { useScrollToTopOnChange } from '../hooks/useScrollToTopOnChange';
 import { suggestionChipFit } from '../utils/suggestionChipFit';
 import { saveSentenceDraft, takeSentenceDraftAfterFontChange } from '../services/sentenceDraft';
+import { consumeWorkspaceReturn } from '../services/conversation-workspace';
 import { t } from '../i18n/strings';
 import {
   recordWordSelection,
@@ -353,6 +354,11 @@ export function useBoardController({ modelling = false, extraActions = [] } = {}
       return words;
     });
   }, []);
+
+  useFocusEffect(useCallback(() => {
+    const returned = consumeWorkspaceReturn();
+    if (returned !== null) replaceSentence(returned.split(' '));
+  }, [replaceSentence]));
 
   const addWords = useCallback((words) => {
     setUndoWords(null);

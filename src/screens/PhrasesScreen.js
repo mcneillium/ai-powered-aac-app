@@ -12,6 +12,7 @@ import { usePaper } from '../design/usePaper';
 import { space, type, touch } from '../design/tokens';
 import { speak, buildSpeechOptions } from '../services/speechService';
 import { getContextPacksForMode, getContextPack } from '../data/contextPacks';
+import { VisualMessage } from '../components/studio/VisualMessage';
 import { loadFavourites, addFavourite, removeFavourite, getFavourites, isFavourite } from '../services/favouritesStore';
 
 export default function PhrasesScreen() {
@@ -79,6 +80,7 @@ export default function PhrasesScreen() {
                   },
                 ]}
               >
+                <VisualMessage text={ph.label} compact />
                 <Text style={[type.heading, { color: c.ink, fontSize: Math.round(17 * scale), lineHeight: Math.round(22 * scale) }]}>
                   {ph.label}
                 </Text>

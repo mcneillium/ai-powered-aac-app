@@ -255,6 +255,7 @@ export default function StudioScreen() {
             What is kept: words, word pairs and whole messages you speak (to suggest them again), when you last used a word, the times of day you use Voice, and searches that found nothing. Not kept: taps you delete, modelling sessions, or anything when learning is off. Long-press a suggestion on the board to stop it appearing.
           </Text>
           <ListRow icon="sparkles-outline" text="See what Voice has learned" meta="forget words, undo hidden suggestions" onPress={() => navigation.navigate('Learned')} />
+          <ListRow icon="analytics-outline" text="How suggestions learn" meta="Learning status and a private demonstration" onPress={() => navigation.navigate('PredictionDiagnostics')} />
           <ActionButton icon="trash-outline" label="Delete what Voice has learned" variant="danger" onPress={confirmReset} size={touch.min} style={{ marginTop: space.md }} />
         </Card>
 
@@ -268,6 +269,8 @@ export default function StudioScreen() {
         </Card>
 
         <Card title="More">
+          <ListRow icon="images-outline" text="My scenes and communication tools" onPress={() => navigation.navigate('CommunicationTools')} />
+          <ListRow icon="print-outline" text="Export or print my board" onPress={() => navigation.navigate('PortableBoard')} />
           <ListRow icon="settings-outline" text="All settings (voice, speech, scanning)" onPress={() => navigation.navigate('Settings')} />
           <ListRow icon="text-outline" text="Sentence builder" onPress={() => navigation.navigate('Sentence')} />
           <ListRow icon="happy-outline" text="Feelings" onPress={() => navigation.navigate('Emotion')} />

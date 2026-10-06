@@ -6,6 +6,7 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Sheet, ActionButton, Card } from '../../design/components';
+import { VisualMessage } from './VisualMessage';
 import { usePaper } from '../../design/usePaper';
 import { space, type, touch } from '../../design/tokens';
 import { REPAIR_PHRASES, rephraseOptions } from '../../services/explain';
@@ -41,6 +42,7 @@ export default function ExplainSheet({ visible, onClose, message, say, onReplace
             accessibilityLabel={`Say: ${ph.text}`}
             style={({ pressed }) => [styles.repair, { backgroundColor: pressed ? c.signalSoft : c.card, borderColor: c.line, borderRadius: r.control }, ring(`rep-${ph.id}`)]}
           >
+            <VisualMessage text={ph.text} compact />
             <Text style={[type.label, { color: c.ink, fontSize: 15 }]}>{ph.text}</Text>
           </Pressable>
         ))}

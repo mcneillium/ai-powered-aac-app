@@ -152,3 +152,23 @@ Emulator runs, 02/10/2026. Full method and values:
 | H23 | New board › Type: type "I want to go to the par", tap the "park" chip, then Add and speak | The word completes; the message is spoken through the normal Speak path, and Stop works |
 | H24 | Start switch scanning (step mode), open Phrases, then Explain, Saved and Show | A focus ring moves through the items inside each sheet; Next and Select are at the bottom of the sheet; closing a sheet resumes scanning on the board |
 | H25 | Me › Delete my words and messages | History, favourites, your own words and their photos, pronunciations and learning are all gone; settings stay |
+
+## I. Visual communication expansion — new native build required
+
+Record exact source SHA, package, signing certificate, device/OS, font scale and speech engine. These checks are pending; automated tests do not mark them passed.
+
+| ID | Check | Expected |
+|---|---|---|
+| I1 | Both modes and text/picture toggle; long sentences; largest font | Original words remain readable; no clipped controls; core tile bounds unchanged. Pictures may yield space to large text. |
+| I2 | Personal-photo phrase, missing local picture, unknown word | Correct unambiguous local picture or fallback; unknown words retained; full TalkBack message. |
+| I3 | Find “something to drink”, “mum”, personal label | Direct/related choices understandable; page links correct; no automatic additions or speech. |
+| I4 | Learning off/on; real prediction probe; isolated demo | Accurate status; demo leaves actual learned data, history and consent unchanged. |
+| I5 | Park/resume two different messages; word forms; back gesture; Use on board + Undo | No silent loss; optional changes only; board Undo restores prior message. |
+| I6 | Create photo scene; deny/cancel picker; restart offline; edit and delete point | Error/cancel preserves existing scenes; photo/phrases persist; explicit Speak/Stop works. |
+| I7 | Child/Adult, edit lock, TalkBack and in-app auto/step scanning | Communication actions reachable; edits/import blocked when locked; confirmation and Back reachable. Keyboard/system pickers checked with OS switch access separately. |
+| I8 | Repair/alternative/scale/drawing, leave and return | Original remains; no auto speech; meaning choices user-controlled; drawing visibly useful. |
+| I9 | Scene JSON and PDF share to Files/OneDrive, reopen after chooser closes | Files contain intended picture/points/phrases and are readable after sharing; no cropped print content. |
+| I10 | Vocabulary export with/without photos; PDF at different column counts | Correct words/photos; inspect all paper pages; omissions reported; original board unchanged. |
+| I11 | Additive vocabulary import; duplicates; malformed/oversized file; storage failure | Preview + consent before import; existing labels/positions/photos unchanged; failures/partial additions reported accurately. |
+| I12 | Delete personal data while draft save/import/export pending; revisit mounted screens | No restored private scenes/drafts/imports; cache cleared; externally shared copies remain. |
+| I13 | Real users/partners try intended tasks in both modes | Record comprehension, successful messages, taps/time, corrections and preference. Do not infer this from test counts. |

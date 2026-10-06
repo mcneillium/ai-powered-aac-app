@@ -45,6 +45,10 @@ import StudioScreen from './src/screens/StudioScreen';
 import LearnedScreen from './src/screens/LearnedScreen';
 import PhrasesScreen from './src/screens/PhrasesScreen';
 import MeScreen from './src/screens/MeScreen';
+import CommunicationToolsScreen from './src/screens/CommunicationToolsScreen';
+import PredictionDiagnosticsScreen from './src/screens/PredictionDiagnosticsScreen';
+import PortableBoardScreen from './src/screens/PortableBoardScreen';
+import ConversationWorkspaceScreen from './src/screens/ConversationWorkspaceScreen';
 import WelcomeSheet from './src/components/studio/WelcomeSheet';
 import { getScheme } from './src/design/tokens';
 
@@ -54,6 +58,7 @@ import { loadAIProfile, recordSessionStart, flushAIProfile } from './src/service
 import { loadCustomVocab } from './src/services/customVocabStore';
 import { loadPronunciations } from './src/services/pronunciationStore';
 import { loadTilePhotos } from './src/services/tilePhotoStore';
+import { cleanupExpiredExports } from './src/services/privateExportCache';
 
 const Tab = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -70,6 +75,7 @@ loadAIProfile()
 loadCustomVocab().catch(err => console.warn('Custom vocab load failed (non-blocking):', err));
 loadPronunciations().catch(err => console.warn('Pronunciation load failed (non-blocking):', err));
 loadTilePhotos().catch(() => {});
+cleanupExpiredExports().catch(() => {});
 
 const TAB_ICONS = {
   'AAC Board': 'grid-outline',
@@ -305,6 +311,10 @@ function RootNavigator() {
         component={LearnedScreen}
         options={{ title: 'What Voice has learned' }}
       />
+      <RootStack.Screen name="CommunicationTools" component={CommunicationToolsScreen} options={{ title: 'Communication tools' }} />
+      <RootStack.Screen name="PredictionDiagnostics" component={PredictionDiagnosticsScreen} options={{ title: 'How suggestions learn' }} />
+      <RootStack.Screen name="PortableBoard" component={PortableBoardScreen} options={{ title: 'Portable board' }} />
+      <RootStack.Screen name="ConversationWorkspace" component={ConversationWorkspaceScreen} options={{ title: 'My messages' }} />
       <RootStack.Screen
         name="Sentence"
         component={EasySentenceBuilderScreen}

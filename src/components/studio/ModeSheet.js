@@ -19,11 +19,11 @@ function MiniBoard({ mode, theme, c }) {
   const child = mode === 'child';
   return (
     <View style={[styles.mini, { backgroundColor: c.paper }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      {PREVIEW.slice(0, child ? 4 : 6).map(([w, cat]) => (
+      {PREVIEW.map(([w, cat]) => (
         <View
           key={w}
           style={[styles.miniTile, {
-            width: child ? '46%' : '30%', height: child ? 46 : 34,
+            width: '30%', height: 40,
             backgroundColor: child ? set[cat].fill : c.card,
             borderRadius: shape[mode].tile / 2,
             borderLeftWidth: child ? 0 : 4, borderLeftColor: set[cat].edge,
@@ -47,6 +47,7 @@ export default function ModeSheet({ visible, onClose }) {
   const focused = useOverlayScan(visible, [
     { id: 'child', onSelect: () => setChoice('child') },
     { id: 'adult', onSelect: () => setChoice('adult') },
+    { id: 'pictures', onSelect: () => updateSettings({ symbolStyle: settings.symbolStyle === 'text' ? 'mixed' : 'text' }) },
     { id: 'confirm', onSelect: confirm },
     { id: 'close', onSelect: onClose },
   ]);
@@ -81,6 +82,14 @@ export default function ModeSheet({ visible, onClose }) {
       <Text style={[type.body, { color: c.inkSoft, marginVertical: space.sm }]}>
         Every word stays in the same place in both modes. Your words, favourites, history, voice and pronunciations are shared; each mode remembers its own colours and picture style.
       </Text>
+      <ActionButton
+        icon="images-outline"
+        label={settings.symbolStyle === 'text' ? 'Turn on picture support' : 'Turn off picture support'}
+        a11yLabel={settings.symbolStyle === 'text' ? 'Turn on pictures for words, predictions and saved messages' : 'Turn off pictures for words, predictions and saved messages'}
+        onPress={() => updateSettings({ symbolStyle: settings.symbolStyle === 'text' ? 'mixed' : 'text' })}
+        focused={focused === 'pictures'} size={touch.min} style={{ marginVertical: space.sm }}
+      />
+      <Text style={[type.body, { color: c.inkSoft, marginBottom: space.sm }]}>Pictures are available in either mode. Familiar photos and downloaded symbols are used on this device; other known words use emoji. Words without a picture remain readable text.</Text>
       <ActionButton
         label={choice === current ? 'Keep this mode' : `Switch to ${MODE_DESCRIPTIONS[choice].title}`}
         variant="signal"
