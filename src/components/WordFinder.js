@@ -15,6 +15,7 @@ import { searchVocabulary } from '../data/coreVocabulary';
 import { getPalette, radii, spacing } from '../theme';
 import { useSettings } from '../contexts/SettingsContext';
 import { t } from '../i18n/strings';
+import { closeUnlessTyping } from '../services/keyboardBack';
 
 export default function WordFinder({ visible, onClose, onAddWord, onShowPage, onNoResults }) {
   const { settings } = useSettings();
@@ -33,7 +34,7 @@ export default function WordFinder({ visible, onClose, onAddWord, onShowPage, on
       visible={visible}
       animationType="slide"
       transparent
-      onRequestClose={onClose}
+      onRequestClose={closeUnlessTyping(onClose)}
       accessibilityViewIsModal
     >
       <View style={[styles.overlay, { backgroundColor: palette.overlay }]}>

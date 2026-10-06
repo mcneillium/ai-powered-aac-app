@@ -11,6 +11,7 @@ import { usePaper } from '../../design/usePaper';
 import { space, type, touch } from '../../design/tokens';
 import { useOverlayScan } from '../../hooks/useOverlayScan';
 import { selectCurrent } from '../../services/switchScanService';
+import { closeUnlessTyping } from '../../services/keyboardBack';
 
 export default function ShowMessage({ visible, onClose, text, onSpeak }) {
   const { c } = usePaper();
@@ -27,7 +28,7 @@ export default function ShowMessage({ visible, onClose, text, onSpeak }) {
   const size = len > 240 ? base * 0.5 : len > 80 ? base * 0.6 : len > 30 ? base * 0.8 : base;
 
   return (
-    <Modal visible={visible} animationType="fade" onRequestClose={onClose} supportedOrientations={['portrait', 'landscape']}>
+    <Modal visible={visible} animationType="fade" onRequestClose={closeUnlessTyping(onClose)} supportedOrientations={['portrait', 'landscape']}>
       <View style={[styles.root, { backgroundColor: c.card, paddingTop: insets.top + space.md, paddingBottom: insets.bottom + space.md }]}>
         {/* A long message scrolls rather than being cut off behind the
             buttons (Android only shrinks text to fit with a line limit). */}
