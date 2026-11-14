@@ -57,8 +57,8 @@ curl -s -X POST \
 
 ## Step 4 — Revoke compromised tokens
 
-- Hugging Face: https://huggingface.co/settings/tokens → revoke `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`
-- Google Cloud Vision: https://console.cloud.google.com/apis/credentials → delete `AIzaSyD4WZGLy8Zt5VsF6v2LmnikM4j7hcWoo9g`
+- Hugging Face: https://huggingface.co/settings/tokens → revoke `hf_REDACTED_REVOKE_AND_USE_SERVER_SIDE_CONFIG`
+- Google Cloud Vision: https://console.cloud.google.com/apis/credentials → delete `REDACTED_VISION_KEY_REVOKED`
 
 ---
 
