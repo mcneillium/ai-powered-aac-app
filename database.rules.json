@@ -56,6 +56,7 @@
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid",
+        ".indexOn": ["timestamp"],
         "$logId": {
           ".validate": "newData.hasChildren(['action', 'timestamp'])",
           "action": { ".validate": "newData.isString() && newData.val().length <= 200" },
@@ -75,6 +76,7 @@
             "appVersion": { ".validate": "newData.isString() && newData.val().length <= 32" },
             "$other": { ".validate": false }
           },
+          "source": { ".validate": "newData.isString() && newData.val().length <= 40" },
           "$other": { ".validate": false }
         }
       }
