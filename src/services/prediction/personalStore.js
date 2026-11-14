@@ -10,7 +10,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CORRUPT_SUFFIX } from '../../utils/safeStorage';
-import { PERSONAL_FORMAT } from './personalModel.js';
+import { PERSONAL_FORMAT, PERSONAL_VERSION } from './personalModel.js';
 
 export const PERSONAL_KEY_PREFIX = '@voice_prediction_personal_v1';
 export const DEFAULT_PROFILE_ID = 'default';
@@ -32,15 +32,12 @@ async function backupCorrupt(key, raw) {
 /**
  * Load the exported personal JSON for a profile.
  * @returns {Promise<object|null>} null when nothing (valid) is stored
+ * @throws when storage cannot be read at all — the caller must not then
+ *         save over whatever is stored (it may be fine, just unreadable now)
  */
 export async function loadPersonalData(profileId) {
   const key = personalKey(profileId);
-  let raw;
-  try {
-    raw = await AsyncStorage.getItem(key);
-  } catch {
-    return null;
-  }
+  const raw = await AsyncStorage.getItem(key);
   if (raw === null || raw === undefined || raw === '') return null;
   let data;
   try {
@@ -49,7 +46,9 @@ export async function loadPersonalData(profileId) {
     await backupCorrupt(key, raw);
     return null;
   }
-  if (!data || typeof data !== 'object' || data.format !== PERSONAL_FORMAT) {
+  // Another version's file is kept as a backup rather than overwritten.
+  if (!data || typeof data !== 'object' || data.format !== PERSONAL_FORMAT
+    || data.version !== PERSONAL_VERSION) {
     await backupCorrupt(key, raw);
     return null;
   }
@@ -65,9 +64,11 @@ export async function savePersonalData(profileId, data) {
   }
 }
 
+/** Delete the profile's data and any backup kept from unreadable data. */
 export async function clearPersonalData(profileId) {
+  const key = personalKey(profileId);
   try {
-    await AsyncStorage.removeItem(personalKey(profileId));
+    await AsyncStorage.multiRemove([key, `${key}${CORRUPT_SUFFIX}`]);
   } catch {
     // Ignore — the in-memory layer is already empty
   }

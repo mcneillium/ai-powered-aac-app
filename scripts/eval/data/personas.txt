@@ -1,0 +1,268 @@
+# Voice prediction synthetic personas
+#
+# AUTHORED SYNTHETIC DATA. These are invented, clearly fictional "users" written
+# by hand to test whether the personal layer adapts to someone's own topics.
+# They are not based on any real person. Sentences are in the order the
+# fictional user "said" them. License: 0BSD (same as the app).
+#
+# "=== id=... role=eval|tune mode=child|adult context=..." starts a persona.
+#   role=tune  personas are used ONLY to tune weights / train the ranker.
+#   role=eval  personas are used ONLY for reported results.
+
+=== id=child_dinosaurs role=eval mode=child context=home
+I want to play dinosaurs
+I want my dinosaur
+where is my dinosaur
+I want the big dinosaur
+T rex is my favourite
+I want to watch the dinosaur film
+can we go swimming
+I want to go swimming
+I want to see Grandma
+can we see Grandma today
+Grandma has a dog
+I love Grandma
+I want to play dinosaurs with Grandma
+T rex is big
+T rex is scary
+I want my dinosaur book
+read me the dinosaur book
+I like swimming
+I want to go swimming with dad
+can I go in the big pool
+I want my goggles
+I am cold after swimming
+I want to see Grandma on Sunday
+I want to play dinosaurs
+where is my T rex
+I want the green dinosaur
+dinosaurs are cool
+I want to go to the dinosaur museum
+can we go to the museum
+I want to go swimming tomorrow
+I want my goggles please
+I want to call Grandma
+Grandma I love you
+I want to watch the dinosaur film again
+T rex is my favourite dinosaur
+can I take my dinosaur to Grandma
+I want to play dinosaurs outside
+I want the big dinosaur please
+I like the dinosaur museum
+I want to go swimming with Grandma
+my dinosaur is lost
+I want my dinosaur back
+I want to see Grandma now
+can we go swimming today
+I want to play dinosaurs again
+I want to read the dinosaur book
+T rex is the biggest
+I want my green dinosaur
+can Grandma come swimming
+I want to go to the museum again
+
+=== id=uni_student role=eval mode=adult context=university
+I have a lecture at nine
+I need to finish my dissertation
+my dissertation is about urban planning
+I am going to the library
+can I have an extension on my dissertation
+I need to email my supervisor
+I have a meeting with my supervisor
+my supervisor is Dr Patel
+I sent the draft to my supervisor
+I need more time for my dissertation chapter
+I am going to the library after the seminar
+I need the reading list
+where is the reading list
+I need to print my chapter
+the printer in the library is not working
+I am meeting Sam in the library
+do you want to get a coffee
+I want to get a coffee before the lecture
+I have a seminar on urban planning
+I want to ask a question about the reading
+I need to email my supervisor today
+can we meet in the library
+my dissertation chapter is due on Monday
+I am stressed about my dissertation
+I need help with my references
+I am going to the gym after the library
+can you send me the reading list
+I have a meeting with Dr Patel at two
+I want to get a coffee with Sam
+I need to finish my chapter tonight
+I am in the library
+I will email my supervisor
+my supervisor liked my draft
+I need more time for my dissertation
+can I record the seminar
+I want to sit near the front
+I need extra time in my exams
+I am going to the library now
+can we meet after the seminar
+I finished my dissertation chapter
+I want to celebrate with Sam
+let us get a coffee
+I need to print my dissertation
+I need to submit my dissertation online
+
+=== id=adult_work role=eval mode=adult context=work
+good morning team
+I have a meeting with the client at ten
+can we move the client meeting
+I need the budget report
+I will send the budget report today
+can you send me the budget figures
+I have a physio appointment on Thursday
+I need to leave early for my physio appointment
+I am working from home on Friday
+please give me time to type
+I have a question about the budget
+the client wants the report by Friday
+I will call the client after lunch
+can we have the team meeting online
+I need to book the meeting room
+I am going for lunch with the team
+the budget report is almost finished
+I sent the budget report to the client
+I need to check the figures
+can you check the figures for me
+I have a physio appointment next week
+my physio says I am doing well
+I need to update the project plan
+can we talk about the project plan
+I will update the project plan tomorrow
+I need a copy of the budget
+good morning team
+I have a meeting with the client on Monday
+the client is happy with the report
+I need to finish the project plan first
+I am working from home today
+I will send the figures by email
+I have a physio appointment at four
+I need to leave at three today
+can we talk about the budget later
+I need to book the meeting room for Tuesday
+thank you team
+well done team
+I am going home now
+have a good weekend team
+the project plan is finished
+I will call the client tomorrow
+can you send me the client details
+I need to check my email
+
+=== id=child_football role=tune mode=child context=school
+I want to play football
+can I play football
+I want to play football at break
+I want to be in goal
+I scored a goal
+I want to play football with Leo
+Leo is my best friend
+can Leo come to my house
+I want to watch football with dad
+my team is winning
+my team lost
+I want my football boots
+where are my football boots
+I want to go to football practice
+I want to play football outside
+can I play with Leo at break
+I want to be on Leo's team
+I scored two goals
+I want to watch the football on TV
+I want my red football shirt
+I want to go to the park with Leo
+can we play football in the park
+I am good at football
+I want to play football again
+I want to see Leo
+Leo scored a goal
+I want to go to practice on Saturday
+I need my football boots
+I want to play in goal
+I want to play football after school
+can I have my football
+I want the new football
+I like football
+I love football
+can Leo play
+I want to go to the match with dad
+my team won
+I want to wear my football shirt
+I want to play football now
+can we go to the park
+
+=== id=teen_school role=tune mode=adult context=school
+I have homework tonight
+I need help with my science homework
+I have a test on Monday
+I need to revise for my test
+can I sit with Maya
+Maya is in my art class
+I like art
+I want to finish my art project
+my art project is due on Friday
+I need more time for my art project
+can you explain the homework
+I don't understand the science homework
+I want to go to art club
+can I go to art club at lunch
+I am meeting Maya at lunch
+I have a science test tomorrow
+I need to revise science
+I got a good mark in science
+my art project is finished
+I want to show my art project
+can I go to the library to revise
+I need help with the science test
+I am stressed about the test
+I want to go to art club after school
+Maya likes my art
+I want to paint at art club
+I need a new sketchbook
+I have homework for science
+I am going to the library with Maya
+I finished my homework
+can I hand in my homework tomorrow
+I need more time for my homework
+I want to go home now
+see you tomorrow Maya
+I have art on Thursday
+I am excited about art club
+
+=== id=retired_gardener role=tune mode=adult context=home
+I want to sit in the garden
+I want to water the plants
+the tomatoes are growing well
+I need to buy more compost
+can we go to the garden centre
+I want to plant the seeds
+I want to see my grandson Tom
+Tom is coming on Sunday
+I want to call Tom
+the roses need water
+I need my gardening gloves
+where are my gardening gloves
+I want to pick the tomatoes
+the tomatoes are ready
+I want a cup of tea in the garden
+can you help me in the garden
+I need to take my tablets
+I want to watch the gardening programme
+I want to plant more roses
+can we go to the garden centre on Saturday
+Tom helped me in the garden
+I want to call Tom tonight
+I need more compost for the roses
+it is too cold to go in the garden
+I want to sit in the garden today
+I want to water the tomatoes
+can you pass my gardening gloves
+I want a cup of tea please
+I want to see Tom
+I love my garden
+the roses look lovely
+I want to buy new seeds

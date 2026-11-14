@@ -4,7 +4,9 @@ on:
   push:
     branches: [main, master]
   pull_request:
-    branches: [main, master]
+    # Also run for PRs stacked on another PR's branch (e.g. codex/*,
+    # claude/*), so a stacked PR is checked before it is retargeted.
+    branches: [main, master, 'codex/**', 'claude/**']
 
 jobs:
   lint-test-build:

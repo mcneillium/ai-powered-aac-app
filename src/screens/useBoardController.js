@@ -143,11 +143,13 @@ export function useBoardController({ modelling = false, extraActions = [] } = {}
     return () => { unsubscribe(); clearTimeout(timer); };
   }, []);
 
-  // Load persistent data on mount
+  // Load saved messages and favourites. Re-read when the board comes back into view: the tab stays mounted, and
+  // "Delete my data" (or an edit on another screen) changes the stores.
   useEffect(() => {
-    loadSentenceHistory().then(setHistory);
-    loadFavourites().then(setFavourites);
-  }, []);
+    if (!isFocused) return;
+    loadSentenceHistory().then((h) => setHistory([...h]));
+    loadFavourites().then((f) => setFavourites([...f]));
+  }, [isFocused]);
 
   // Changing the system font size reloads the app in place (Android); bring
   // back the sentence and page the user had, then keep the draft current.
@@ -417,10 +419,15 @@ export function useBoardController({ modelling = false, extraActions = [] } = {}
     });
   }, []);
 
+  // Clear on an already-empty message (an accidental second tap) keeps the
+  // message that can still be brought back with Undo.
   const clearSentence = useCallback(() => {
-    replaceSentence([]);
+    setSentenceWords(prev => {
+      if (prev.length > 0) setUndoWords(prev);
+      return [];
+    });
     stop();
-  }, [replaceSentence]);
+  }, []);
 
   const undo = useCallback(() => {
     if (!undoWords) return;

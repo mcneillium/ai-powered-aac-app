@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { deleteLearnedData } from '../services/localData';
 import { useSettings } from '../contexts/SettingsContext';
 import { MODE_DESCRIPTIONS } from '../contexts/experience';
 import { usePaper } from '../design/usePaper';
@@ -26,7 +27,7 @@ import {
 } from '../services/customVocabStore';
 import { saveTilePhoto, removeTilePhoto, getTilePhoto } from '../services/tilePhotoStore';
 import { searchVocabulary } from '../data/coreVocabulary';
-import { getLearningStats, resetLearning, setLearningEnabled } from '../services/suggestionEngine';
+import { getLearningStats, setLearningEnabled } from '../services/suggestionEngine';
 
 const CATEGORIES = [
   { value: 'noun', label: 'Thing' },
@@ -120,13 +121,13 @@ export default function StudioScreen() {
   const [stats, setStats] = useState(getLearningStats());
   useEffect(() => { setStats(getLearningStats()); }, [settings.personalLearning]);
   const toggleLearning = (on) => {
-    updateSettings({ personalLearning: on });
+    updateSettings({ personalLearning: on, learningCarriedOver: false });
     setLearningEnabled(on);
   };
   const confirmReset = () => {
     Alert.alert('Delete what Voice has learned?', 'Suggestions go back to the starting set. Your words, favourites and history are not affected.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await resetLearning(); setStats(getLearningStats()); } },
+      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteLearnedData(); updateSettings({ learningCarriedOver: false }); setStats(getLearningStats()); } },
     ]);
   };
 
@@ -243,7 +244,7 @@ export default function StudioScreen() {
         <Card title="Learning">
           <SwitchRow
             label="Learn from my messages"
-            description="Off until you turn it on. When on, Voice counts which words you use together in messages you speak, on this phone only, to improve suggestions."
+            description={settings.learningCarriedOver && settings.personalLearning === true ? "On because it was on in your earlier version of Voice; phrases you used repeatedly were kept. Turn it off here at any time. When on, Voice counts the words you use together in messages you speak, on this phone, to improve suggestions." : "Off until you turn it on. When on, Voice counts which words you use together in messages you speak, on this phone, to improve suggestions. If you sign in, this choice applies on your other devices too."}
             value={settings.personalLearning === true}
             onValueChange={toggleLearning}
           />
@@ -251,7 +252,7 @@ export default function StudioScreen() {
             {settings.personalLearning === true ? 'Learning is on.' : 'Learning is paused.'} Learned so far: {stats.sentences} messages, {stats.pairs} word pairs.
           </Text>
           <Text style={[type.body, { color: c.inkSoft, marginTop: space.sm }]}>
-            What is kept: word counts and word pairs from spoken messages. Not kept: taps you delete, modelling sessions, or anything when learning is off. Long-press a suggestion on the board to stop it appearing.
+            What is kept: words, word pairs and whole messages you speak (to suggest them again), when you last used a word, the times of day you use Voice, and searches that found nothing. Not kept: taps you delete, modelling sessions, or anything when learning is off. Long-press a suggestion on the board to stop it appearing.
           </Text>
           <ListRow icon="sparkles-outline" text="See what Voice has learned" meta="forget words, undo hidden suggestions" onPress={() => navigation.navigate('Learned')} />
           <ActionButton icon="trash-outline" label="Delete what Voice has learned" variant="danger" onPress={confirmReset} size={touch.min} style={{ marginTop: space.md }} />

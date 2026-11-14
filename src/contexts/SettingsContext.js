@@ -53,7 +53,7 @@ export { defaultSettings };
 // differ between devices and platforms, and the compact layout depends on
 // this device's screen. (Keeping them local also means a reset to "default"
 // (null), which the Realtime Database stores as a missing key, is not lost.)
-export const LOCAL_ONLY_KEYS = ['speechVoice', 'compactLayout', 'boardLayoutSource'];
+export const LOCAL_ONLY_KEYS = ['speechVoice', 'compactLayout', 'boardLayoutSource', 'learningCarriedOver'];
 
 /** The settings object as written to the cloud. Exported for tests. */
 export function toCloudSettings(settings) {
@@ -130,7 +130,9 @@ export function migrateLearning(stored, hadLegacyLearning) {
   if (stored && typeof stored.personalLearning === 'boolean') return null;
   if (!hadLegacyLearning) return null;
   const keep = !(stored && stored.aiPersonalisationEnabled === false);
-  return { personalLearning: keep };
+  // learningCarriedOver lets Personalise and Settings say why learning is on
+  // (it was on in the earlier version), instead of "off until you turn it on".
+  return keep ? { personalLearning: true, learningCarriedOver: true } : { personalLearning: false };
 }
 
 export const SettingsContext = createContext({
@@ -162,32 +164,42 @@ export function SettingsProvider({ children }) {
         const stored = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
         const parsed = await safeParse(SETTINGS_STORAGE_KEY, stored, null);
         const hasStored = !!(parsed && typeof parsed === 'object');
+        // Settings that exist but cannot be read (backed up by safeParse)
+        // belong to an existing user: never treat them as a new install or
+        // re-decide their learning choice.
+        const unreadable = stored != null && !hasStored;
+        // Built in a local copy: a render while this is still reading (for
+        // example the signed-in user arriving) resets latestSettings to the
+        // rendered defaults, and those were then saved over the user's
+        // settings.
+        let loadedSettings = { ...defaultSettings };
         if (hasStored) {
-          latestSettings.current = { ...latestSettings.current, ...parsed };
+          loadedSettings = { ...loadedSettings, ...parsed };
         }
         // Existing installs keep the familiar board until they opt in.
         const launched = await AsyncStorage.getItem('hasLaunched').catch(() => null);
-        const migration = migrateExperience(hasStored ? parsed : null, hasStored || launched === 'true');
+        const migration = migrateExperience(hasStored ? parsed : null, hasStored || unreadable || launched === 'true');
         if (migration) {
-          latestSettings.current = {
-            ...latestSettings.current,
+          loadedSettings = {
+            ...loadedSettings,
             ...migration,
             boardLayoutSource: migration.boardLayout === 'studio' ? 'new-install' : 'existing-install',
           };
-          AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(latestSettings.current)).catch(() => {});
+          AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(loadedSettings)).catch(() => {});
         }
         // Someone who was already learning in an earlier version keeps
         // learning, with what was learned carried over (once).
         const legacyRaw = await AsyncStorage.getItem(LEGACY_PROFILE_KEY).catch(() => null);
         let legacy = null;
         try { legacy = legacyRaw ? JSON.parse(legacyRaw) : null; } catch { legacy = null; }
-        const learning = migrateLearning(hasStored ? parsed : null, hasLegacyLearning(legacy));
+        const learning = unreadable ? null : migrateLearning(hasStored ? parsed : null, hasLegacyLearning(legacy));
         if (learning) {
-          latestSettings.current = { ...latestSettings.current, ...learning };
-          AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(latestSettings.current)).catch(() => {});
+          loadedSettings = { ...loadedSettings, ...learning };
+          AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(loadedSettings)).catch(() => {});
           if (learning.personalLearning) importLegacyLearning(legacy).catch(() => {});
         }
-        setSettings(latestSettings.current);
+        latestSettings.current = loadedSettings;
+        setSettings(loadedSettings);
       } catch (e) {
         console.warn('Failed to load local settings:', e);
       }

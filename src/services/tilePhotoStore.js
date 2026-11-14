@@ -23,9 +23,16 @@ export async function loadTilePhotos() {
 
 // Stored as a file name and resolved against the current documents folder:
 // on iOS the app's container path can change after an update or restore.
+// The first Voice 2 build stored absolute file:// URIs; a photo copied into a
+// (possibly older) container's tiles folder is found again by its file name.
+// '.' and '..' are never photo names: they would point at a folder.
+const LEGACY_TILE_URI = /^file:\/\/.*\/tiles\/(?!\.\.?$)([^/]+)$/i;
 function resolve(stored) {
   if (!stored) return null;
-  if (Platform.OS === 'web' || !DIR || /^[a-z]+:/i.test(stored)) return stored;
+  if (Platform.OS === 'web' || !DIR) return stored;
+  const legacy = LEGACY_TILE_URI.exec(stored);
+  if (legacy) return `${DIR}${legacy[1]}`;
+  if (/^[a-z]+:/i.test(stored)) return stored;
   return `${DIR}${stored}`;
 }
 
@@ -56,4 +63,18 @@ export async function removeTilePhoto(itemId) {
   photos = next;
   await AsyncStorage.setItem(KEY, JSON.stringify(photos)).catch(() => {});
   if (Platform.OS !== 'web') FileSystem.deleteAsync(old, { idempotent: true }).catch(() => {});
+}
+
+/**
+ * Remove every tile photo on this device, including photos of words that
+ * were removed elsewhere (another screen or another device) and so are no
+ * longer in the word list. Used by "Delete my data".
+ */
+export async function removeAllTilePhotos() {
+  photos = {};
+  await AsyncStorage.removeItem(KEY).catch(() => {});
+  if (Platform.OS !== 'web' && DIR) {
+    // Every photo is copied into DIR (saveTilePhoto), so this removes them all.
+    await FileSystem.deleteAsync(DIR, { idempotent: true }).catch(() => {});
+  }
 }

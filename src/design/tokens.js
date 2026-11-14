@@ -22,7 +22,7 @@ export const colorSchemes = {
     ink: '#151A2D',        // primary text
     inkSoft: '#4A4F66',    // secondary text (AA on paper, card and sunk)
     line: '#DED7CB',       // hairlines and tile borders
-    lineStrong: '#B9B0A2', // dashed suggestion outlines, input borders
+    lineStrong: '#857D70', // suggestion outlines, input borders, switch off (3:1 on paper, card, sunk)
     signal: '#2643D9',     // Speak, selection, links
     onSignal: '#FFFFFF',
     signalSoft: '#E3E7FB', // selected backgrounds
@@ -31,6 +31,7 @@ export const colorSchemes = {
     dangerSoft: '#FBE4E1',
     success: '#1F7A45',
     focus: '#D84315',      // scan / keyboard focus ring (distinct from signal)
+    symbolPlate: null,     // pictures sit straight on the tile
     scrim: 'rgba(21,26,45,0.45)',
     statusBar: 'dark',
   },
@@ -41,7 +42,7 @@ export const colorSchemes = {
     ink: '#F2EFE9',
     inkSoft: '#B9B5AC',
     line: '#30354A',
-    lineStrong: '#5A6078',
+    lineStrong: '#737A99',
     signal: '#9AAAFF',
     onSignal: '#0B1030',
     signalSoft: '#262E55',
@@ -50,6 +51,7 @@ export const colorSchemes = {
     dangerSoft: '#3D1B18',
     success: '#7CD3A0',
     focus: '#FF9100',
+    symbolPlate: '#F2EFE9', // light plate behind black line-art pictures
     scrim: 'rgba(0,0,0,0.6)',
     statusBar: 'light',
   },
@@ -69,6 +71,7 @@ export const colorSchemes = {
     dangerSoft: '#330000',
     success: '#66FF8A',
     focus: '#00E5FF',
+    symbolPlate: '#FFFFFF',
     scrim: 'rgba(0,0,0,0.85)',
     statusBar: 'light',
   },

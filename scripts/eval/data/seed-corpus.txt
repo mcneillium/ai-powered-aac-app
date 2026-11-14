@@ -1,0 +1,716 @@
+# Voice prediction seed corpus
+#
+# AUTHORED SYNTHETIC DATA. Every sentence below was written by hand for the
+# Voice project as short, everyday AAC-style utterances. Nothing here is copied
+# or derived from CHILDES, any transcript corpus, or any real person's speech.
+# License: 0BSD (same as the app).
+#
+# Format:
+#   lines starting with '#' are comments
+#   "@ contexts=a,b mode=m" sets tags for the sentences that follow
+#     contexts: general | home | school | university | work | shopping |
+#               appointments | social
+#     mode:     any | child | adult   (a weighting hint only; never a filter)
+#   every other non-empty line is one sentence
+
+@ contexts=general mode=any
+I need help
+I need help please
+help me please
+can you help me
+can you help me please
+stop
+stop please
+stop that
+please stop
+no thank you
+no thanks
+yes please
+yes thank you
+thank you
+thank you very much
+I don't like that
+I don't like it
+I don't want that
+I don't want to
+I don't want to go
+I don't know
+I don't understand
+I don't feel well
+I want more
+I want more please
+more please
+I want that one
+I want to go home
+I want to go outside
+I want to stop
+I want a break
+I need a break
+I need a break please
+I need the toilet
+I need the toilet please
+I need to go to the toilet
+I need water
+I need a drink
+I want a drink
+I want a drink of water
+can I have a drink please
+can I have some water
+can I have some water please
+wait please
+wait a minute
+give me a minute
+one minute please
+not now
+not that one
+not yet
+maybe later
+I like that
+I like it
+I really like that
+I love it
+I love you
+that is good
+that is funny
+that is not fair
+that is too loud
+it is too loud
+it is too hot
+it is too cold
+I am cold
+I am hot
+I am tired
+I am hungry
+I am thirsty
+I am happy
+I am sad
+I am scared
+I am angry
+I am bored
+I am ok
+I am fine
+I am fine thank you
+I feel sick
+I feel tired
+I feel happy
+I feel sad
+I feel better now
+I feel worried
+I feel good today
+I am in pain
+it hurts
+it hurts here
+my head hurts
+my tummy hurts
+my leg hurts
+something is wrong
+I am finished
+I am done
+all done
+I am ready
+I am not ready
+I am not sure
+let me think
+say that again please
+can you say that again
+can you repeat that
+can you speak slower please
+please wait for me
+please listen to me
+look at me please
+I have something to say
+I want to tell you something
+I made a mistake
+that is not what I meant
+I meant something else
+yes that is right
+no that is wrong
+good morning
+good night
+goodbye
+see you later
+see you tomorrow
+hello
+hi
+hi how are you
+how are you
+I am good thank you
+what is your name
+my name is
+nice to meet you
+where are we going
+where is it
+what is that
+what is happening
+what time is it
+when are we going
+who is that
+why
+how much is it
+can we go now
+can we go home now
+can I go
+can I go now
+can I play
+can I watch TV
+can I have a turn
+it is my turn
+it is your turn
+I want to do it myself
+let me do it
+I can do it
+I can't do it
+I need more time
+please be quiet
+I want to be alone
+I need some space
+I need quiet
+leave me alone please
+give me a hug
+I want a hug
+I am sorry
+sorry
+excuse me
+that is ok
+it is ok
+it is fine
+never mind
+I forgot
+I remember
+I want to sleep
+I want to rest
+I need to rest
+turn it off please
+turn it on please
+turn it up please
+turn it down please
+open the door please
+close the door please
+I want to read a book
+I want to listen to music
+I want to see my friend
+call my mum please
+call my dad please
+I want my mum
+I want my dad
+
+@ contexts=home mode=any
+I want breakfast
+I want lunch
+I want dinner
+what is for dinner
+what is for lunch
+I am hungry can I have a snack
+can I have a snack
+can I have a snack please
+I want toast
+I want toast please
+I want cereal
+I want a sandwich
+I want pasta for dinner
+I want pizza
+I want juice
+I want milk please
+can I have a cup of tea
+I want a cup of tea
+I want a cup of coffee
+I don't like this food
+I don't want to eat that
+I am full
+I am still hungry
+I want to watch TV
+I want to watch a film
+can we watch a film
+turn on the TV please
+change the channel please
+I want to play a game
+can we play a game
+I want to play outside
+I want to go to the park
+I want to have a bath
+I want to have a shower
+I need to brush my teeth
+I want to go to bed
+I don't want to go to bed
+I am going to bed
+I want to get up
+can you open the window
+can you close the window
+it is cold in here
+it is hot in here
+where is my phone
+where is my bag
+where are my shoes
+I can't find my phone
+I need my glasses
+I need my medicine
+I want to wear my blue jumper
+I want to wear my coat
+I want to call Grandma
+can we visit Grandma
+when is Grandma coming
+I want to see the dog
+can I feed the cat
+the dog is barking
+I want to help cook
+can I help you
+I want to tidy my room
+I don't want to tidy up
+I want to read a story
+read me a story please
+one more story please
+I want my blanket
+I want my teddy
+good night mum
+good night dad
+I love you mum
+I love you dad
+I had a good day
+I had a bad day
+I want to talk about my day
+
+@ contexts=school mode=child
+I want to play with my friend
+can I play with my friend
+can I play outside
+I want to go outside at break
+can I have a break please
+I need help with this
+I need help with my work
+I don't understand this
+I don't understand the question
+can you show me
+can you show me again
+I finished my work
+I have finished
+I know the answer
+I want to answer
+can I answer
+it is my turn to read
+I want to read
+I want to draw
+I want to paint
+can I use the computer
+can I use the iPad
+I want to sit here
+I don't want to sit there
+I want to sit next to my friend
+he is being mean
+she took my pencil
+they won't let me play
+that is not fair
+I need a pencil
+I need a pen
+where is my book
+I forgot my book
+I forgot my lunch
+I want my lunch box
+when is lunch
+when is home time
+is it home time yet
+I want to go home now
+I like maths
+I don't like maths
+I like reading
+I like art
+I like PE
+I want to do PE
+I like playing football
+I want to play football
+can I be on your team
+I am good at this
+this is too hard
+this is too easy
+I need more time please
+I did my best
+I am proud of my work
+can I show my mum
+can I tell the teacher
+I want to tell the teacher
+miss I need help
+sir I need help
+good morning miss
+good morning sir
+thank you miss
+thank you sir
+I lost my coat
+my friend is sad
+we are playing a game
+I want to be the leader
+can I go to the library
+I want a sticker
+I got a sticker
+I like my teacher
+
+@ contexts=university mode=adult
+I have a lecture at ten
+I have a seminar this afternoon
+I am going to the library
+I need to finish my essay
+my essay is due on Friday
+can I have an extension please
+I need more time for my assignment
+I have a question about the assignment
+can you explain that again
+can you explain that point again
+could you slow down please
+could you share the slides
+where are the slides
+I could not hear the lecture
+can I record the lecture
+I need extra time in exams
+I need a quiet room for exams
+I use this device to talk
+please give me time to type
+I am typing my answer
+I have an answer
+I agree with that
+I don't agree with that
+that is a good point
+I think the answer is
+I want to join the group
+can I join your group
+let us meet in the library
+let us meet after the lecture
+I will send you an email
+I sent you an email
+can you send me the notes
+I want to book a meeting with my tutor
+I need to see my tutor
+I am going to the student union
+I want to get a coffee
+do you want to get a coffee
+I am going to the canteen
+I want to go to the gym
+I am tired after the lecture
+I am stressed about exams
+I am worried about my essay
+I passed my exam
+I failed the test
+I need help with my reading
+I need help with referencing
+can I submit it online
+where is the lecture room
+which room is the seminar in
+I am running late
+I will be there in five minutes
+I am at the library
+I am in the lab
+I need to print my work
+the printer is not working
+my laptop is not working
+I need to charge my laptop
+I forgot my student card
+I need to pay my rent
+I am going home for the weekend
+I am going out with friends tonight
+
+@ contexts=work mode=adult
+good morning everyone
+I am at work
+I have a meeting at nine
+I have a meeting this afternoon
+can we move the meeting
+can we have the meeting online
+I am working from home today
+I will be late today
+I am running late
+I need to leave early today
+I need a day off
+I am on holiday next week
+I am off sick today
+I am almost finished
+I have finished the report
+I will send the report today
+I will send it by email
+can you send me the file
+can you send me the details
+I need more information
+I need more time for this
+I can do that
+I can't do that today
+I will do it tomorrow
+I will do it after lunch
+can we talk about this later
+can we talk about this now
+I have a question
+I have an idea
+I agree
+I don't agree
+that sounds good
+that works for me
+that does not work for me
+let me check
+let me check my calendar
+I need to check my email
+my computer is not working
+the internet is not working
+I need help with the computer
+can you call IT please
+I am going for lunch
+I am going on my break
+I will be back in ten minutes
+I am back
+who is in the meeting
+where is the meeting
+the meeting is in room two
+please give me time to type
+I use this device to talk
+please wait while I type
+I need the agenda
+I need a copy of the notes
+thank you for your help
+thanks for your help
+well done everyone
+see you tomorrow
+have a good weekend
+I am going home now
+I need to speak to my manager
+can I speak to you
+can I speak to you in private
+I am happy with that
+I am not happy with that
+I need to finish this first
+
+@ contexts=shopping mode=any
+I want to go shopping
+I need to go to the shop
+can we go to the shop
+I want that one please
+I want this one
+not that one
+the red one please
+the blue one please
+the big one
+the small one
+how much is this
+how much is it
+how much does it cost
+that is too expensive
+I want to pay by card
+can I pay by card
+I want to pay with cash
+do you have a bag
+I need a bag please
+I don't need a bag
+I am looking for bread
+I am looking for milk
+where is the milk
+where is the bread
+where are the toilets
+can you help me find this
+I need to buy food
+I need to buy a present
+I want to buy new shoes
+I want to try it on
+can I try it on
+it is too big
+it is too small
+do you have a bigger size
+do you have a smaller size
+I like this colour
+I don't like this colour
+I want to look around
+I am just looking thank you
+can I have a receipt please
+I want to return this
+I want a coffee please
+can I have a coffee please
+I want a tea please
+a cup of tea please
+I want a sandwich please
+to take away please
+to eat in please
+that is all thank you
+I want an ice cream
+can I have an ice cream
+can I have sweets
+I want chips
+I am tired can we go home
+it is too busy here
+it is too noisy in here
+
+@ contexts=appointments mode=any
+I have an appointment
+I have an appointment at two
+I have an appointment with the doctor
+I am here for my appointment
+my name is on the list
+I need to see a doctor
+I need to see the nurse
+I feel sick
+I feel dizzy
+I have a headache
+I have a sore throat
+I have a cough
+I have a temperature
+I have been sick
+I can't sleep
+I am in pain
+the pain is here
+it hurts when I move
+it hurts all the time
+it started yesterday
+it started last week
+I take medicine every day
+I need my medicine
+I need a new prescription
+I am allergic to penicillin
+I don't understand please explain
+can you explain that again
+please speak to me not my carer
+please ask me
+please talk to me directly
+I can answer for myself
+I use this device to talk
+please give me time to type
+I am scared
+I am nervous
+will it hurt
+how long will it take
+when will I get the results
+what happens next
+do I need to come back
+can I have a copy of the letter
+can you write it down please
+I need a quiet room
+I need a break
+I want my mum to stay
+I want my carer to stay
+please wait for me to finish
+I need the toilet
+I need to see the dentist
+my tooth hurts
+I want to book an appointment
+can I change my appointment
+I need to cancel my appointment
+I am feeling better
+I am feeling worse
+thank you doctor
+thank you nurse
+
+@ contexts=social mode=any
+hello how are you
+hi nice to see you
+I am good how are you
+what are you doing
+what did you do today
+what are you doing this weekend
+do you want to play
+do you want to come
+do you want to come with me
+I want to come too
+can I come with you
+let us go
+let us play a game
+let us watch a film
+let us get food
+I want to go to the cinema
+I want to go to a party
+I want to go to the beach
+I want to go swimming
+I like swimming
+I like music
+I like football
+I like dancing
+I like that song
+my favourite colour is blue
+my favourite food is pizza
+that is so funny
+I am excited
+I am really excited
+happy birthday
+happy birthday to you
+congratulations
+well done
+good job
+I missed you
+I am glad you came
+I had fun
+I had a great time
+that was fun
+can we do it again
+see you soon
+see you next week
+bye
+bye bye
+talk to you later
+I have to go now
+I need to go now
+text me later
+I will call you
+call me later
+
+@ contexts=home mode=child
+I want to play with my toys
+I want to play with the ball
+I want to play on the iPad
+can I have the iPad
+I want to build a tower
+I want to play with blocks
+I want to play with my train
+I want to go on the swing
+I want to go on the slide
+push me please
+higher please
+again please
+do it again
+I want to do it again
+I want bubbles
+I want to blow bubbles
+I want to colour
+I want to play hide and seek
+you are it
+I win
+I want my dummy
+I want my mummy
+I want my daddy
+I want a cuddle
+I want to sit on your lap
+pick me up please
+put me down please
+I want to get down
+I want to go upstairs
+I want to go downstairs
+I want to go in the car
+are we there yet
+I want a biscuit
+I want an apple
+I want a banana
+I want yogurt
+I want chocolate
+I don't want peas
+yuck
+yummy
+I spilled my drink
+I fell over
+I hurt my knee
+I need a plaster
+I wet myself
+I want to wear my pyjamas
+I want my Peppa Pig cup
+
+@ contexts=home mode=adult
+I need to go to the bank
+I need to pay the bills
+I need to do the washing
+can you help me with the shopping list
+I need to make a phone call
+can you make a phone call for me
+I want to cook dinner tonight
+I want to order a takeaway
+I want to watch the news
+I want to watch the football
+I want to read the paper
+I need to charge my phone
+I need to charge my chair
+can you help me get dressed
+can you help me with my shoes
+I want to go for a walk
+I want to sit in the garden
+I want some fresh air
+I am expecting a delivery
+someone is at the door
+can you answer the door please
+I need to take my tablets
+I want an early night

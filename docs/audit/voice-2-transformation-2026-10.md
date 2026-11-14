@@ -163,7 +163,7 @@ The owner chose this PR as the base, with the strongest parts of PR #9 (Soft Stu
 - **Not tested:** TalkBack, physical switches and a physical phone.
 
 ## 8. Known issues and next tasks (priority order)
-1. Run checklist §G on the S24 Ultra and the Android 11 emulator; the Android 15 emulator runs are recorded in §7c. Have a person check TalkBack and switch access.
+1. Run checklist §H (Voice 2; formerly a second "§G") on the S24 Ultra and the Android 11 emulator; the Android 15 emulator runs are recorded in §7c. Have a person check TalkBack and switch access.
 2. ~~Remove TensorFlow~~ (done in `acbb3b9`).
 3. ~~Restyle remaining screens~~ (done by palette mapping; Phrases and Me rebuilt). Settings could still be reorganised into Personalise-style cards.
 4. Owner decisions before release: ARASAAC non-commercial terms (symbols + API), tokenizer/model provenance (now unused by the board), "VOICE" icon artwork rights, native-only licence notices (`docs/legal/asset-inventory.md`).
