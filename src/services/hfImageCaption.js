@@ -9,7 +9,7 @@ export const getImageCaption = async (imageUri) => {
     });
 
     const apiUrl = "https://api-inference.huggingface.co/models/nlpconnect/vit-gpt2-image-captioning";
-    const hfToken = "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";
+    const hfToken = "hf_REDACTED_REVOKE_AND_USE_SERVER_SIDE_CONFIG";
 
     const requestBody = {
       inputs: base64

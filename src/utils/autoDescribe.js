@@ -4,7 +4,7 @@ import axios from 'axios';
 
 // WARNING: Hardcoding API keys is not recommended for production. 
 // Consider using environment variables or a secure key management strategy.
-const GOOGLE_CLOUD_VISION_API_KEY = 'AIzaSyD4WZGLy8Zt5VsF6v2LmnikM4j7hcWoo9g';
+const GOOGLE_CLOUD_VISION_API_KEY = 'REDACTED_VISION_KEY_REVOKED';
 const GOOGLE_CLOUD_VISION_API_URL = `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_CLOUD_VISION_API_KEY}`;
 
 export async function autoDescribeImage(uri) {
