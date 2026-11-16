@@ -51,7 +51,7 @@ Firebase settings come from `EXPO_PUBLIC_FIREBASE_*` environment variables; see 
 npx jest
 ```
 
-The suite has 57 test files with 364 tests. They cover the prediction engine, speech, settings upgrades, switch scanning, offline start-up and data deletion. GitHub Actions runs lint, the tests and an Expo config check on every push and pull request.
+The suite has 57 test files with 833 tests. They cover the prediction engine, speech, settings upgrades, switch scanning, offline start-up and data deletion. GitHub Actions runs lint, the tests and an Expo config check on every push and pull request.
 
 ## Project layout
 
